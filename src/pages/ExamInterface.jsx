@@ -281,7 +281,7 @@ const ExamInterface = () => {
       if (answeredCount < totalQuestions) {
         Swal.fire({
           title: 'Belum Selesai!',
-          text: `Kamu baru menjawab ${answeredCount} dari ${totalQuestions} soal. Silakan isi yang kosong dulu bro!`,
+          text: `Kamu baru menjawab ${answeredCount} dari ${totalQuestions} soal. Silakan isi yang kosong dulu!`,
           icon: 'warning',
           confirmButtonColor: '#ea580c'
         });
@@ -290,7 +290,7 @@ const ExamInterface = () => {
 
       const { isConfirmed } = await Swal.fire({
         title: 'Selesai Ujian?',
-        text: "Pastikan semua jawaban sudah benar bro.",
+        text: "Pastikan semua jawaban sudah benar.",
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#ea580c',
@@ -327,7 +327,7 @@ const ExamInterface = () => {
 
       await Swal.fire({
         title: isAuto ? 'Waktu Habis!' : 'Ujian Selesai!',
-        html: `Jawaban lu berhasil dikirim ke server.<br><br>Skor Akhir Kamu:<br><span style="font-size: 64px; font-weight: 900; color: #ea580c;">${finalScore}</span>`,
+        html: `Jawaban anda berhasil dikirim ke server.<br><br>Skor Akhir Kamu:<br><span style="font-size: 64px; font-weight: 900; color: #ea580c;">${finalScore}</span>`,
         icon: 'success',
         confirmButtonColor: '#10b981',
         confirmButtonText: 'Kembali ke Dashboard',

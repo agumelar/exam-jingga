@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { LogOut, GraduationCap, User, BookOpen, Clock, LayoutDashboard, Moon, Sun, Key, CheckCircle, AlertTriangle, FileSpreadsheet } from 'lucide-react';
+import { LogOut, GraduationCap, User, BookOpen, Clock, LayoutDashboard, Moon, Sun, Key, CheckCircle, AlertTriangle, FileSpreadsheet, X, KeyRound } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
