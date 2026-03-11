@@ -37,19 +37,32 @@ const Schedules = () => {
 
   const fetchExams = async () => {
     setLoading(true);
+    const user = JSON.parse(localStorage.getItem('user_session'));
+
     const { data } = await supabase
       .from('schedules')
       .select(`*, exams(*, subjects(name)), teachers(full_name), classes(name)`)
       .order('created_at', { ascending: false });
     
     if (data) {
-      const cleaned = data.map(ex => ({
-        ...ex,
-        start_time: ex.start_time ? ex.start_time.split('+')[0].replace('T', ' ') : null,
-        end_time: ex.end_time ? ex.end_time.split('+')[0].replace('T', ' ') : null
-      }));
+      // --- PERBAIKAN: Ambil SEMUA soal ujian, jangan difilter berdasarkan user login ---
+      // Supaya admin bisa melihat data dari semua guru
+      const { data: allQuestions } = await supabase
+        .from('exam_questions')
+        .select('exam_id, questions!inner(created_by)');
 
-      const user = JSON.parse(localStorage.getItem('user_session'));
+      const cleaned = data.map(ex => {
+        // Hitung soal spesifik berdasarkan guru yang ditugaskan pada jadwal (ex) ini
+        const teacherInputCount = allQuestions?.filter(q => q.exam_id === ex.exam_id && q.questions.created_by === ex.teacher_id).length || 0;
+        
+        return {
+          ...ex,
+          start_time: ex.start_time ? ex.start_time.split('+')[0].replace('T', ' ') : null,
+          end_time: ex.end_time ? ex.end_time.split('+')[0].replace('T', ' ') : null,
+          my_question_count: teacherInputCount // Menyimpan progres aktual guru di jadwal ini
+        };
+      });
+
       if (user.role === 'guru') {
         const filtered = cleaned.filter(ex => ex.teacher_id === user.id);
         setExams(filtered);
@@ -132,11 +145,9 @@ const Schedules = () => {
       const finalTitle = (formData.type === 'PTS' || formData.type === 'PAS/PAT') ? formData.sub_type : (formData.type === 'SAJ' ? "Asesmen Sumatif Akhir Jenjang" : formData.title);
       const initialStatus = 'pending_selection';
 
-      // Jika session_no "Semua Sesi", simpan ke DB sebagai angka 0 (buat penanda)
       const parsedSessionNo = formData.session_no === 'Semua Sesi' ? 0 : parseInt(formData.session_no);
 
       if (editingId) {
-        // UPDATE BIASA
         const scheduleData = exams.find(ex => ex.id === editingId);
         await supabase.from('exams').update({ 
           title: finalTitle,
@@ -148,7 +159,6 @@ const Schedules = () => {
         await supabase.from('schedules').update({ start_time: finalStart, end_time: finalEnd, token: formData.token, session_no: parsedSessionNo }).eq('id', editingId);
       
       } else {
-        // INSERT BARU DENGAN AUTO-SPLIT 
         if (formData.type === 'UH' || formData.type === 'PTS') {
            const assignment = allAssignments.find(a => a.classes.id === formData.class_id && a.subject_id === formData.subject_id);
            if (!assignment) throw new Error("Guru pengampu tidak ditemukan di kelas ini!");
@@ -167,25 +177,27 @@ const Schedules = () => {
            }]);
 
         } else {
-           // PAS/PAT atau SAJ -> AUTO SPLIT
            const matchedAssignments = allAssignments.filter(a => parseInt(a.classes.name.split(' ')[0]) === parseInt(formData.level) && a.subject_id === formData.subject_id);
            
            if (matchedAssignments.length === 0) throw new Error("Tidak ada guru yang ditugaskan untuk mapel dan jenjang ini!");
 
            const uniqueTeachers = Array.from(new Set(matchedAssignments.map(a => a.teacher_id)));
 
-           // Bikin jadwal sebanyak jumlah guru yang ngajar pakai TOKEN SAMA
-           for (const tId of uniqueTeachers) {
-             const { data: examData, error: exErr } = await supabase.from('exams').insert([{
-                title: finalTitle, subject_id: formData.subject_id, type: formData.type, level: parseInt(formData.level),
-                teacher_id: tId, status: initialStatus,
-                duration: parseInt(formData.duration), target_question_count: parseInt(formData.target_question_count),
-                token: formData.token 
-             }]).select().single();
-             if (exErr) throw exErr;
+           const { data: examData, error: exErr } = await supabase.from('exams').insert([{
+              title: finalTitle, subject_id: formData.subject_id, type: formData.type, level: parseInt(formData.level),
+              teacher_id: myTeacherId, 
+              status: initialStatus,
+              duration: parseInt(formData.duration), target_question_count: parseInt(formData.target_question_count),
+              token: formData.token 
+           }]).select().single();
+           
+           if (exErr) throw exErr;
 
+           for (const tId of uniqueTeachers) {
              await supabase.from('schedules').insert([{
-                exam_id: examData.id, class_id: null, teacher_id: tId, 
+                exam_id: examData.id, 
+                class_id: null, 
+                teacher_id: tId, 
                 start_time: finalStart, end_time: finalEnd, token: formData.token, session_no: parsedSessionNo, status: 'active'
              }]);
            }
@@ -213,6 +225,27 @@ const Schedules = () => {
     }
   };
 
+  // --- FUNGSI MENGHITUNG KUOTA SOAL PER GURU ---
+  const getTeacherQuota = (ex) => {
+    if (!ex.exams) return 0;
+    if (['UH', 'PTS'].includes(ex.exams.type)) {
+      return ex.exams.target_question_count;
+    }
+    // Kalau Kolaborasi (PAS/PAT/SAJ)
+    const matchedAssignments = allAssignments.filter(a => parseInt(a.classes?.name?.split(' ')[0]) === parseInt(ex.exams.level) && a.subject_id === ex.exams.subject_id);
+    const uniqueTeacherCount = Array.from(new Set(matchedAssignments.map(a => a.teacher_id))).length;
+    
+    return uniqueTeacherCount > 0 
+        ? Math.floor(ex.exams.target_question_count / uniqueTeacherCount) 
+        : ex.exams.target_question_count;
+  };
+
+  // --- FUNGSI CEK TUGAS SELESAI ---
+  const isMyTaskDone = (ex) => {
+    if (!ex.exams || ex.exams.status !== 'pending_selection') return false;
+    return ex.my_question_count >= getTeacherQuota(ex);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 flex font-sans text-left text-slate-900 dark:text-white">
       <Sidebar role={userRole} />
@@ -222,9 +255,22 @@ const Schedules = () => {
             <h2 className="text-3xl font-black italic uppercase tracking-tighter">{userRole === 'guru' ? 'Task Ujian Saya' : 'Jadwal Ujian'}</h2>
             <p className="text-orange-600 font-bold text-[10px] uppercase tracking-[0.3em] mt-1">Lifecycle Management Ujian</p>
           </div>
-          <button onClick={() => { setEditingId(null); setFormData({...initialForm, type: userRole === 'guru' ? 'UH' : 'PTS'}); generateToken(); setShowModal(true); }} className="bg-orange-600 text-white px-6 py-3 rounded-2xl font-black shadow-lg uppercase text-xs flex items-center gap-2">
-            + BUAT BARU
-          </button>
+          
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <button 
+              onClick={fetchExams} 
+              disabled={loading} 
+              className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-600 dark:text-slate-300 hover:text-orange-600 dark:hover:text-orange-500 px-4 py-3 rounded-2xl font-black shadow-sm flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 flex-1 md:flex-none"
+              title="Refresh Data"
+            >
+              <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+              <span className="hidden sm:inline text-xs uppercase tracking-widest">Refresh</span>
+            </button>
+
+            <button onClick={() => { setEditingId(null); setFormData({...initialForm, type: userRole === 'guru' ? 'UH' : 'PTS'}); generateToken(); setShowModal(true); }} className="bg-orange-600 text-white px-6 py-3 rounded-2xl font-black shadow-lg uppercase text-xs flex items-center justify-center gap-2 transition-all hover:bg-orange-700 active:scale-95 flex-1 md:flex-none">
+              + BUAT BARU
+            </button>
+          </div>
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 text-left font-sans">
@@ -254,7 +300,9 @@ const Schedules = () => {
               </div>
               
               <h3 className="text-xl font-black mb-1 uppercase italic leading-tight pr-10 truncate">{ex.exams?.title}</h3>
-              <p className="text-orange-600 font-black text-xs mb-6 uppercase truncate">{ex.exams?.subjects?.name} | {ex.classes?.name || `KELAS ${ex.exams?.level}`}</p>
+              <p className="text-orange-600 font-black text-xs mb-6 uppercase truncate">
+                {ex.exams?.subjects?.name} | {ex.classes?.name || `GABUNGAN KELAS ${ex.exams?.level}`}
+              </p>
               
               <div className="space-y-3 mb-8 text-slate-500 text-xs font-bold uppercase">
                 <div className="flex items-center gap-3"><Calendar size={14} className="text-orange-500"/> {formatWIB(ex.start_time)}</div>
@@ -263,10 +311,28 @@ const Schedules = () => {
               </div>
 
               <div className="flex flex-col gap-2 border-t border-dashed border-zinc-200 dark:border-zinc-800 pt-6">
+                
+                {/* --- TAMBAHAN BARU KHUSUS ADMIN: Indikator Progres Tiap Guru --- */}
+                {userRole === 'admin' && ex.exams?.status === 'pending_selection' && (
+                  <div className={`w-full py-3 px-4 rounded-xl font-bold text-[10px] uppercase flex justify-between items-center mb-1 ${isMyTaskDone(ex) ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' : 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800'}`}>
+                    <span className="flex items-center gap-2 truncate pr-2">
+                      {isMyTaskDone(ex) ? <Check size={14} className="shrink-0"/> : <AlertCircle size={14} className="shrink-0"/>}
+                      Progres: {ex.teachers?.full_name?.split(' ')[0] || 'Guru'}
+                    </span>
+                    <span className="text-xs whitespace-nowrap shrink-0">{ex.my_question_count} / {getTeacherQuota(ex)} Soal</span>
+                  </div>
+                )}
+
                 {userRole === 'guru' && ex.exams?.status === 'pending_selection' && (
-                   <button onClick={() => navigate(`/select-questions/${ex.id}`)} className="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white py-4 rounded-2xl font-black text-[10px] uppercase shadow-lg flex items-center justify-center gap-2">
-                     <BookOpen size={14}/> Pilih Soal
-                   </button>
+                   isMyTaskDone(ex) ? (
+                     <div className="w-full bg-slate-100 dark:bg-zinc-800 text-emerald-600 dark:text-emerald-500 border-2 border-dashed border-emerald-200 dark:border-emerald-900 py-4 rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 cursor-not-allowed">
+                       <Check size={14}/> TUGAS SELESAI ({ex.my_question_count} Soal)
+                     </div>
+                   ) : (
+                     <button onClick={() => navigate(`/select-questions/${ex.id}`)} className="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white py-4 rounded-2xl font-black text-[10px] uppercase shadow-lg flex items-center justify-center gap-2">
+                       <BookOpen size={14}/> {ex.my_question_count > 0 ? `Lanjutkan Pilih Soal (${ex.my_question_count})` : 'Pilih Soal'}
+                     </button>
+                   )
                 )}
 
                 {userRole === 'admin' && ex.exams?.status === 'waiting_validation' && (
@@ -287,7 +353,7 @@ const Schedules = () => {
           ))}
         </div>
 
-        {/* MODAL FORM */}
+        {/* MODAL FORM (TETAP SAMA DENGAN VERSI SEBELUMNYA) */}
         {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto font-sans">
             <div className="bg-white dark:bg-zinc-950 w-full max-w-4xl rounded-[3rem] p-10 shadow-2xl text-left relative text-slate-900 dark:text-white font-bold border border-zinc-200 dark:border-zinc-800">

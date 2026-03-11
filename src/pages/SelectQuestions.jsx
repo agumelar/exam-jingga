@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import Sidebar from '../components/Sidebar';
-import { CheckCircle2, Circle, Save, ArrowLeft, Info, Lock } from 'lucide-react';
+import { CheckCircle2, Circle, Save, ArrowLeft, Info } from 'lucide-react';
 import Swal from 'sweetalert2';
 
 const SelectQuestions = () => {
@@ -15,6 +15,7 @@ const SelectQuestions = () => {
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState('');
   const [myId, setMyId] = useState(null);
+  const [collabInfo, setCollabInfo] = useState({ isCollab: false, quota: 0, myCount: 0 }); // Tambahan State
 
   useEffect(() => { fetchExamAndQuestions(); }, [examId]);
 
@@ -34,6 +35,24 @@ const SelectQuestions = () => {
       if (!schData) throw new Error("Jadwal tidak ditemukan");
       setExamInfo(schData);
 
+      // --- LOGIKA KUOTA KOLABORASI ---
+      let quotaPerTeacher = schData.exams.target_question_count;
+      let isCollaboration = false;
+
+      if (['SAJ', 'PAS', 'PAT', 'PAS/PAT'].includes(schData.exams.type)) {
+        isCollaboration = true;
+        // Hitung ada berapa guru di jadwal ini yang terhubung ke exam_id yang sama
+        const { count: teacherCount } = await supabase
+           .from('schedules')
+           .select('teacher_id', { count: 'exact', head: true })
+           .eq('exam_id', schData.exam_id);
+           
+        // Bagi total target soal dengan jumlah guru
+        if (teacherCount && teacherCount > 0) {
+            quotaPerTeacher = Math.floor(schData.exams.target_question_count / teacherCount);
+        }
+      }
+
       // Ambil Bank Soal milik Guru login
       const { data: questions } = await supabase.from('questions')
         .select('*')
@@ -51,10 +70,14 @@ const SelectQuestions = () => {
       
       if (allSelected) {
         // Pisahkan mana yang punya saya, mana yang punya orang lain
-        const mine = allSelected.filter(q => q.questions.created_by === userSession.id).map(q => q.question_id);
-        const others = allSelected.filter(q => q.questions.created_by !== userSession.id).map(q => q.question_id);
+        const mine = allSelected.filter(q => q.questions?.created_by === userSession.id).map(q => q.question_id);
+        const others = allSelected.filter(q => q.questions?.created_by !== userSession.id).map(q => q.question_id);
         setSelectedIds(mine);
         setOthersSelectedIds(others);
+        
+        setCollabInfo({ isCollab: isCollaboration, quota: quotaPerTeacher, myCount: mine.length });
+      } else {
+        setCollabInfo({ isCollab: isCollaboration, quota: quotaPerTeacher, myCount: 0 });
       }
 
     } catch (error) {
@@ -70,23 +93,31 @@ const SelectQuestions = () => {
     
     if (selectedIds.includes(id)) {
       setSelectedIds(selectedIds.filter(i => i !== id));
+      setCollabInfo(prev => ({...prev, myCount: prev.myCount - 1}));
     } else {
-      if (totalSelected >= examInfo.exams.target_question_count) {
-        return Swal.fire('Limit!', `Total target ${examInfo.exams.target_question_count} soal sudah terpenuhi.`, 'warning');
+      // Validasi 1: Maksimal Kuota Saya (Kalau Kolaborasi)
+      if (collabInfo.isCollab && selectedIds.length >= collabInfo.quota) {
+          return Swal.fire('Kuota Penuh!', `Jatah soal Anda hanya ${collabInfo.quota} soal.`, 'warning');
       }
+
+      // Validasi 2: Maksimal Target Soal Global
+      if (totalSelected >= examInfo.exams.target_question_count) {
+        return Swal.fire('Limit!', `Total target ${examInfo.exams.target_question_count} soal ujian sudah terpenuhi oleh semua guru.`, 'warning');
+      }
+
       setSelectedIds([...selectedIds, id]);
+      setCollabInfo(prev => ({...prev, myCount: prev.myCount + 1}));
     }
   };
 
   const handleSave = async () => {
     const totalNow = selectedIds.length + othersSelectedIds.length;
     
-    // Jika soal sudah pas, atau jika mau nyicil dulu
     const { isConfirmed } = await Swal.fire({
       title: 'Simpan Pilihan?',
       text: totalNow < examInfo.exams.target_question_count 
-        ? `Baru ${totalNow}/${examInfo.exams.target_question_count} soal. Simpan sementara?`
-        : "Soal sudah lengkap. Ajukan validasi ke Admin?",
+        ? `Baru terkumpul ${totalNow}/${examInfo.exams.target_question_count} soal secara keseluruhan. Simpan sementara?`
+        : "Total soal sudah lengkap! Ajukan verifikasi ke Admin?",
       icon: 'question',
       showCancelButton: true,
       confirmButtonText: 'Ya, Simpan'
@@ -95,8 +126,7 @@ const SelectQuestions = () => {
     if (!isConfirmed) return;
 
     try {
-      // SUNTIKAN: Hanya hapus soal MILIK SAYA di ujian ini
-      // Kita pakai subquery untuk hapus berdasarkan created_by di tabel questions
+      // Hapus soal lama MILIK SAYA saja
       const { data: myOldQuestions } = await supabase
         .from('exam_questions')
         .select('id, questions!inner(created_by)')
@@ -116,12 +146,12 @@ const SelectQuestions = () => {
         await supabase.from('exam_questions').insert(payload);
       }
       
-      // Jika total sudah pas, ganti status ke waiting_validation
+      // Update Status Ujian jika lengkap
       if (totalNow === examInfo.exams.target_question_count) {
         await supabase.from('exams').update({ status: 'waiting_validation' }).eq('id', examInfo.exam_id);
         Swal.fire('Berhasil!', 'Soal lengkap & diajukan ke Admin.', 'success');
       } else {
-        Swal.fire('Tersimpan!', 'Progress berhasil disimpan sementara.', 'success');
+        Swal.fire('Tersimpan!', `Tugas Anda selesai! Soal Anda disimpan (${collabInfo.myCount}/${collabInfo.quota}).`, 'success');
       }
       
       navigate('/schedules');
@@ -145,23 +175,35 @@ const SelectQuestions = () => {
             </div>
           </div>
           
-          <div className="bg-white dark:bg-zinc-900 px-8 py-5 rounded-[2.5rem] shadow-sm border border-orange-500/20 flex items-center gap-8">
-             <div className="text-left border-r border-slate-100 dark:border-zinc-800 pr-8">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Terkumpul</p>
+          <div className="bg-white dark:bg-zinc-900 px-8 py-5 rounded-[2.5rem] shadow-sm border border-orange-500/20 flex flex-wrap items-center gap-6 md:gap-8">
+             {/* Info Kuota Pribadi (Hanya muncul saat Kolaborasi) */}
+             {collabInfo.isCollab && (
+                 <div className="text-left border-r border-slate-100 dark:border-zinc-800 pr-6 md:pr-8">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Kuota Anda</p>
+                    <p className={`text-2xl font-black ${collabInfo.myCount >= collabInfo.quota ? 'text-emerald-500' : 'text-blue-600'}`}>
+                      {collabInfo.myCount} <span className="text-slate-300 text-sm">/ {collabInfo.quota}</span>
+                    </p>
+                 </div>
+             )}
+
+             {/* Info Total Terkumpul Global */}
+             <div className="text-left md:border-r border-slate-100 dark:border-zinc-800 md:pr-8">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Soal Terkumpul</p>
                 <p className={`text-3xl font-black ${selectedIds.length + othersSelectedIds.length === examInfo?.exams?.target_question_count ? 'text-emerald-500' : 'text-orange-600'}`}>
                   {selectedIds.length + othersSelectedIds.length} <span className="text-slate-300 text-sm">/ {examInfo?.exams?.target_question_count}</span>
                 </p>
              </div>
+
              <button onClick={handleSave} className="bg-slate-900 dark:bg-white dark:text-black text-white px-10 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:scale-105 transition-all shadow-xl flex items-center gap-2">
-               <Save size={18}/> Simpan & Ajukan
+               <Save size={18}/> {collabInfo.isCollab ? 'Simpan Tugas Saya' : 'Simpan & Ajukan'}
              </button>
           </div>
         </header>
 
         {/* Info Mode Kolaborasi */}
-        {othersSelectedIds.length > 0 && (
+        {collabInfo.isCollab && othersSelectedIds.length > 0 && (
           <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-2xl flex items-center gap-3 text-blue-600 dark:text-blue-400 text-xs font-bold">
-            <Info size={16}/> <span>Rekan duet Anda sudah memilih {othersSelectedIds.length} soal. Silakan lengkapi sisanya.</span>
+            <Info size={16} className="shrink-0"/> <span>Info Kolaborasi: Rekan guru lain sudah menyumbang <b>{othersSelectedIds.length} soal</b>. Selesaikan kuota <b>{collabInfo.quota} soal</b> milik Anda.</span>
           </div>
         )}
 
