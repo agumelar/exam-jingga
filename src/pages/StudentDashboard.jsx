@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { LogOut, GraduationCap, User, BookOpen, Clock, LayoutDashboard, Moon, Sun, Key, CheckCircle, AlertTriangle, FileSpreadsheet, X, KeyRound } from 'lucide-react';
+import { LogOut, GraduationCap, User, BookOpen, Clock, LayoutDashboard, Moon, Sun, Key, CheckCircle, AlertTriangle, FileSpreadsheet, X, KeyRound, ArrowRight } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
@@ -24,244 +24,127 @@ const StudentDashboard = () => {
     if (session) {
       const userData = JSON.parse(session);
       if (userData.role !== 'siswa') {
-        window.location.href = '/';
+        navigate('/login');
       } else {
         setStudent(userData);
         fetchStudentData(userData.id);
       }
     } else {
-      window.location.href = '/login';
+      navigate('/login');
     }
 
     if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
       setIsDark(true);
       document.documentElement.classList.add('dark');
-    } else {
-      setIsDark(false);
-      document.documentElement.classList.remove('dark');
     }
-  }, []);
+  }, [navigate]);
 
   const fetchStudentData = async (studentId) => {
     setLoading(true);
     try {
-      // 1. Tarik Logistik (Ruangan)
-      const { data: logData } = await supabase
-        .from('student_logistics')
-        .select('*')
-        .eq('student_id', studentId)
-        .single();
-      setLogistics(logData);
-
-      // 2. Tarik Data Siswa & Kelas
-      const { data: stuData } = await supabase
-        .from('students')
-        .select('*, classes(name)')
-        .eq('id', studentId)
-        .single();
-        
-      setStudent(stuData); 
+      const { data: stuData } = await supabase.from('students').select('*, classes(id, name)').eq('id', studentId).single();
       const level = parseInt(stuData.classes.name.split(' ')[0]);
 
-      // 3. JEMBATAN GURU (PERBAIKAN: Array untuk tampung banyak guru)
-      const { data: assignments } = await supabase
-        .from('teacher_assignments')
-        .select('subject_id, teacher_id')
-        .eq('class_id', stuData.class_id);
+      const { data: logData } = await supabase.from('student_logistics').select('*').eq('student_id', studentId).maybeSingle();
+      setLogistics(logData);
 
-      const tMap = {};
-      assignments?.forEach(a => { 
-        if (!tMap[a.subject_id]) tMap[a.subject_id] = [];
-        tMap[a.subject_id].push(a.teacher_id); 
+      // JEMBATAN GURU
+      const { data: assignments } = await supabase.from('teacher_assignments').select('subject_id, teacher_id').eq('class_id', stuData.class_id);
+      const myTeachersBySubject = {}; 
+      assignments?.forEach(a => {
+        if (!myTeachersBySubject[a.subject_id]) myTeachersBySubject[a.subject_id] = [];
+        myTeachersBySubject[a.subject_id].push(a.teacher_id);
       });
 
-      // 4. Tarik Jadwal Ujian Aktif
-      const { data: schData } = await supabase
-        .from('schedules')
-        .select('*, exams(*, subjects(name)), teachers(full_name)')
-        .eq('status', 'active');
+      const { data: schData } = await supabase.from('schedules').select('*, exams(*, subjects(name)), teachers(full_name)').eq('status', 'active');
+      const todayStr = new Date().toISOString().split('T')[0];
 
-      const today = new Date();
-      const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      // 1. Kumpulkan SEMUA jadwal yang eligible untuk siswa ini
+      const validExamsAll = schData?.filter(sch => {
+        const isToday = sch.start_time?.startsWith(todayStr);
+        const isReady = ['validated', 'ready', 'live'].includes(sch.exams?.status);
+        if (!isToday || !isReady) return false;
 
-      let validExams = schData.filter(sch => {
-        const examDate = new Date(sch.start_time);
-        const examDateString = `${examDate.getFullYear()}-${String(examDate.getMonth() + 1).padStart(2, '0')}-${String(examDate.getDate()).padStart(2, '0')}`;
-        const isToday = examDateString === todayString;
-
-        const isExamReady = ['validated', 'ready', 'live'].includes(sch.exams?.status);
-        
-        let isClassAndTeacherValid = false;
-        if (sch.exams?.type === 'UH' || sch.exams?.type === 'PTS') {
-           isClassAndTeacherValid = sch.class_id === stuData.class_id;
+        let isEligible = false;
+        if (['UH', 'PTS'].includes(sch.exams?.type)) {
+           isEligible = sch.class_id === stuData.class_id;
         } else {
-           const isLevelValid = parseInt(sch.exams?.level) === level;
-           // PERBAIKAN: Cek apakah guru jadwal ada di array guru mapel kelas siswa
-           const isTeacherValid = tMap[sch.exams?.subject_id]?.includes(sch.teacher_id);
-           
-           const sessionNumber = logData ? parseInt(logData.session_name.replace(/\D/g, '')) : 1;
-           const isSessionValid = sch.session_no === 0 || sch.session_no === sessionNumber;
-
-           isClassAndTeacherValid = isLevelValid && isTeacherValid && isSessionValid;
+           const isLevelOk = parseInt(sch.exams?.level) === level;
+           const isTeacherOk = myTeachersBySubject[sch.exams?.subject_id]?.includes(sch.teacher_id);
+           const studentSessionNo = logData ? parseInt(logData.session_name.replace(/\D/g, '')) : 1;
+           const isSessionOk = sch.session_no === 0 || sch.session_no === studentSessionNo;
+           isEligible = isLevelOk && isTeacherOk && isSessionOk;
         }
+        return isEligible;
+      }) || [];
 
-        return isExamReady && isToday && isClassAndTeacherValid;
-      });
-
-      // PERBAIKAN: Mencegah Card Ganda jika 1 mapel ada banyak guru
-      const uniqueExams = [];
-      const seenExamIds = new Set();
-      for (const ex of validExams) {
-        if (!seenExamIds.has(ex.exam_id)) {
-          seenExamIds.add(ex.exam_id);
-          uniqueExams.push(ex);
-        }
-      }
-      validExams = uniqueExams;
-
-      // 5. Cek Status Pengerjaan (ANTI GHOST SESSION)
-      if (validExams.length > 0) {
-        const { data: sessionData } = await supabase
-          .from('exam_sessions')
-          .select('schedule_id, status, score')
+      // 2. Tarik Data Session berdasarkan semua jadwal yang valid
+      let sessionData = [];
+      if (validExamsAll.length > 0) {
+        const { data: sData } = await supabase.from('exam_sessions')
+          .select('*')
           .eq('student_id', studentId)
-          .in('schedule_id', validExams.map(v => v.id));
+          .in('schedule_id', validExamsAll.map(v => v.id));
+        sessionData = sData || [];
+      }
 
-        const examsWithStatus = validExams.map(ex => {
-          // Cari semua sesi untuk jadwal ini
-          const studentSessions = sessionData?.filter(s => s.schedule_id === ex.id) || [];
+      // 3. Deduplikasi & Prioritas Status Sesi
+      const examMap = new Map(); 
+      validExamsAll.forEach(sch => {
+        if (!examMap.has(sch.exam_id)) {
+          const relatedScheduleIds = validExamsAll.filter(v => v.exam_id === sch.exam_id).map(v => v.id);
+          const relatedSessions = sessionData.filter(s => relatedScheduleIds.includes(s.schedule_id));
           
           let bestSession = null;
-          if (studentSessions.length > 0) {
-            // Prioritas Sesi: 1. Finished, 2. Locked, 3. Active
-            bestSession = studentSessions.find(s => s.status === 'finished') || 
-                          studentSessions.find(s => s.status === 'locked') || 
-                          studentSessions[0];
+          if (relatedSessions.length > 0) {
+             bestSession = relatedSessions.find(s => s.status === 'finished') || 
+                           relatedSessions.find(s => s.status === 'locked') || 
+                           relatedSessions.find(s => s.status === 'active') || 
+                           relatedSessions[0];
           }
 
-          return {
-            ...ex,
-            studentStatus: bestSession?.status || 'not_started',
-            studentScore: bestSession?.score || null
-          };
-        });
-
-        examsWithStatus.sort((a, b) => {
-           if (a.studentStatus === 'finished' && b.studentStatus !== 'finished') return 1;
-           if (a.studentStatus !== 'finished' && b.studentStatus === 'finished') return -1;
-           return 0;
-        });
-
-        setAvailableExams(examsWithStatus);
-      } else {
-        setAvailableExams([]);
-      }
-
-      // 6. TARIK RIWAYAT NILAI 
-      const { data: historyData } = await supabase
-        .from('exam_sessions')
-        .select(`id, score, finished_at, schedules ( exams ( title, type, subjects (name) ) )`)
-        .eq('student_id', studentId)
-        .eq('status', 'finished')
-        .order('finished_at', { ascending: false });
-
-      if (historyData) {
-        // Biar riwayat juga bebas ghost session (filter ID yang unik aja kalau perlu)
-        const uniqueHistory = [];
-        const seenSchedules = new Set();
-        for (const h of historyData) {
-          if (!seenSchedules.has(h.schedules?.exams?.title)) {
-            seenSchedules.add(h.schedules?.exams?.title);
-            uniqueHistory.push(h);
-          }
+          examMap.set(sch.exam_id, {
+             ...sch,
+             studentStatus: bestSession?.status || 'not_started',
+             studentScore: bestSession?.score ?? null
+          });
         }
-        setExamHistory(uniqueHistory);
-      }
-
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const toggleDarkMode = () => {
-    if (isDark) {
-      document.documentElement.classList.remove('dark');
-      localStorage.theme = 'light';
-      setIsDark(false);
-    } else {
-      document.documentElement.classList.add('dark');
-      localStorage.theme = 'dark';
-      setIsDark(true);
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('user_session');
-    window.location.href = '/login';
-  };
-
-  // FUNGSI POP UP TOKEN
-  const handleStartExam = (schedule) => {
-    const examType = schedule.exams?.type;
-    const isStrictLogistics = ['PAS/PAT', 'SAJ'].includes(examType);
-
-    if (isStrictLogistics && !logistics) {
-      Swal.fire({
-        title: 'Akses Ditolak!',
-        text: 'Anda belum terdaftar di Ruangan & Sesi manapun untuk ujian ini. Silahkan lapor ke Pengawas/Kurikulum.',
-        icon: 'error'
       });
-      return;
-    }
 
-    setSelectedExam(schedule);
-    setTokenInput(['', '', '', '', '', '']);
+      const finalAvailableExams = Array.from(examMap.values());
+      
+      setAvailableExams(finalAvailableExams.sort((a,b) => a.studentStatus === 'finished' ? 1 : -1));
+
+      const { data: history } = await supabase.from('exam_sessions').select(`score, finished_at, schedules(exams(title, subjects(name)))`)
+        .eq('student_id', studentId).eq('status', 'finished').order('finished_at', { ascending: false });
+      setExamHistory(history || []);
+      setStudent(stuData);
+
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
+  };
+
+  const handleStartExam = (sch) => {
+    if (['PAS/PAT', 'SAJ'].includes(sch.exams.type) && !logistics) {
+      return Swal.fire('Akses Ditolak', 'Data ruangan/sesi Anda belum disetting.', 'error');
+    }
+    setSelectedExam(sch);
+    setTokenInput(['','','','','','']);
     setShowTokenModal(true);
     setTimeout(() => inputRefs.current[0]?.focus(), 100);
   };
 
-  const handleTokenChange = (index, value) => {
-    if (value.length > 1) value = value.slice(-1);
-    const newToken = [...tokenInput];
-    newToken[index] = value.toUpperCase();
-    setTokenInput(newToken);
-    if (value && index < 5) inputRefs.current[index + 1].focus();
-  };
-
-  const handleTokenKeyDown = (index, e) => {
-    if (e.key === 'Backspace' && !tokenInput[index] && index > 0) {
-      inputRefs.current[index - 1].focus();
-    }
-  };
-
-  const verifyTokenAndStart = () => {
-    const enteredToken = tokenInput.join('');
-    if (enteredToken === selectedExam.token) {
-      Swal.fire({
-        title: 'Token Valid!',
-        text: 'Selamat mengerjakan ujian.',
-        icon: 'success',
-        timer: 1500,
-        showConfirmButton: false
-      }).then(() => {
-        setShowTokenModal(false);
-        navigate(`/exam-interface/${selectedExam.id}`);
-      });
+  const verifyToken = () => {
+    if (tokenInput.join('') === selectedExam.token) {
+      setShowTokenModal(false);
+      navigate(`/exam-interface/${selectedExam.id}`);
     } else {
-      Swal.fire({
-        title: 'Token Salah!',
-        text: 'Silakan minta token yang valid ke pengawas.',
-        icon: 'error',
-        confirmButtonColor: '#ea580c'
-      });
-      setTokenInput(['', '', '', '', '', '']);
-      inputRefs.current[0]?.focus();
+      Swal.fire('Token Salah', 'Minta token ke pengawas.', 'error');
+      setTokenInput(['','','','','','']);
+      inputRefs.current[0].focus();
     }
   };
 
-  // FUNGSI POP UP LIHAT NILAI
   const handleShowScore = (schedule) => {
     Swal.fire({
       title: 'NILAI UJIAN',
@@ -282,101 +165,91 @@ const StudentDashboard = () => {
     });
   };
 
-  const formatDateShort = (dateStr) => {
-    if (!dateStr) return '-';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+  const toggleDarkMode = () => {
+    const newDark = !isDark;
+    setIsDark(newDark);
+    document.documentElement.classList.toggle('dark');
+    localStorage.theme = newDark ? 'dark' : 'light';
   };
 
-  if (!student) return null;
+  if (loading) return <div className="h-screen flex items-center justify-center bg-zinc-950 text-orange-600 font-black animate-pulse uppercase italic">Sinkronisasi Identitas...</div>;
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 transition-colors duration-500">
-      <nav className="bg-white dark:bg-zinc-900 border-b dark:border-zinc-800 px-6 py-4 sticky top-0 z-10 transition-colors">
-        <div className="max-w-5xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <div className="bg-orange-600 p-2 rounded-lg">
-              <LayoutDashboard size={20} className="text-white" />
-            </div>
-            <h1 className="text-xl font-black text-slate-800 dark:text-white italic tracking-tighter">
-              EXAM <span className="text-orange-600">JINGGA</span>
-            </h1>
+    <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 transition-colors duration-500 font-sans text-left">
+      <nav className="bg-white dark:bg-zinc-900 border-b dark:border-zinc-800 px-6 py-4 sticky top-0 z-30 shadow-sm">
+        <div className="max-w-6xl mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="bg-orange-600 p-2 rounded-xl shadow-lg shadow-orange-600/20"><LayoutDashboard size={20} className="text-white" /></div>
+            <h1 className="text-xl font-black text-slate-800 dark:text-white italic tracking-tighter uppercase">EXAM <span className="text-orange-600">JINGGA</span></h1>
           </div>
-          
-          <div className="flex items-center gap-2 md:gap-4">
-            <button onClick={toggleDarkMode} className="p-2.5 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-orange-400 hover:ring-2 ring-orange-500/50 transition-all">
-              {isDark ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
-            <button onClick={handleLogout} className="flex items-center gap-2 text-red-500 font-bold hover:bg-red-50 dark:hover:bg-red-900/10 px-4 py-2 rounded-xl transition-all">
-              <LogOut size={18}/> <span className="hidden md:block">Keluar</span>
-            </button>
+          <div className="flex items-center gap-4">
+            <button onClick={toggleDarkMode} className="p-3 rounded-2xl bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-orange-400 active:scale-90 transition-all">{isDark ? <Sun size={20} /> : <Moon size={20} />}</button>
+            <button onClick={() => { localStorage.removeItem('user_session'); navigate('/login'); }} className="hidden md:flex items-center gap-2 text-red-500 font-black uppercase text-[10px] tracking-widest bg-red-50 dark:bg-red-950/20 px-5 py-3 rounded-2xl hover:bg-red-500 hover:text-white transition-all"><LogOut size={16}/> Keluar</button>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-5xl mx-auto p-6 animate-in fade-in zoom-in-95 duration-700 slide-in-from-bottom-4 text-left">
-        <div className="bg-gradient-to-br from-orange-500 to-orange-700 rounded-[2rem] p-8 text-white shadow-xl shadow-orange-500/20 mb-8 relative overflow-hidden">
+      <main className="max-w-6xl mx-auto p-6 lg:p-10">
+        <div className="bg-gradient-to-br from-orange-500 to-orange-700 rounded-[3rem] p-10 text-white shadow-2xl shadow-orange-500/30 mb-10 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl group-hover:scale-110 transition-all duration-700"></div>
           <div className="relative z-10">
-            <p className="text-orange-100 font-medium mb-1">Selamat Datang,</p>
-            <h2 className="text-3xl md:text-4xl font-black uppercase mb-4 tracking-tight">{student.full_name || student.name}</h2>
-            <div className="flex flex-wrap gap-4">
-              <div className="bg-white/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-2 border border-white/10">
-                <GraduationCap size={18}/>
-                <span className="font-bold text-sm">{student.classes?.name || student.class}</span>
+            <p className="text-orange-100 font-bold uppercase tracking-[0.3em] text-[10px] mb-2">Profil Siswa</p>
+            <h2 className="text-4xl md:text-5xl font-black uppercase italic tracking-tighter mb-6">{student?.full_name}</h2>
+            <div className="flex flex-wrap gap-3">
+              <div className="bg-black/20 backdrop-blur-md px-6 py-3 rounded-2xl flex items-center gap-3 border border-white/10">
+                <GraduationCap size={20} className="text-orange-300"/><span className="font-black text-xs uppercase tracking-widest">{student?.classes?.name}</span>
               </div>
-              <div className="bg-white/20 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-2 border border-white/10">
-                <User size={18}/>
-                <span className="font-bold text-sm">Siswa Aktif</span>
+              <div className="bg-black/20 backdrop-blur-md px-6 py-3 rounded-2xl flex items-center gap-3 border border-white/10">
+                <User size={20} className="text-orange-300"/><span className="font-black text-xs uppercase tracking-widest">NIS: {student?.nis}</span>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-2 space-y-6">
-            <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-              <BookOpen size={20} className="text-orange-600"/> Daftar Ujian Hari Ini
-            </h3>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+          <div className="lg:col-span-2 space-y-8">
+            <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase italic flex items-center gap-3"><BookOpen size={24} className="text-orange-600"/> Jadwal Ujian Hari Ini</h3>
             
-            {loading ? (
-              <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-[2rem] p-12 text-center animate-pulse">
-                <p className="text-orange-600 font-black italic uppercase">Mencari Jadwal Hari Ini...</p>
-              </div>
-            ) : availableExams.length === 0 ? (
-              <div className="bg-white dark:bg-zinc-900 border-2 border-dashed border-slate-200 dark:border-zinc-800 rounded-[2rem] p-12 text-center transition-colors">
-                <div className="bg-slate-100 dark:bg-zinc-800 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Clock size={32} className="text-slate-400" />
-                </div>
-                <h4 className="font-bold text-slate-800 dark:text-zinc-200 uppercase">Belum Ada Jadwal Ujian</h4>
-                <p className="text-sm text-slate-500 mt-1">Ujian yang aktif pada hari ini akan muncul di sini.</p>
+            {availableExams.length === 0 ? (
+              <div className="bg-white dark:bg-zinc-900 border-2 border-dashed border-slate-200 dark:border-zinc-800 rounded-[3rem] p-20 text-center">
+                <Clock size={48} className="text-slate-300 mx-auto mb-4 animate-bounce" />
+                <h4 className="font-black text-slate-400 uppercase tracking-widest italic text-sm">Tidak ada ujian untuk hari ini.</h4>
               </div>
             ) : (
-              <div className="grid gap-4">
+              <div className="grid gap-6">
                 {availableExams.map(sch => (
-                  <div key={sch.id} className={`bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors ${sch.studentStatus === 'finished' ? 'border-emerald-200 dark:border-emerald-800/50 opacity-80' : 'border-slate-200 dark:border-zinc-800 hover:border-orange-500'}`}>
-                    <div>
-                      <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest ${sch.studentStatus === 'finished' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30' : 'bg-orange-100 text-orange-600 dark:bg-orange-900/30'}`}>
-                        {sch.exams?.type}
-                      </span>
-                      <h4 className="text-xl font-black text-slate-900 dark:text-white uppercase italic mt-2">{sch.exams?.title}</h4>
-                      <p className="text-slate-500 text-sm font-bold">
-                        {sch.exams?.subjects?.name} 
-                        {['PAS/PAT', 'SAJ'].includes(sch.exams?.type) ? ` • ${sch.session_no === 0 ? 'Semua Sesi' : 'Sesi ' + sch.session_no}` : ''}
+                  <div key={sch.id} className={`bg-white dark:bg-zinc-900 p-8 rounded-[3rem] border-2 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all ${sch.studentStatus === 'finished' ? 'border-emerald-500/30 bg-emerald-50/5 dark:bg-emerald-950/10' : 'border-white dark:border-zinc-900 hover:border-orange-500'}`}>
+                    <div className="text-left">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="bg-orange-100 dark:bg-orange-900/40 text-orange-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest">{sch.exams?.type}</span>
+                        {sch.studentStatus === 'finished' && <span className="bg-emerald-500 text-white px-3 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1 shadow-lg shadow-emerald-500/20"><CheckCircle size={10}/> Selesai</span>}
+                      </div>
+                      <h4 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic leading-tight mb-1">{sch.exams?.title}</h4>
+                      
+                      {/* PENAMBAHAN NAMA GURU KHUSUS UH & PTS */}
+                      <p className="text-slate-500 dark:text-zinc-400 text-xs font-bold uppercase tracking-widest leading-relaxed">
+                        Mapel: {sch.exams?.subjects?.name} 
+                        {['UH', 'PTS'].includes(sch.exams?.type) && sch.teachers?.full_name && (
+                           <span className="block mt-1 text-orange-600 dark:text-orange-500">
+                             Guru: {sch.teachers.full_name}
+                           </span>
+                        )}
                       </p>
+
                     </div>
 
-                    <div className="flex-shrink-0 w-full md:w-auto mt-2 md:mt-0">
+                    <div>
                       {sch.studentStatus === 'finished' ? (
-                        <button onClick={() => handleShowScore(sch)} className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-4 rounded-2xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-600/20">
+                        <button onClick={() => handleShowScore(sch)} className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-4 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.2em] flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-600/20 hover:scale-105 active:scale-95">
                           <CheckCircle size={16}/> Lihat Nilai
                         </button>
                       ) : sch.studentStatus === 'locked' ? (
-                         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 px-5 py-3 rounded-2xl flex items-center justify-center">
-                          <span className="text-red-500 font-black text-xs uppercase flex items-center gap-2"><AlertTriangle size={16}/> Terkunci Admin</span>
+                        <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 p-5 rounded-[2rem] flex items-center gap-3 text-red-600">
+                          <AlertTriangle size={20}/> <span className="text-[10px] font-black uppercase">Terkunci</span>
                         </div>
                       ) : (
-                        <button onClick={() => handleStartExam(sch)} className="w-full md:w-auto bg-slate-900 dark:bg-white dark:text-black text-white px-6 py-4 rounded-2xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 hover:scale-105 transition-all shadow-lg">
-                          <Key size={16}/> {sch.studentStatus === 'active' ? 'Lanjutkan' : 'Mulai Kerjakan'}
+                        <button onClick={() => handleStartExam(sch)} className="bg-slate-900 dark:bg-white dark:text-black text-white px-10 py-5 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.2em] flex items-center justify-center gap-3 hover:scale-105 active:scale-95 transition-all shadow-xl">
+                          {sch.studentStatus === 'active' ? 'LANJUTKAN' : 'MULAI'} <ArrowRight size={16}/>
                         </button>
                       )}
                     </div>
@@ -384,107 +257,77 @@ const StudentDashboard = () => {
                 ))}
               </div>
             )}
-            
-            {/* RIWAYAT NILAI SISWA */}
-            <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2 pt-6 border-t border-slate-200 dark:border-zinc-800">
-              <FileSpreadsheet size={20} className="text-emerald-600"/> Riwayat Ujian (Selesai)
-            </h3>
-            
-            <div className="bg-white dark:bg-zinc-900 rounded-[2rem] p-6 shadow-sm border border-slate-100 dark:border-zinc-800 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[500px]">
-                  <thead>
-                    <tr className="border-b border-slate-100 dark:border-zinc-800">
-                      <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Mata Pelajaran</th>
-                      <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Waktu</th>
-                      <th className="pb-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Nilai Akhir</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50 dark:divide-zinc-800/50">
-                    {examHistory.length === 0 ? (
-                      <tr>
-                        <td colSpan="3" className="py-6 text-center text-slate-400 font-bold italic text-xs">
-                          Belum ada ujian yang diselesaikan.
-                        </td>
-                      </tr>
-                    ) : (
-                      examHistory.map((history, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-zinc-800/30 transition-colors">
-                          <td className="py-4 text-xs font-black uppercase dark:text-white text-slate-800">
-                            {history.schedules?.exams?.subjects?.name}
-                            <div className="text-[10px] text-slate-400 mt-1">{history.schedules?.exams?.type} - {history.schedules?.exams?.title}</div>
-                          </td>
-                          <td className="py-4 text-xs font-bold text-slate-500 dark:text-zinc-400">
-                            {formatDateShort(history.finished_at)}
-                          </td>
-                          <td className="py-4 text-right">
-                            <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">
-                              {history.score ?? 0}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
           </div>
 
-          <div className="space-y-6">
-            <h3 className="text-lg font-bold text-slate-800 dark:text-white uppercase">Aturan Ujian</h3>
-            <div className="bg-white dark:bg-zinc-900 border dark:border-zinc-800 rounded-3xl p-6 shadow-sm transition-colors mb-4">
-              <p className="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">Informasi Logistik</p>
+          <div className="space-y-8">
+            <div className="bg-white dark:bg-zinc-900 p-8 rounded-[3rem] border border-slate-100 dark:border-zinc-800 shadow-sm text-left">
+              <h3 className="font-black text-[10px] uppercase text-slate-400 mb-6 tracking-widest flex items-center gap-2">
+                <AlertTriangle size={14} className="text-orange-600"/> Aturan & Penempatan
+              </h3>
+              
               {logistics ? (
-                <div className="space-y-2 mb-4 pb-4 border-b border-dashed dark:border-zinc-800">
-                  <p className="text-sm font-bold dark:text-zinc-300">Ruangan: <span className="text-orange-600 uppercase">{logistics.room_name}</span></p>
-                  <p className="text-sm font-bold dark:text-zinc-300">Sesi Ujian: <span className="text-orange-600 uppercase">Sesi {logistics.session_name}</span></p>
+                <div className="space-y-4 mb-6 pb-6 border-b border-dashed border-slate-200 dark:border-zinc-800">
+                   <div className="flex justify-between items-center p-4 bg-slate-50 dark:bg-zinc-950 rounded-2xl">
+                      <span className="text-[10px] font-black text-slate-400 uppercase">Ruangan</span>
+                      <span className="font-black dark:text-white uppercase italic text-orange-600">{logistics.room_name}</span>
+                   </div>
+                   <div className="flex justify-between items-center p-4 bg-slate-50 dark:bg-zinc-950 rounded-2xl">
+                      <span className="text-[10px] font-black text-slate-400 uppercase">Sesi</span>
+                      <span className="font-black dark:text-white uppercase italic text-orange-600">{logistics.session_name}</span>
+                   </div>
                 </div>
               ) : (
-                <p className="text-xs text-orange-500 font-bold mb-4 pb-4 border-b border-dashed dark:border-zinc-800">Plotting Ruang & Sesi kosong.</p>
+                <p className="text-[10px] font-bold text-orange-500 uppercase italic mb-6 pb-6 border-b border-dashed border-slate-200 dark:border-zinc-800">Ruangan & Sesi Belum Diploting.</p>
               )}
-              <ul className="space-y-3">
-                <li className="flex gap-3"><div className="w-2 h-2 bg-orange-500 rounded-full mt-1.5 shrink-0"></div><p className="text-xs font-bold text-slate-600 dark:text-zinc-400">Dilarang berpindah Tab/Aplikasi selama ujian.</p></li>
-                <li className="flex gap-3"><div className="w-2 h-2 bg-orange-500 rounded-full mt-1.5 shrink-0"></div><p className="text-xs font-bold text-slate-600 dark:text-zinc-400">Mintalah Token Ujian kepada Pengawas.</p></li>
+
+              <ul className="space-y-4">
+                <li className="flex gap-3 items-start"><div className="w-2 h-2 bg-orange-500 rounded-full mt-1.5 shrink-0"></div><p className="text-xs font-bold text-slate-600 dark:text-zinc-400 leading-relaxed">Dilarang berpindah Tab/Aplikasi selama ujian berlangsung.</p></li>
+                <li className="flex gap-3 items-start"><div className="w-2 h-2 bg-orange-500 rounded-full mt-1.5 shrink-0"></div><p className="text-xs font-bold text-slate-600 dark:text-zinc-400 leading-relaxed">Mintalah Token Ujian kepada Pengawas Ruangan.</p></li>
+                <li className="flex gap-3 items-start"><div className="w-2 h-2 bg-orange-500 rounded-full mt-1.5 shrink-0"></div><p className="text-xs font-bold text-slate-600 dark:text-zinc-400 leading-relaxed">Ujian akan berakhir otomatis saat waktu habis.</p></li>
               </ul>
             </div>
-          </div>
 
+            <div className="bg-white dark:bg-zinc-900 p-8 rounded-[3rem] border border-slate-100 dark:border-zinc-800 shadow-sm text-left">
+              <h3 className="font-black text-[10px] uppercase text-slate-400 mb-6 tracking-widest flex items-center gap-2"><FileSpreadsheet size={14} className="text-emerald-600"/> Riwayat Nilai</h3>
+              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                {examHistory.length === 0 ? (
+                  <p className="text-[10px] font-bold text-slate-400 italic py-4 text-center">Belum ada ujian diselesaikan.</p>
+                ) : (
+                  examHistory.map((h, i) => (
+                    <div key={i} className="flex justify-between items-center p-4 hover:bg-slate-50 dark:hover:bg-zinc-800 rounded-2xl transition-all border-b dark:border-zinc-800 last:border-0">
+                       <div className="max-w-[70%]">
+                          <p className="text-xs font-black uppercase dark:text-white truncate">{h.schedules?.exams?.subjects?.name}</p>
+                          <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">{h.schedules?.exams?.title}</p>
+                       </div>
+                       <span className="text-xl font-black text-emerald-500 italic">{h.score}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </main>
 
-      {/* MODAL INPUT TOKEN PIN */}
+      {/* TOKEN MODAL */}
       {showTokenModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-center">
-          <div className="bg-white dark:bg-zinc-950 w-full max-w-md rounded-[3rem] p-10 shadow-2xl relative border border-slate-100 dark:border-zinc-800">
-             <button onClick={() => setShowTokenModal(false)} className="absolute top-6 right-6 p-2 text-slate-400 hover:text-red-500 transition-colors"><X size={24}/></button>
-             
-             <div className="mx-auto bg-orange-100 dark:bg-orange-900/30 text-orange-600 w-20 h-20 rounded-[2rem] flex items-center justify-center mb-6">
-               <KeyRound size={40}/>
-             </div>
-             
-             <h3 className="text-2xl font-black uppercase italic dark:text-white tracking-tighter mb-2">Masukkan Token</h3>
-             <p className="text-xs font-bold text-slate-500 mb-8 uppercase">Mintalah 6 digit token kepada pengawas ujian</p>
-
-             <div className="flex justify-center gap-2 mb-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-zinc-950 w-full max-w-md rounded-[3.5rem] p-12 shadow-2xl relative border border-slate-100 dark:border-zinc-800">
+             <button onClick={() => setShowTokenModal(false)} className="absolute top-10 right-10 p-2 text-slate-400 hover:text-red-500 transition-colors"><X size={24}/></button>
+             <div className="mx-auto bg-orange-100 dark:bg-orange-900/40 text-orange-600 w-20 h-20 rounded-[2rem] flex items-center justify-center mb-8"><KeyRound size={40}/></div>
+             <h3 className="text-3xl font-black uppercase italic dark:text-white tracking-tighter mb-2 text-center">Input Token</h3>
+             <p className="text-[10px] font-black text-slate-400 mb-10 uppercase tracking-widest text-center">Silahkan minta 6 digit token ke pengawas</p>
+             <div className="flex justify-center gap-3 mb-10">
                {tokenInput.map((digit, index) => (
-                 <input
-                   key={index}
-                   ref={el => inputRefs.current[index] = el}
-                   type="text"
-                   value={digit}
-                   onChange={e => handleTokenChange(index, e.target.value)}
-                   onKeyDown={e => handleTokenKeyDown(index, e)}
-                   className="w-12 h-14 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-200 dark:border-zinc-800 rounded-xl text-center text-2xl font-black text-orange-600 uppercase focus:border-orange-500 focus:bg-orange-50 dark:focus:bg-orange-900/20 outline-none transition-all"
-                   maxLength={1}
-                 />
+                 <input key={index} ref={el => inputRefs.current[index] = el} type="text" value={digit} onChange={e => {
+                   const val = e.target.value.toUpperCase().slice(-1);
+                   const nt = [...tokenInput]; nt[index] = val; setTokenInput(nt);
+                   if (val && index < 5) inputRefs.current[index + 1].focus();
+                 }} onKeyDown={e => { if (e.key === 'Backspace' && !tokenInput[index] && index > 0) inputRefs.current[index - 1].focus(); }}
+                 className="w-12 h-16 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl text-center text-3xl font-black text-orange-600 focus:border-orange-500 outline-none transition-all"/>
                ))}
              </div>
-
-             <button onClick={verifyTokenAndStart} className="w-full bg-orange-600 text-white py-4 rounded-2xl font-black uppercase text-xs shadow-lg hover:scale-105 transition-all">
-                Verifikasi & Mulai
-             </button>
+             <button onClick={verifyToken} className="w-full bg-orange-600 text-white py-5 rounded-[2rem] font-black uppercase text-xs tracking-[0.3em] shadow-xl shadow-orange-600/30 hover:scale-105 transition-all">VALIDASI & MULAI</button>
           </div>
         </div>
       )}
