@@ -101,14 +101,31 @@ const ExamInterface = () => {
       
       setTimeLeft(remaining);
 
+      // --- PERBAIKAN LOGIKA PENARIKAN SOAL ---
+      // 1. Ambil info class_id siswa
+      const { data: studentData } = await supabase.from('students').select('class_id').eq('id', studentId).single();
+      const studentClassId = studentData?.class_id;
+
+      // 2. Cari tahu siapa saja guru siswa ini untuk mapel ujian ini
+      const { data: myTeachers } = await supabase
+        .from('teacher_assignments')
+        .select('teacher_id')
+        .eq('class_id', studentClassId)
+        .eq('subject_id', schData.exams.subject_id);
+      
+      const allowedTeacherIds = myTeachers?.map(t => t.teacher_id) || [];
+
+      // 3. Tarik soal dengan filter created_by hanya dari guru-guru pengampu di kelas tersebut
       const { data: qData, error: qErr } = await supabase
         .from('exam_questions')
-        .select(`question_id, questions(*)`)
+        .select(`question_id, questions!inner(*)`)
         .eq('exam_id', schData.exam_id)
+        .in('questions.created_by', allowedTeacherIds)
         .order('order_number', { ascending: true });
 
       if (qErr) throw qErr;
-      if (!qData || qData.length === 0) throw new Error("Soal belum divalidasi oleh Admin/Guru!");
+      if (!qData || qData.length === 0) throw new Error("Soal belum divalidasi oleh Admin/Guru atau soal guru pengampumu belum tersedia!");
+      // ----------------------------------------
       
       let fetchedQuestions = qData.map(item => item.questions);
       
@@ -312,7 +329,6 @@ const ExamInterface = () => {
     const finalScore = questions.length > 0 ? Math.round((correctCount / questions.length) * 100) : 0;
 
     try {
-      // PERBAIKAN: Tangkap error dari Supabase secara eksplisit menggunakan .select()
       const { error: updateErr } = await supabase.from('exam_sessions')
         .update({ 
           status: 'finished', 
@@ -322,7 +338,6 @@ const ExamInterface = () => {
         .eq('id', sessionId)
         .select();
       
-      // Jika supabase gagal update, lemparkan error ke blok catch
       if (updateErr) throw updateErr;
 
       await Swal.fire({
@@ -337,7 +352,6 @@ const ExamInterface = () => {
       navigate('/student-dashboard');
     } catch (err) {
       console.error("Error saving score:", err);
-      // Jika pop-up ini yang muncul, berarti ada masalah dengan Database/RLS lu bro
       Swal.fire('Gagal Menyimpan!', `Sistem menolak update nilai: ${err.message}. Hubungi admin atau pengawas!`, 'error');
     }
   };

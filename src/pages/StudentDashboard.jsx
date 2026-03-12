@@ -63,14 +63,17 @@ const StudentDashboard = () => {
       setStudent(stuData); 
       const level = parseInt(stuData.classes.name.split(' ')[0]);
 
-      // 3. JEMBATAN GURU
+      // 3. JEMBATAN GURU (PERBAIKAN: Array untuk tampung banyak guru)
       const { data: assignments } = await supabase
         .from('teacher_assignments')
         .select('subject_id, teacher_id')
         .eq('class_id', stuData.class_id);
 
       const tMap = {};
-      assignments?.forEach(a => { tMap[a.subject_id] = a.teacher_id; });
+      assignments?.forEach(a => { 
+        if (!tMap[a.subject_id]) tMap[a.subject_id] = [];
+        tMap[a.subject_id].push(a.teacher_id); 
+      });
 
       // 4. Tarik Jadwal Ujian Aktif
       const { data: schData } = await supabase
@@ -81,7 +84,7 @@ const StudentDashboard = () => {
       const today = new Date();
       const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-      const validExams = schData.filter(sch => {
+      let validExams = schData.filter(sch => {
         const examDate = new Date(sch.start_time);
         const examDateString = `${examDate.getFullYear()}-${String(examDate.getMonth() + 1).padStart(2, '0')}-${String(examDate.getDate()).padStart(2, '0')}`;
         const isToday = examDateString === todayString;
@@ -93,7 +96,8 @@ const StudentDashboard = () => {
            isClassAndTeacherValid = sch.class_id === stuData.class_id;
         } else {
            const isLevelValid = parseInt(sch.exams?.level) === level;
-           const isTeacherValid = sch.teacher_id === tMap[sch.exams?.subject_id];
+           // PERBAIKAN: Cek apakah guru jadwal ada di array guru mapel kelas siswa
+           const isTeacherValid = tMap[sch.exams?.subject_id]?.includes(sch.teacher_id);
            
            const sessionNumber = logData ? parseInt(logData.session_name.replace(/\D/g, '')) : 1;
            const isSessionValid = sch.session_no === 0 || sch.session_no === sessionNumber;
@@ -103,6 +107,17 @@ const StudentDashboard = () => {
 
         return isExamReady && isToday && isClassAndTeacherValid;
       });
+
+      // PERBAIKAN: Mencegah Card Ganda jika 1 mapel ada banyak guru
+      const uniqueExams = [];
+      const seenExamIds = new Set();
+      for (const ex of validExams) {
+        if (!seenExamIds.has(ex.exam_id)) {
+          seenExamIds.add(ex.exam_id);
+          uniqueExams.push(ex);
+        }
+      }
+      validExams = uniqueExams;
 
       // 5. Cek Status Pengerjaan (ANTI GHOST SESSION)
       if (validExams.length > 0) {
@@ -351,7 +366,6 @@ const StudentDashboard = () => {
                     </div>
 
                     <div className="flex-shrink-0 w-full md:w-auto mt-2 md:mt-0">
-                      {/* TOMBOL LIHAT NILAI & MULAI KERJAKAN */}
                       {sch.studentStatus === 'finished' ? (
                         <button onClick={() => handleShowScore(sch)} className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-4 rounded-2xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-600/20">
                           <CheckCircle size={16}/> Lihat Nilai

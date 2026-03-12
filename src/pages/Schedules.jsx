@@ -45,21 +45,19 @@ const Schedules = () => {
       .order('created_at', { ascending: false });
     
     if (data) {
-      // --- PERBAIKAN: Ambil SEMUA soal ujian, jangan difilter berdasarkan user login ---
-      // Supaya admin bisa melihat data dari semua guru
       const { data: allQuestions } = await supabase
         .from('exam_questions')
         .select('exam_id, questions!inner(created_by)');
 
       const cleaned = data.map(ex => {
-        // Hitung soal spesifik berdasarkan guru yang ditugaskan pada jadwal (ex) ini
         const teacherInputCount = allQuestions?.filter(q => q.exam_id === ex.exam_id && q.questions.created_by === ex.teacher_id).length || 0;
         
         return {
           ...ex,
           start_time: ex.start_time ? ex.start_time.split('+')[0].replace('T', ' ') : null,
           end_time: ex.end_time ? ex.end_time.split('+')[0].replace('T', ' ') : null,
-          my_question_count: teacherInputCount // Menyimpan progres aktual guru di jadwal ini
+          my_question_count: teacherInputCount,
+          cluster_classes_text: `GABUNGAN KELAS ${ex.exams?.level}` 
         };
       });
 
@@ -144,21 +142,47 @@ const Schedules = () => {
 
       const finalTitle = (formData.type === 'PTS' || formData.type === 'PAS/PAT') ? formData.sub_type : (formData.type === 'SAJ' ? "Asesmen Sumatif Akhir Jenjang" : formData.title);
       const initialStatus = 'pending_selection';
-
       const parsedSessionNo = formData.session_no === 'Semua Sesi' ? 0 : parseInt(formData.session_no);
+      const totalTarget = parseInt(formData.target_question_count);
 
       if (editingId) {
+        // --- LOGIKA EDIT (UPDATE DATABASE) ---
         const scheduleData = exams.find(ex => ex.id === editingId);
+        
         await supabase.from('exams').update({ 
-          title: finalTitle,
-          duration: parseInt(formData.duration), 
-          target_question_count: parseInt(formData.target_question_count),
-          type: formData.type
+          title: finalTitle, duration: parseInt(formData.duration), target_question_count: totalTarget, type: formData.type
         }).eq('id', scheduleData.exam_id);
         
-        await supabase.from('schedules').update({ start_time: finalStart, end_time: finalEnd, token: formData.token, session_no: parsedSessionNo }).eq('id', editingId);
+        const { data: existingSchedules } = await supabase.from('schedules').select('id, teacher_id').eq('exam_id', scheduleData.exam_id);
+        
+        // Cari pembagi (max guru per kelas) untuk jadwal yang lagi di-edit
+        const matchedAssignments = allAssignments.filter(a => parseInt(a.classes.name.split(' ')[0]) === parseInt(formData.level) && a.subject_id === formData.subject_id);
+        const teacherCountPerClass = {};
+        matchedAssignments.forEach(a => {
+          if (!teacherCountPerClass[a.classes.id]) teacherCountPerClass[a.classes.id] = new Set();
+          teacherCountPerClass[a.classes.id].add(a.teacher_id);
+        });
+        
+        let maxTeachersPerClass = 1;
+        for (const classId in teacherCountPerClass) {
+          if (teacherCountPerClass[classId].size > maxTeachersPerClass) maxTeachersPerClass = teacherCountPerClass[classId].size;
+        }
+
+        const baseQuota = Math.floor(totalTarget / maxTeachersPerClass);
+        const remainder = totalTarget % maxTeachersPerClass;
+
+        for (let i = 0; i < existingSchedules.length; i++) {
+          const sch = existingSchedules[i];
+          const quota = baseQuota + (i < remainder ? 1 : 0); // Distribusi sisa soal
+          
+          await supabase.from('schedules').update({ 
+            start_time: finalStart, end_time: finalEnd, token: formData.token, session_no: parsedSessionNo,
+            teacher_quota: quota 
+          }).eq('id', sch.id);
+        }
       
       } else {
+        // --- LOGIKA BIKIN BARU (INSERT DATABASE) ---
         if (formData.type === 'UH' || formData.type === 'PTS') {
            const assignment = allAssignments.find(a => a.classes.id === formData.class_id && a.subject_id === formData.subject_id);
            if (!assignment) throw new Error("Guru pengampu tidak ditemukan di kelas ini!");
@@ -166,45 +190,62 @@ const Schedules = () => {
            const { data: examData, error: exErr } = await supabase.from('exams').insert([{
               title: finalTitle, subject_id: formData.subject_id, type: formData.type, level: parseInt(formData.level),
               teacher_id: assignment.teacher_id, status: initialStatus,
-              duration: parseInt(formData.duration), target_question_count: parseInt(formData.target_question_count),
+              duration: parseInt(formData.duration), target_question_count: totalTarget,
               token: formData.token 
            }]).select().single();
            if (exErr) throw exErr;
 
            await supabase.from('schedules').insert([{
               exam_id: examData.id, class_id: formData.class_id, teacher_id: assignment.teacher_id, 
-              start_time: finalStart, end_time: finalEnd, token: formData.token, session_no: parsedSessionNo, status: 'active'
+              start_time: finalStart, end_time: finalEnd, token: formData.token, session_no: parsedSessionNo, status: 'active',
+              teacher_quota: totalTarget 
            }]);
 
         } else {
            const matchedAssignments = allAssignments.filter(a => parseInt(a.classes.name.split(' ')[0]) === parseInt(formData.level) && a.subject_id === formData.subject_id);
-           
            if (matchedAssignments.length === 0) throw new Error("Tidak ada guru yang ditugaskan untuk mapel dan jenjang ini!");
 
            const uniqueTeachers = Array.from(new Set(matchedAssignments.map(a => a.teacher_id)));
 
+           // 1. Hitung jumlah guru terbanyak dalam 1 kelas
+           const teacherCountPerClass = {};
+           matchedAssignments.forEach(a => {
+             if (!teacherCountPerClass[a.classes.id]) teacherCountPerClass[a.classes.id] = new Set();
+             teacherCountPerClass[a.classes.id].add(a.teacher_id);
+           });
+
+           let maxTeachersPerClass = 1;
+           for (const classId in teacherCountPerClass) {
+             if (teacherCountPerClass[classId].size > maxTeachersPerClass) {
+               maxTeachersPerClass = teacherCountPerClass[classId].size;
+             }
+           }
+
            const { data: examData, error: exErr } = await supabase.from('exams').insert([{
               title: finalTitle, subject_id: formData.subject_id, type: formData.type, level: parseInt(formData.level),
-              teacher_id: myTeacherId, 
-              status: initialStatus,
-              duration: parseInt(formData.duration), target_question_count: parseInt(formData.target_question_count),
-              token: formData.token 
+              teacher_id: myTeacherId, status: initialStatus,
+              duration: parseInt(formData.duration), target_question_count: totalTarget, token: formData.token 
            }]).select().single();
-           
            if (exErr) throw exErr;
 
-           for (const tId of uniqueTeachers) {
+           // 2. Bagi target soal dengan max guru per kelas
+           const baseQuota = Math.floor(totalTarget / maxTeachersPerClass);
+           const remainder = totalTarget % maxTeachersPerClass;
+
+           for (let i = 0; i < uniqueTeachers.length; i++) {
+             const tId = uniqueTeachers[i];
+             const quota = baseQuota + (i < remainder ? 1 : 0); 
+             
              await supabase.from('schedules').insert([{
-                exam_id: examData.id, 
-                class_id: null, 
-                teacher_id: tId, 
-                start_time: finalStart, end_time: finalEnd, token: formData.token, session_no: parsedSessionNo, status: 'active'
+                exam_id: examData.id, class_id: null, teacher_id: tId, 
+                start_time: finalStart, end_time: finalEnd, token: formData.token, session_no: parsedSessionNo, status: 'active',
+                teacher_quota: quota 
              }]);
            }
         }
       }
       
-      Swal.fire('Berhasil!', 'Jadwal tersimpan dan didistribusikan ke guru bersangkutan.', 'success');
+      Swal.fire('Berhasil!', 'Jadwal tersimpan dan kuota didistribusikan akurat ke database.', 'success');
       setShowModal(false); setEditingId(null); setFormData(initialForm); fetchExams();
     } catch (error) { Swal.fire('Gagal!', error.message, 'error'); }
     finally { setLoading(false); }
@@ -225,25 +266,36 @@ const Schedules = () => {
     }
   };
 
-  // --- FUNGSI MENGHITUNG KUOTA SOAL PER GURU ---
-  const getTeacherQuota = (ex) => {
+  // --- Rumus Cadangan (Fallback) jika API Supabase gagal narik teacher_quota ---
+  const getTeacherQuotaFallback = (ex) => {
     if (!ex.exams) return 0;
-    if (['UH', 'PTS'].includes(ex.exams.type)) {
-      return ex.exams.target_question_count;
-    }
-    // Kalau Kolaborasi (PAS/PAT/SAJ)
-    const matchedAssignments = allAssignments.filter(a => parseInt(a.classes?.name?.split(' ')[0]) === parseInt(ex.exams.level) && a.subject_id === ex.exams.subject_id);
-    const uniqueTeacherCount = Array.from(new Set(matchedAssignments.map(a => a.teacher_id))).length;
+    if (['UH', 'PTS'].includes(ex.exams.type)) return ex.exams.target_question_count;
     
-    return uniqueTeacherCount > 0 
-        ? Math.floor(ex.exams.target_question_count / uniqueTeacherCount) 
-        : ex.exams.target_question_count;
+    const matched = allAssignments.filter(a => parseInt(a.classes?.name?.split(' ')[0]) === parseInt(ex.exams.level) && a.subject_id === ex.exams.subject_id);
+    if (matched.length === 0) return ex.exams.target_question_count;
+
+    const countPerClass = {};
+    matched.forEach(a => {
+        if (!countPerClass[a.classes.id]) countPerClass[a.classes.id] = new Set();
+        countPerClass[a.classes.id].add(a.teacher_id);
+    });
+
+    let maxT = 1;
+    for (const cId in countPerClass) {
+        if (countPerClass[cId].size > maxT) maxT = countPerClass[cId].size;
+    }
+
+    return Math.floor(ex.exams.target_question_count / maxT);
   };
 
-  // --- FUNGSI CEK TUGAS SELESAI ---
+  const getFinalQuota = (ex) => {
+     // Jika teacher_quota ada nilainya, pakai itu. Kalau kosong/null, pakai hitungan manual.
+     return (ex.teacher_quota !== undefined && ex.teacher_quota !== null) ? ex.teacher_quota : getTeacherQuotaFallback(ex);
+  };
+
   const isMyTaskDone = (ex) => {
     if (!ex.exams || ex.exams.status !== 'pending_selection') return false;
-    return ex.my_question_count >= getTeacherQuota(ex);
+    return ex.my_question_count >= getFinalQuota(ex);
   };
 
   return (
@@ -300,8 +352,9 @@ const Schedules = () => {
               </div>
               
               <h3 className="text-xl font-black mb-1 uppercase italic leading-tight pr-10 truncate">{ex.exams?.title}</h3>
-              <p className="text-orange-600 font-black text-xs mb-6 uppercase truncate">
-                {ex.exams?.subjects?.name} | {ex.classes?.name || `GABUNGAN KELAS ${ex.exams?.level}`}
+              
+              <p className="text-orange-600 font-black text-xs mb-6 uppercase truncate" title={['UH', 'PTS'].includes(ex.exams?.type) ? ex.classes?.name : ex.cluster_classes_text}>
+                {ex.exams?.subjects?.name} | {['UH', 'PTS'].includes(ex.exams?.type) ? ex.classes?.name : ex.cluster_classes_text}
               </p>
               
               <div className="space-y-3 mb-8 text-slate-500 text-xs font-bold uppercase">
@@ -312,14 +365,13 @@ const Schedules = () => {
 
               <div className="flex flex-col gap-2 border-t border-dashed border-zinc-200 dark:border-zinc-800 pt-6">
                 
-                {/* --- TAMBAHAN BARU KHUSUS ADMIN: Indikator Progres Tiap Guru --- */}
                 {userRole === 'admin' && ex.exams?.status === 'pending_selection' && (
                   <div className={`w-full py-3 px-4 rounded-xl font-bold text-[10px] uppercase flex justify-between items-center mb-1 ${isMyTaskDone(ex) ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' : 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800'}`}>
                     <span className="flex items-center gap-2 truncate pr-2">
                       {isMyTaskDone(ex) ? <Check size={14} className="shrink-0"/> : <AlertCircle size={14} className="shrink-0"/>}
                       Progres: {ex.teachers?.full_name?.split(' ')[0] || 'Guru'}
                     </span>
-                    <span className="text-xs whitespace-nowrap shrink-0">{ex.my_question_count} / {getTeacherQuota(ex)} Soal</span>
+                    <span className="text-xs whitespace-nowrap shrink-0">{ex.my_question_count} / {getFinalQuota(ex)} Soal</span>
                   </div>
                 )}
 
@@ -353,7 +405,6 @@ const Schedules = () => {
           ))}
         </div>
 
-        {/* MODAL FORM (TETAP SAMA DENGAN VERSI SEBELUMNYA) */}
         {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto font-sans">
             <div className="bg-white dark:bg-zinc-950 w-full max-w-4xl rounded-[3rem] p-10 shadow-2xl text-left relative text-slate-900 dark:text-white font-bold border border-zinc-200 dark:border-zinc-800">

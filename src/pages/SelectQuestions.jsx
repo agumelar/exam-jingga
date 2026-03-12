@@ -15,7 +15,7 @@ const SelectQuestions = () => {
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState('');
   const [myId, setMyId] = useState(null);
-  const [collabInfo, setCollabInfo] = useState({ isCollab: false, quota: 0, myCount: 0 }); // Tambahan State
+  const [collabInfo, setCollabInfo] = useState({ isCollab: false, quota: 0, myCount: 0 }); 
 
   useEffect(() => { fetchExamAndQuestions(); }, [examId]);
 
@@ -35,23 +35,12 @@ const SelectQuestions = () => {
       if (!schData) throw new Error("Jadwal tidak ditemukan");
       setExamInfo(schData);
 
-      // --- LOGIKA KUOTA KOLABORASI ---
-      let quotaPerTeacher = schData.exams.target_question_count;
-      let isCollaboration = false;
-
-      if (['SAJ', 'PAS', 'PAT', 'PAS/PAT'].includes(schData.exams.type)) {
-        isCollaboration = true;
-        // Hitung ada berapa guru di jadwal ini yang terhubung ke exam_id yang sama
-        const { count: teacherCount } = await supabase
-           .from('schedules')
-           .select('teacher_id', { count: 'exact', head: true })
-           .eq('exam_id', schData.exam_id);
-           
-        // Bagi total target soal dengan jumlah guru
-        if (teacherCount && teacherCount > 0) {
-            quotaPerTeacher = Math.floor(schData.exams.target_question_count / teacherCount);
-        }
-      }
+      // --- LOGIKA KUOTA KOLABORASI (SUDAH DIPERBAIKI) ---
+      let isCollaboration = ['SAJ', 'PAS', 'PAT', 'PAS/PAT'].includes(schData.exams.type);
+      
+      // Kuncinya di sini bro: Langsung panggil kolom teacher_quota dari database! 
+      // Nggak perlu hitung ulang dibagi jumlah guru lagi.
+      let quotaPerTeacher = schData.teacher_quota || schData.exams.target_question_count;
 
       // Ambil Bank Soal milik Guru login
       const { data: questions } = await supabase.from('questions')
@@ -111,6 +100,7 @@ const SelectQuestions = () => {
   };
 
   const handleSave = async () => {
+    // Karena Supabase butuh payload untuk multiple insert, pastikan ada proses delete -> insert
     const totalNow = selectedIds.length + othersSelectedIds.length;
     
     const { isConfirmed } = await Swal.fire({
@@ -126,18 +116,20 @@ const SelectQuestions = () => {
     if (!isConfirmed) return;
 
     try {
-      // Hapus soal lama MILIK SAYA saja
+      // 1. Ambil ID baris exam_questions yang mau kita hapus (Milik saya saja)
       const { data: myOldQuestions } = await supabase
         .from('exam_questions')
         .select('id, questions!inner(created_by)')
         .eq('exam_id', examInfo.exam_id)
         .eq('questions.created_by', myId);
 
+      // 2. Hapus yang lama 
       if (myOldQuestions?.length > 0) {
-        await supabase.from('exam_questions').delete().in('id', myOldQuestions.map(q => q.id));
+        const idsToDelete = myOldQuestions.map(q => q.id);
+        await supabase.from('exam_questions').delete().in('id', idsToDelete);
       }
       
-      // Insert pilihan baru saya
+      // 3. Insert pilihan baru saya
       if (selectedIds.length > 0) {
         const payload = selectedIds.map((qid) => ({
           exam_id: examInfo.exam_id,
