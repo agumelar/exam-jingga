@@ -58,11 +58,11 @@ const ExamParticipants = () => {
 
       let studentQuery = supabase.from('students').select('*, classes(name)');
       
-      if (schData.exams.type === 'UH') {
-        // Kalau UH, khusus kelas itu aja
+      // SUNTIKAN: Tambahkan 'PTS' di sini agar dia mencari spesifik 1 kelas seperti UH
+      if (['UH', 'PTS'].includes(schData.exams.type) && schData.class_id) {
         studentQuery = studentQuery.eq('class_id', schData.class_id);
       } else {
-        // Kalau PAS/PTS, filter sesuai kelas yang diampu guru
+        // Kalau PAS/PAT/SAJ, filter sesuai kelas yang diampu guru dalam angkatan tersebut
         const { data: allClassIds } = await supabase.from('classes').select('id').like('name', `${schData.exams.level}%`);
         let ids = allClassIds?.map(c => c.id) || [];
         
@@ -199,7 +199,7 @@ const ExamParticipants = () => {
             <button onClick={() => navigate('/schedules')} className="p-3 bg-white dark:bg-zinc-900 rounded-2xl shadow-sm hover:text-orange-600 transition-all dark:text-white"><ArrowLeft size={20}/></button>
             <div>
               <h2 className="text-2xl font-black text-slate-800 dark:text-zinc-100 uppercase italic tracking-tighter">{exam?.title}</h2>
-              <p className="text-orange-600 font-black text-xs uppercase">{exam?.subjects?.name} | {exam?.type === 'UH' ? 'ULANGAN HARIAN' : `JENJANG ${exam?.level}`}</p>
+              <p className="text-orange-600 font-black text-xs uppercase">{exam?.subjects?.name} | {['UH', 'PTS'].includes(exam?.type) ? exam?.classes?.name || 'UJIAN KELAS' : `JENJANG ${exam?.level}`}</p>
             </div>
           </div>
           

@@ -10,8 +10,8 @@ const SelectQuestions = () => {
   const navigate = useNavigate();
   const [examInfo, setExamInfo] = useState(null);
   const [bankQuestions, setBankQuestions] = useState([]);
-  const [selectedIds, setSelectedIds] = useState([]); // Milik user login
-  const [othersSelectedIds, setOthersSelectedIds] = useState([]); // Milik rekan duet
+  const [selectedIds, setSelectedIds] = useState([]); 
+  const [othersSelectedIds, setOthersSelectedIds] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState('');
   const [myId, setMyId] = useState(null);
@@ -35,14 +35,9 @@ const SelectQuestions = () => {
       if (!schData) throw new Error("Jadwal tidak ditemukan");
       setExamInfo(schData);
 
-      // --- LOGIKA KUOTA KOLABORASI (SUDAH DIPERBAIKI) ---
       let isCollaboration = ['SAJ', 'PAS', 'PAT', 'PAS/PAT'].includes(schData.exams.type);
-      
-      // Kuncinya di sini bro: Langsung panggil kolom teacher_quota dari database! 
-      // Nggak perlu hitung ulang dibagi jumlah guru lagi.
       let quotaPerTeacher = schData.teacher_quota || schData.exams.target_question_count;
 
-      // Ambil Bank Soal milik Guru login
       const { data: questions } = await supabase.from('questions')
         .select('*')
         .eq('subject_id', schData.exams.subject_id)
@@ -51,14 +46,12 @@ const SelectQuestions = () => {
       
       setBankQuestions(questions || []);
       
-      // Ambil SEMUA soal yang sudah dipilih untuk ujian ini
       const { data: allSelected } = await supabase
         .from('exam_questions')
         .select('question_id, questions(created_by)')
         .eq('exam_id', schData.exam_id);
       
       if (allSelected) {
-        // Pisahkan mana yang punya saya, mana yang punya orang lain
         const mine = allSelected.filter(q => q.questions?.created_by === userSession.id).map(q => q.question_id);
         const others = allSelected.filter(q => q.questions?.created_by !== userSession.id).map(q => q.question_id);
         setSelectedIds(mine);
@@ -84,12 +77,10 @@ const SelectQuestions = () => {
       setSelectedIds(selectedIds.filter(i => i !== id));
       setCollabInfo(prev => ({...prev, myCount: prev.myCount - 1}));
     } else {
-      // Validasi 1: Maksimal Kuota Saya (Kalau Kolaborasi)
       if (collabInfo.isCollab && selectedIds.length >= collabInfo.quota) {
           return Swal.fire('Kuota Penuh!', `Jatah soal Anda hanya ${collabInfo.quota} soal.`, 'warning');
       }
 
-      // Validasi 2: Maksimal Target Soal Global
       if (totalSelected >= examInfo.exams.target_question_count) {
         return Swal.fire('Limit!', `Total target ${examInfo.exams.target_question_count} soal ujian sudah terpenuhi oleh semua guru.`, 'warning');
       }
@@ -100,14 +91,13 @@ const SelectQuestions = () => {
   };
 
   const handleSave = async () => {
-    // Karena Supabase butuh payload untuk multiple insert, pastikan ada proses delete -> insert
     const totalNow = selectedIds.length + othersSelectedIds.length;
     
     const { isConfirmed } = await Swal.fire({
       title: 'Simpan Pilihan?',
       text: totalNow < examInfo.exams.target_question_count 
         ? `Baru terkumpul ${totalNow}/${examInfo.exams.target_question_count} soal secara keseluruhan. Simpan sementara?`
-        : "Total soal sudah lengkap! Ajukan verifikasi ke Admin?",
+        : "Total soal sudah lengkap! Simpan dan selesaikan?",
       icon: 'question',
       showCancelButton: true,
       confirmButtonText: 'Ya, Simpan'
@@ -116,20 +106,17 @@ const SelectQuestions = () => {
     if (!isConfirmed) return;
 
     try {
-      // 1. Ambil ID baris exam_questions yang mau kita hapus (Milik saya saja)
       const { data: myOldQuestions } = await supabase
         .from('exam_questions')
         .select('id, questions!inner(created_by)')
         .eq('exam_id', examInfo.exam_id)
         .eq('questions.created_by', myId);
 
-      // 2. Hapus yang lama 
       if (myOldQuestions?.length > 0) {
         const idsToDelete = myOldQuestions.map(q => q.id);
         await supabase.from('exam_questions').delete().in('id', idsToDelete);
       }
       
-      // 3. Insert pilihan baru saya
       if (selectedIds.length > 0) {
         const payload = selectedIds.map((qid) => ({
           exam_id: examInfo.exam_id,
@@ -138,10 +125,18 @@ const SelectQuestions = () => {
         await supabase.from('exam_questions').insert(payload);
       }
       
-      // Update Status Ujian jika lengkap
+      // --- SUNTIKAN JALUR EKSPRES UH ---
       if (totalNow === examInfo.exams.target_question_count) {
-        await supabase.from('exams').update({ status: 'waiting_validation' }).eq('id', examInfo.exam_id);
-        Swal.fire('Berhasil!', 'Soal lengkap & diajukan ke Admin.', 'success');
+        // Kalau UH langsung 'validated', selain itu 'waiting_validation'
+        const nextStatus = examInfo.exams.type === 'UH' ? 'validated' : 'waiting_validation';
+        
+        await supabase.from('exams').update({ status: nextStatus }).eq('id', examInfo.exam_id);
+        
+        if (examInfo.exams.type === 'UH') {
+          Swal.fire('Berhasil!', 'Soal lengkap & Ujian langsung siap dilaksanakan!', 'success');
+        } else {
+          Swal.fire('Berhasil!', 'Soal lengkap & diajukan ke Admin.', 'success');
+        }
       } else {
         Swal.fire('Tersimpan!', `Tugas Anda selesai! Soal Anda disimpan (${collabInfo.myCount}/${collabInfo.quota}).`, 'success');
       }
@@ -168,7 +163,6 @@ const SelectQuestions = () => {
           </div>
           
           <div className="bg-white dark:bg-zinc-900 px-8 py-5 rounded-[2.5rem] shadow-sm border border-orange-500/20 flex flex-wrap items-center gap-6 md:gap-8">
-             {/* Info Kuota Pribadi (Hanya muncul saat Kolaborasi) */}
              {collabInfo.isCollab && (
                  <div className="text-left border-r border-slate-100 dark:border-zinc-800 pr-6 md:pr-8">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Kuota Anda</p>
@@ -178,7 +172,6 @@ const SelectQuestions = () => {
                  </div>
              )}
 
-             {/* Info Total Terkumpul Global */}
              <div className="text-left md:border-r border-slate-100 dark:border-zinc-800 md:pr-8">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Soal Terkumpul</p>
                 <p className={`text-3xl font-black ${selectedIds.length + othersSelectedIds.length === examInfo?.exams?.target_question_count ? 'text-emerald-500' : 'text-orange-600'}`}>
@@ -187,12 +180,11 @@ const SelectQuestions = () => {
              </div>
 
              <button onClick={handleSave} className="bg-slate-900 dark:bg-white dark:text-black text-white px-10 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:scale-105 transition-all shadow-xl flex items-center gap-2">
-               <Save size={18}/> {collabInfo.isCollab ? 'Simpan Tugas Saya' : 'Simpan & Ajukan'}
+               <Save size={18}/> {collabInfo.isCollab ? 'Simpan Tugas Saya' : 'Simpan & Selesai'}
              </button>
           </div>
         </header>
 
-        {/* Info Mode Kolaborasi */}
         {collabInfo.isCollab && othersSelectedIds.length > 0 && (
           <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-2xl flex items-center gap-3 text-blue-600 dark:text-blue-400 text-xs font-bold">
             <Info size={16} className="shrink-0"/> <span>Info Kolaborasi: Rekan guru lain sudah menyumbang <b>{othersSelectedIds.length} soal</b>. Selesaikan kuota <b>{collabInfo.quota} soal</b> milik Anda.</span>
