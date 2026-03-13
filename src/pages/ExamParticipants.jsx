@@ -6,7 +6,7 @@ import { Users, ArrowLeft, LayoutGrid, UserCheck, ShieldAlert, Clock, RefreshCw,
 import Swal from 'sweetalert2';
 
 const ExamParticipants = () => {
-  const { examId } = useParams();
+  const { examId } = useParams(); // Ini sebenarnya schedule_id dari URL
   const navigate = useNavigate();
   const [exam, setExam] = useState(null);
   const [schedule, setSchedule] = useState(null);
@@ -21,6 +21,9 @@ const ExamParticipants = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userRole, setUserRole] = useState('');
+  
+  // Simpan array schedule IDs yang terhubung ke Ujian ini
+  const [relatedScheduleIds, setRelatedScheduleIds] = useState([]); 
 
   useEffect(() => {
     fetchInitialData();
@@ -34,9 +37,10 @@ const ExamParticipants = () => {
       const userId = userSession?.id;
       setUserRole(role);
 
+      // 1. Ambil Data Jadwal yang di-klik
       const { data: schData, error: schErr } = await supabase
         .from('schedules')
-        .select(`*, exams(*, subjects(name))`)
+        .select(`*, exams(*, subjects(name)), classes(name)`)
         .eq('id', examId)
         .single();
 
@@ -45,7 +49,16 @@ const ExamParticipants = () => {
       setSchedule(schData);
       setExam(schData.exams);
 
-      // JEMBATAN LOGIKA GURU (Strict Class Filter)
+      // 2. Cari Semua "Pintu" (Schedules) yang menuju ke "Rumah" (Exam) ini
+      const { data: allRelatedSch } = await supabase
+        .from('schedules')
+        .select('id')
+        .eq('exam_id', schData.exam_id);
+      
+      const allSchIds = allRelatedSch?.map(s => s.id) || [examId];
+      setRelatedScheduleIds(allSchIds);
+
+      // 3. JEMBATAN LOGIKA GURU (Strict Class Filter)
       let allowedClassIds = null;
       if (role === 'guru') {
         const { data: assignments } = await supabase
@@ -58,20 +71,21 @@ const ExamParticipants = () => {
 
       let studentQuery = supabase.from('students').select('*, classes(name)');
       
-      // SUNTIKAN: Tambahkan 'PTS' di sini agar dia mencari spesifik 1 kelas seperti UH
+      // Filter Siswa Berdasarkan Tipe Ujian dan Role
       if (['UH', 'PTS'].includes(schData.exams.type) && schData.class_id) {
         studentQuery = studentQuery.eq('class_id', schData.class_id);
       } else {
-        // Kalau PAS/PAT/SAJ, filter sesuai kelas yang diampu guru dalam angkatan tersebut
-        const { data: allClassIds } = await supabase.from('classes').select('id').like('name', `${schData.exams.level}%`);
+        // PAS/PAT/SAJ - Filter seangkatan, tapi potong berdasarkan guru yang login
+        const { data: allClassIds } = await supabase.from('classes').select('id').like('name', `${schData.exams.level} %`);
         let ids = allClassIds?.map(c => c.id) || [];
         
-        if (role === 'guru' && allowedClassIds) {
+        if (role === 'guru') {
+           // Irisan: Kelas di angkatan itu YANG diajar oleh guru ini
            ids = ids.filter(id => allowedClassIds.includes(id));
         }
 
         if (ids.length === 0) {
-           setParticipants([]); // Guru ini tidak ngajar mapel ini di level ini
+           setParticipants([]); 
            setLoading(false);
            return; 
         }
@@ -83,6 +97,7 @@ const ExamParticipants = () => {
       
       setParticipants(students || []);
 
+      // 4. Logistik Ruangan
       const studentIds = students?.map(s => s.id) || [];
       if (studentIds.length > 0) {
         const { data: logData } = await supabase
@@ -100,7 +115,7 @@ const ExamParticipants = () => {
         setRooms([...uniqueRooms].sort());
       }
 
-      await fetchLiveSessions();
+      await fetchLiveSessions(allSchIds);
 
     } catch (error) {
       console.error(error);
@@ -111,13 +126,15 @@ const ExamParticipants = () => {
     }
   };
 
-  const fetchLiveSessions = async () => {
+  const fetchLiveSessions = async (schIds = relatedScheduleIds) => {
+    if (!schIds || schIds.length === 0) return;
     setRefreshing(true);
     try {
+      // PERBAIKAN: Tarik dari SEMUA schedule_id yang berkaitan dengan exam_id ini
       const { data: sessionData, error: sErr } = await supabase
         .from('exam_sessions')
         .select('*')
-        .eq('schedule_id', examId)
+        .in('schedule_id', schIds)
         .order('started_at', { ascending: false }); 
       
       if (sErr) throw sErr;
@@ -151,7 +168,7 @@ const ExamParticipants = () => {
       text: `Sesi ujian atas nama ${studentName} akan dibuka kembali dan peringatan di-reset.`,
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonColor: '#10b981',
+      confirmButtonColor: '#ea580c',
       cancelButtonColor: '#d33',
       confirmButtonText: 'Ya, Buka Kunci!'
     });
@@ -172,11 +189,11 @@ const ExamParticipants = () => {
   };
 
   const getStatusUI = (session) => {
-    if (!session) return { label: 'Belum Mulai', color: 'bg-slate-100 text-slate-500 dark:bg-zinc-800', icon: <Clock size={12}/> };
+    if (!session) return { label: 'Belum Mulai', color: 'bg-slate-100 text-slate-500 dark:bg-zinc-800 dark:text-zinc-400', icon: <Clock size={12}/> };
     switch (session.status) {
-      case 'active': return { label: 'Mengerjakan', color: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30', icon: <RefreshCw size={12} className="animate-spin"/> };
-      case 'locked': return { label: 'Terkunci', color: 'bg-red-100 text-red-600 dark:bg-red-900/30', icon: <AlertTriangle size={12}/> };
-      case 'finished': return { label: 'Selesai', color: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30', icon: <CheckCircle2 size={12}/> };
+      case 'active': return { label: 'Mengerjakan', color: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400', icon: <RefreshCw size={12} className="animate-spin"/> };
+      case 'locked': return { label: 'Terkunci', color: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400', icon: <AlertTriangle size={12}/> };
+      case 'finished': return { label: 'Selesai', color: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400', icon: <CheckCircle2 size={12}/> };
       default: return { label: session.status, color: 'bg-slate-100 text-slate-500', icon: null };
     }
   };
@@ -188,25 +205,25 @@ const ExamParticipants = () => {
     return matchSearch && matchRoom;
   });
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center dark:bg-zinc-950 text-orange-600 font-black animate-pulse uppercase italic">Memuat Data Peserta...</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center dark:bg-zinc-950 text-orange-600 font-black animate-pulse uppercase italic tracking-widest">Memuat Data Peserta...</div>;
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 flex font-sans text-left">
+    <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 flex font-sans text-left transition-colors duration-500">
       <Sidebar role={userRole} />
       <main className="flex-1 lg:ml-64 p-4 lg:p-8 mt-12 lg:mt-0">
         <header className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b dark:border-zinc-800 pb-6">
           <div className="flex items-center gap-4 text-left">
-            <button onClick={() => navigate('/schedules')} className="p-3 bg-white dark:bg-zinc-900 rounded-2xl shadow-sm hover:text-orange-600 transition-all dark:text-white"><ArrowLeft size={20}/></button>
+            <button onClick={() => navigate('/schedules')} className="p-3 bg-white dark:bg-zinc-900 rounded-2xl shadow-sm hover:text-orange-600 transition-all dark:text-white border border-slate-100 dark:border-zinc-800"><ArrowLeft size={20}/></button>
             <div>
               <h2 className="text-2xl font-black text-slate-800 dark:text-zinc-100 uppercase italic tracking-tighter">{exam?.title}</h2>
-              <p className="text-orange-600 font-black text-xs uppercase">{exam?.subjects?.name} | {['UH', 'PTS'].includes(exam?.type) ? exam?.classes?.name || 'UJIAN KELAS' : `JENJANG ${exam?.level}`}</p>
+              <p className="text-orange-600 font-black text-[10px] uppercase tracking-widest">{exam?.subjects?.name} | {['UH', 'PTS'].includes(exam?.type) ? schedule?.classes?.name || 'KELAS' : `JENJANG ${exam?.level}`}</p>
             </div>
           </div>
           
           <button 
-            onClick={fetchLiveSessions} 
+            onClick={() => fetchLiveSessions()} 
             disabled={refreshing}
-            className="flex items-center gap-2 bg-slate-900 dark:bg-white dark:text-zinc-900 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-lg disabled:opacity-50"
+            className="flex items-center gap-2 bg-orange-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-orange-700 transition-all shadow-lg shadow-orange-600/20 disabled:opacity-50 active:scale-95"
           >
             <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /> 
             {refreshing ? 'Memperbarui...' : 'Refresh Live Data'}
@@ -215,29 +232,29 @@ const ExamParticipants = () => {
 
         {/* INFO RINGKAS */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8 text-left">
-          <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-slate-100 dark:border-zinc-800 shadow-sm flex items-center gap-4">
-             <div className="p-3 bg-orange-100 dark:bg-orange-900/30 text-orange-600 rounded-2xl"><Users size={24} /></div>
+          <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-slate-100 dark:border-zinc-800 shadow-sm flex items-center gap-4 hover:border-orange-500 transition-colors">
+             <div className="p-4 bg-orange-100 dark:bg-orange-900/30 text-orange-600 rounded-2xl"><Users size={24} /></div>
              <div>
                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Peserta</p>
-               <p className="text-2xl font-black dark:text-white">{participants.length} Siswa</p>
+               <p className="text-2xl font-black dark:text-white">{participants.length} <span className="text-sm text-slate-400">Siswa</span></p>
              </div>
           </div>
-          <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-slate-100 dark:border-zinc-800 shadow-sm flex items-center gap-4">
-             <div className="p-3 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-2xl"><ShieldAlert size={24} /></div>
+          <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-slate-100 dark:border-zinc-800 shadow-sm flex items-center gap-4 hover:border-emerald-500 transition-colors">
+             <div className="p-4 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-2xl"><ShieldAlert size={24} /></div>
              <div>
                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tipe Pelaksanaan</p>
-               <p className="text-2xl font-black text-emerald-500 uppercase italic">{exam?.type}</p>
+               <p className="text-2xl font-black text-emerald-500 uppercase italic tracking-tighter">{exam?.type}</p>
              </div>
           </div>
-          <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-slate-100 dark:border-zinc-800 shadow-sm flex items-center gap-4">
-             <div className="p-3 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-2xl"><Clock size={24} /></div>
+          <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-slate-100 dark:border-zinc-800 shadow-sm flex items-center gap-4 hover:border-purple-500 transition-colors">
+             <div className="p-4 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-2xl"><Clock size={24} /></div>
              <div>
                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Durasi Waktu</p>
-               <p className="text-2xl font-black text-purple-600 uppercase italic">{exam?.duration} Menit</p>
+               <p className="text-2xl font-black text-purple-600 uppercase italic tracking-tighter">{exam?.duration} <span className="text-sm">Menit</span></p>
              </div>
           </div>
-          <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-slate-100 dark:border-zinc-800 shadow-sm flex items-center gap-4">
-             <div className="p-3 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-2xl"><LayoutGrid size={24} /></div>
+          <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-slate-100 dark:border-zinc-800 shadow-sm flex items-center gap-4 hover:border-blue-500 transition-colors">
+             <div className="p-4 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-2xl"><LayoutGrid size={24} /></div>
              <div>
                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Token Aktif</p>
                <p className="text-2xl font-black text-orange-600 tracking-widest uppercase font-mono">{schedule?.token}</p>
@@ -245,9 +262,10 @@ const ExamParticipants = () => {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 p-4 rounded-3xl border border-slate-100 dark:border-zinc-800 shadow-sm mb-6 flex flex-col md:flex-row gap-4">
-            <div className="flex-1 relative">
-                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-slate-400">
+        {/* TOOLBAR PENCARIAN & FILTER RUANGAN */}
+        <div className="bg-white dark:bg-zinc-900 p-4 rounded-[2rem] border border-slate-100 dark:border-zinc-800 shadow-sm mb-8 flex flex-col sm:flex-row gap-4">
+            <div className="flex-1 relative group">
+                <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-orange-600 transition-colors">
                     <Search size={18} />
                 </div>
                 <input 
@@ -255,22 +273,22 @@ const ExamParticipants = () => {
                     placeholder="Cari nama atau NIS siswa..." 
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-zinc-950 border-none rounded-2xl outline-none focus:ring-2 focus:ring-orange-500 font-bold dark:text-white"
+                    className="w-full pl-12 pr-6 py-4 bg-slate-50 dark:bg-zinc-950 border-none rounded-2xl outline-none focus:ring-2 focus:ring-orange-500 font-bold dark:text-white transition-all shadow-inner text-sm"
                 />
             </div>
             
-            <div className="w-full md:w-64 relative">
-                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-slate-400">
+            <div className="w-full sm:w-64 relative group">
+                <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-orange-600 transition-colors">
                     <Filter size={18} />
                 </div>
                 <select 
                     value={selectedRoom}
                     onChange={(e) => setSelectedRoom(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-zinc-950 border-none rounded-2xl outline-none focus:ring-2 focus:ring-orange-500 font-bold dark:text-white appearance-none"
+                    className="w-full pl-12 pr-6 py-4 bg-slate-50 dark:bg-zinc-950 border-none rounded-2xl outline-none focus:ring-2 focus:ring-orange-500 font-bold dark:text-white appearance-none cursor-pointer transition-all shadow-inner text-sm"
                 >
                     <option value="">Semua Ruangan</option>
                     {rooms.map(r => (
-                        <option key={r} value={r}>Ruang {r}</option>
+                        <option key={r} value={r}>Ruangan {r}</option>
                     ))}
                 </select>
             </div>
@@ -280,7 +298,7 @@ const ExamParticipants = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredParticipants.length === 0 ? (
             <div className="col-span-full py-20 text-center bg-white dark:bg-zinc-900 rounded-[3rem] border-2 border-dashed border-slate-200 dark:border-zinc-800">
-              <p className="font-bold text-slate-400 italic">Peserta tidak ditemukan di kelas Anda bro.</p>
+              <p className="font-bold text-slate-400 italic">Peserta tidak ditemukan di kelas Anda.</p>
             </div>
           ) : (
             filteredParticipants.map((p, idx) => {
@@ -292,25 +310,25 @@ const ExamParticipants = () => {
                   
                   <div>
                     <div className="flex justify-between items-start mb-4 border-b border-dashed border-slate-100 dark:border-zinc-800 pb-4">
-                      <div className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase flex items-center gap-2 ${statusUI.color}`}>
+                      <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 tracking-widest ${statusUI.color}`}>
                         {statusUI.icon} {statusUI.label}
                       </div>
-                      <span className="text-[10px] bg-slate-100 dark:bg-zinc-800 px-2 py-1 rounded-lg font-bold text-slate-400"># {idx + 1}</span>
+                      <span className="text-[10px] bg-slate-100 dark:bg-zinc-800 px-3 py-1.5 rounded-lg font-bold text-slate-400"># {idx + 1}</span>
                     </div>
 
                     <div className="space-y-4 mb-6">
                       <div>
-                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Nama Peserta</p>
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Nama Peserta</p>
                           <p className="text-sm font-black dark:text-white uppercase truncate">{p.full_name}</p>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                          <div className="bg-slate-50 dark:bg-zinc-800/50 p-3 rounded-xl">
+                      <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-slate-50 dark:bg-zinc-950 p-4 rounded-2xl border border-slate-100 dark:border-zinc-800">
                               <p className="text-[8px] font-black text-slate-400 uppercase">Username (NIS)</p>
-                              <p className="text-xs font-bold dark:text-white font-mono mt-1">{p.nis}</p>
+                              <p className="text-xs font-bold dark:text-white font-mono mt-1 text-orange-600">{p.nis}</p>
                           </div>
-                          <div className="bg-slate-50 dark:bg-zinc-800/50 p-3 rounded-xl">
+                          <div className="bg-slate-50 dark:bg-zinc-950 p-4 rounded-2xl border border-slate-100 dark:border-zinc-800">
                               <p className="text-[8px] font-black text-slate-400 uppercase">Kelas / Ruang</p>
-                              <p className="text-xs font-bold dark:text-white uppercase mt-1">
+                              <p className="text-[10px] font-bold dark:text-white uppercase mt-1 truncate">
                                 {p.classes?.name} {logisticsMap[p.id]?.room_name ? `• R.${logisticsMap[p.id].room_name}` : ''}
                               </p>
                           </div>
@@ -321,36 +339,38 @@ const ExamParticipants = () => {
                   <div className="pt-4 border-t border-slate-100 dark:border-zinc-800">
                     {session?.status === 'locked' && (
                       <>
-                        {(userRole === 'admin' || userRole === 'kurikulum') ? (
+                        {userRole === 'admin' ? (
                           <button 
                             onClick={() => handleUnlock(session.id, p.full_name)}
-                            className="w-full bg-red-100 hover:bg-red-600 text-red-600 hover:text-white dark:bg-red-900/30 dark:hover:bg-red-600 transition-colors py-3 rounded-xl font-black text-[10px] uppercase flex items-center justify-center gap-2"
+                            className="w-full bg-red-100 hover:bg-red-600 text-red-600 hover:text-white dark:bg-red-900/30 dark:hover:bg-red-600 transition-colors py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"
                           >
                             <Unlock size={14}/> Buka Kunci Sesi
                           </button>
                         ) : (
-                          <p className="text-[10px] font-bold text-red-500 italic text-center uppercase p-2 bg-red-50 dark:bg-red-900/20 rounded-xl">
-                            <AlertTriangle size={12} className="inline mr-1" /> Terkunci (Hubungi Admin)
-                          </p>
+                          <div className="w-full bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 py-3 rounded-2xl text-center">
+                             <p className="text-[10px] font-black text-red-500 uppercase tracking-widest flex items-center justify-center gap-2">
+                               <AlertTriangle size={14} /> Terkunci Oleh Admin
+                             </p>
+                          </div>
                         )}
                       </>
                     )}
 
                     {session?.status === 'active' && session?.violation_count > 0 && (
-                      <p className="text-xs font-bold text-orange-500 flex items-center gap-1"><AlertTriangle size={14}/> {session.violation_count}x Peringatan Pelanggaran</p>
+                      <p className="text-[10px] font-black text-orange-500 uppercase flex items-center gap-2 bg-orange-50 dark:bg-orange-900/20 p-3 rounded-xl">
+                         <AlertTriangle size={14}/> {session.violation_count}x Peringatan Pelanggaran
+                      </p>
                     )}
 
                     {session?.status === 'finished' && (
-                       <div className="flex items-center justify-between mt-4 bg-emerald-50 dark:bg-emerald-900/10 p-3 rounded-xl border border-emerald-100 dark:border-emerald-800/30">
-                         <span className="text-xs font-black text-emerald-600 flex items-center gap-1"><CheckCircle2 size={14}/> SELESAI</span>
-                         <div className="text-emerald-700 dark:text-emerald-400 font-black text-sm flex items-center gap-2">
-                           SKOR: <span className="text-2xl bg-emerald-500 text-white px-3 py-1 rounded-lg shadow-sm">{session.score ?? 0}</span>
-                         </div>
+                       <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-800/30">
+                         <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2"><CheckCircle2 size={14}/> Nilai</span>
+                         <span className="text-2xl font-black text-emerald-600 italic leading-none">{session.score ?? 0}</span>
                        </div>
                     )}
 
                     {!session && (
-                      <p className="text-[10px] font-bold text-slate-400 italic text-center">Menunggu siswa login...</p>
+                      <p className="text-[10px] font-bold text-slate-400 italic text-center py-2">Siswa belum login / memulai ujian...</p>
                     )}
                   </div>
                 </div>
