@@ -160,16 +160,17 @@ const ExamResults = () => {
         let distro = { A: 0, B: 0, C: 0, D: 0, E: 0 };
 
         finishedSessionIds.forEach(sId => {
-          const studentAns = allAnswers.find(a => a.session_id === sId && a.question_id === q.id);
+          // BUNGKUS PAKE String() BIAR ID INTEGER VS UUID GAK BENTROK
+          const studentAns = allAnswers.find(a => String(a.session_id) === String(sId) && String(a.question_id) === String(q.id));
           const kunci = q.correct_answer || q.answer_key || q.kunci_jawaban || q.answer;
 
           if (!studentAns || !studentAns.chosen_answer) {
             blank++;
           } else {
-            const chosen = studentAns.chosen_answer.toUpperCase();
+            const chosen = String(studentAns.chosen_answer).toUpperCase();
             if (distro.hasOwnProperty(chosen)) distro[chosen]++; 
 
-            if (kunci && chosen === kunci.toUpperCase()) {
+            if (kunci && chosen === String(kunci).toUpperCase()) {
               correct++;
             } else {
               wrong++;
