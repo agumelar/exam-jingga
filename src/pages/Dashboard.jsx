@@ -46,7 +46,8 @@ const Dashboard = () => {
         supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'aktif'),
         supabase.from('teachers').select('*', { count: 'exact', head: true }).eq('role_level', 'guru'),
         supabase.from('questions').select('*', { count: 'exact', head: true }),
-        supabase.from('exams').select('*', { count: 'exact', head: true }).in('status', ['ready', 'validated', 'live'])
+        // INI YANG DIUBAH: Nembak ke tabel schedules, bukan exams
+        supabase.from('schedules').select('*', { count: 'exact', head: true }).eq('status', 'active')
       ]);
 
       setStats({
