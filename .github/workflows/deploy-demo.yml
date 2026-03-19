@@ -27,11 +27,8 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      # 4. Build Project + Suntik Variable Supabase
-      - name: Build Project
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+      # 4. Build Demo Project (No Database Required)
+      - name: Build Demo Project
         run: npm run build
 
       # 5. Kirim File ke Hosting Demo via FTP
