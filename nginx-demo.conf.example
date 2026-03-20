@@ -1,0 +1,72 @@
+# Nginx Configuration for Exam Jingga - Demo Application
+#
+# Installation:
+# 1. Copy this file to /etc/nginx/sites-available/demo-exam-jingga
+# 2. Replace 'demo.yourdomain.com' with your actual subdomain
+# 3. Create symlink: ln -s /etc/nginx/sites-available/demo-exam-jingga /etc/nginx/sites-enabled/
+# 4. Test config: nginx -t
+# 5. Reload Nginx: systemctl reload nginx
+# 6. Setup SSL: certbot --nginx -d demo.yourdomain.com
+
+server {
+    listen 80;
+    listen [::]:80;
+
+    # GANTI DENGAN SUBDOMAIN DEMO ANDA
+    server_name demo.yourdomain.com;
+
+    # Root directory - sama dengan main app (karena demo.html ada di dist/)
+    root /var/www/exam-jingga/dist;
+    index demo.html;
+
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_proxied expired no-cache no-store private auth;
+    gzip_types text/plain text/css text/xml text/javascript application/javascript application/json application/xml+rss;
+    gzip_disable "MSIE [1-6]\.";
+
+    # Main location - SPA routing untuk demo
+    location / {
+        try_files $uri $uri/ /demo.html;
+    }
+
+    # Cache static assets
+    location ~* \.(jpg|jpeg|png|gif|ico|svg|webp)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
+    location ~* \.(css|js)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location ~* \.(woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
+
+    # Disable access to hidden files
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    # Logs (separate untuk demo)
+    access_log /var/log/nginx/demo-exam-jingga-access.log;
+    error_log /var/log/nginx/demo-exam-jingga-error.log;
+
+    # Max upload size
+    client_max_body_size 10M;
+}
