@@ -43,6 +43,24 @@ const MasterTeachers = () => {
     XLSX.writeFile(workbook, "Template_Import_Guru_Jingga.xlsx");
   };
 
+  const exportTeacherAccounts = () => {
+    const dataToExport = filteredTeachers.map((t) => ({
+      Nama: t.full_name || '-',
+      Akun: t.email || '-',
+      Password: t.password || 'Jingga123'
+    }));
+
+    if (dataToExport.length === 0) {
+      Swal.fire('Tidak ada data', 'Belum ada akun guru yang bisa diexport.', 'info');
+      return;
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Akun Guru");
+    XLSX.writeFile(workbook, "Data_Akun_Guru_Jingga.xlsx");
+  };
+
   const handleImportExcel = (e) => {
     const file = e.target.files[0];
     const reader = new FileReader();
@@ -123,6 +141,7 @@ const MasterTeachers = () => {
           </div>
           <div className="flex flex-wrap gap-3">
             <button onClick={downloadTemplate} className="bg-slate-800 text-white px-5 py-3 rounded-2xl font-black text-xs uppercase"><FileDown size={18} className="inline mr-2"/> Template</button>
+            <button onClick={exportTeacherAccounts} className="bg-blue-600 text-white px-5 py-3 rounded-2xl font-black text-xs uppercase"><FileDown size={18} className="inline mr-2"/> Export Akun</button>
             <label className="cursor-pointer bg-emerald-600 text-white px-5 py-3 rounded-2xl font-black text-xs uppercase">
               <FileUp size={18} className="inline mr-2"/> Import
               <input type="file" className="hidden" onChange={handleImportExcel} />
