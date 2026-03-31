@@ -210,8 +210,7 @@ const ExamInterface = () => {
     return () => { window.removeEventListener('visibilitychange', handleVisibility); window.removeEventListener('blur', handleCheatDetection); };
   }, [loading, isLocked, sessionId, schedule, violationCount]);
 
-  // --- RADAR AUTO-UNLOCK (NEW) ---
-  // Mengecek status di database setiap 3 detik JIKA layar sedang terkunci
+  // --- RADAR AUTO-UNLOCK ---
   useEffect(() => {
     let interval;
     if (isLocked && sessionId) {
@@ -226,8 +225,6 @@ const ExamInterface = () => {
           if (data && data.status === 'active') {
             setIsLocked(false);
             setViolationCount(data.violation_count || 0);
-            
-            // Notifikasi sukses biar siswanya tau
             Swal.fire({
               title: 'Akses Dibuka!',
               text: 'Pengawas telah membuka sesi Anda. Silakan lanjutkan ujian.',
@@ -239,9 +236,8 @@ const ExamInterface = () => {
         } catch (err) {
           console.error("Gagal mengecek status:", err);
         }
-      }, 3000); // Cek setiap 3 detik
+      }, 3000); 
     }
-    
     return () => {
       if (interval) clearInterval(interval);
     };
@@ -288,9 +284,9 @@ const ExamInterface = () => {
     } catch (err) { console.error("Save error:", err); }
   };
 
-  // --- SUBMIT EXAM DENGAN PENGAMAN ---
+  // --- SUBMIT EXAM ---
   const submitExam = async (isAuto = false) => {
-    if (!isAuto && timeLeft > 60) return; // Prevent manual submit via console
+    if (!isAuto && timeLeft > 60) return; 
 
     let correct = 0;
     questions.forEach(q => {
@@ -334,7 +330,8 @@ const ExamInterface = () => {
   const currentQ = questions[currentIndex];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 flex flex-col font-sans text-left transition-colors">
+    // DI SINI VAKSINNYA! translate="no" dan className="notranslate"
+    <div translate="no" className="notranslate min-h-screen bg-slate-50 dark:bg-zinc-950 flex flex-col font-sans text-left transition-colors">
       <header className="bg-white dark:bg-zinc-900 border-b dark:border-zinc-800 p-4 sticky top-0 z-20 shadow-sm">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="text-left">
