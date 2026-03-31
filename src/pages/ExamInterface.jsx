@@ -12,7 +12,7 @@ const ExamInterface = () => {
   const [questions, setQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState({});
-  const [doubtfulQuestions, setDoubtfulQuestions] = useState([]); // State Ragu-Ragu
+  const [doubtfulQuestions, setDoubtfulQuestions] = useState([]); 
   const [timeLeft, setTimeLeft] = useState(0);
   const [loading, setLoading] = useState(true);
   
@@ -83,28 +83,73 @@ const ExamInterface = () => {
       }
       setSessionId(currentSession.id);
 
-      // Timer Logic
+      // --- TIMER LOGIC (DENGAN PERBAIKAN AUTO-SUBMIT ADIL) ---
       const durationInSeconds = (schData.exams?.duration || 60) * 60;
       const startTime = new Date(currentSession.started_at).getTime();
       const now = new Date().getTime();
       const timePassed = Math.floor((now - startTime) / 1000);
       let remaining = durationInSeconds - timePassed;
       
-      if (remaining <= 0) { await submitExam(true); return; }
+      if (remaining <= 0) { 
+         const { data: studentData } = await supabase.from('students').select('class_id').eq('id', studentId).single();
+         const { data: myTeachers } = await supabase.from('teacher_assignments').select('teacher_id')
+            .eq('class_id', studentData?.class_id).eq('subject_id', schData.exams.subject_id);
+         const allowedTeacherIds = myTeachers?.map(t => t.teacher_id) || [];
+
+         const { data: qData } = await supabase
+            .from('exam_questions')
+            .select('question_id, questions!inner(*)')
+            .eq('exam_id', schData.exam_id)
+            .in('questions.created_by', allowedTeacherIds);
+
+         const { data: aData } = await supabase.from('student_answers').select('question_id, chosen_answer').eq('session_id', currentSession.id);
+         
+         let dbCorrect = 0;
+         const dbQuestions = qData ? qData.map(q => q.questions).filter(Boolean) : [];
+         
+         dbQuestions.forEach(q => {
+             const ans = aData?.find(a => String(a.question_id) === String(q.id));
+             const kunci = q.correct_answer || q.answer_key || q.kunci_jawaban || q.answer;
+             if (ans && ans.chosen_answer && kunci) {
+                 if (String(ans.chosen_answer).toUpperCase() === String(kunci).toUpperCase()) {
+                     dbCorrect++;
+                 }
+             }
+         });
+
+         const dbScore = dbQuestions.length > 0 ? Math.round((dbCorrect / dbQuestions.length) * 100) : 0;
+         
+         await supabase.from('exam_sessions').update({ 
+             status: 'finished', 
+             finished_at: new Date().toISOString(), 
+             score: dbScore 
+         }).eq('id', currentSession.id);
+         
+         await Swal.fire({
+             title: 'Waktu Habis!',
+             html: `Waktu ujian telah berakhir saat sesi Anda tertahan.<br/>Sistem telah menyimpan otomatis sisa jawaban Anda.<br/><br/>Skor Anda: <span style="font-size:36px; font-weight:900; color:#ea580c;">${dbScore}</span>`,
+             icon: 'info',
+             allowOutsideClick: false
+         });
+         
+         navigate('/student-dashboard');
+         return; 
+      }
+      
       setTimeLeft(remaining);
 
-      // Fetch Questions (Filter Produktif / Guru Pengampu)
-      const { data: studentData } = await supabase.from('students').select('class_id').eq('id', studentId).single();
-      const { data: myTeachers } = await supabase.from('teacher_assignments').select('teacher_id')
-        .eq('class_id', studentData?.class_id).eq('subject_id', schData.exams.subject_id);
+      // Fetch Questions (Untuk Ujian Normal)
+      const { data: studentDataNormal } = await supabase.from('students').select('class_id').eq('id', studentId).single();
+      const { data: myTeachersNormal } = await supabase.from('teacher_assignments').select('teacher_id')
+        .eq('class_id', studentDataNormal?.class_id).eq('subject_id', schData.exams.subject_id);
       
-      const allowedTeacherIds = myTeachers?.map(t => t.teacher_id) || [];
+      const allowedTeacherIdsNormal = myTeachersNormal?.map(t => t.teacher_id) || [];
 
       const { data: qData, error: qErr } = await supabase
         .from('exam_questions')
         .select(`question_id, questions!inner(*)`)
         .eq('exam_id', schData.exam_id)
-        .in('questions.created_by', allowedTeacherIds)
+        .in('questions.created_by', allowedTeacherIdsNormal)
         .order('order_number', { ascending: true });
 
       if (qErr) throw qErr;
@@ -116,14 +161,13 @@ const ExamInterface = () => {
 
       setQuestions(fetchedQuestions);
       
-      // Load Existing Answers & Doubt Status
       const { data: savedAns } = await supabase.from('student_answers').select('*').eq('session_id', currentSession.id);
       if (savedAns) {
         const ansMap = {};
         const doubts = [];
         savedAns.forEach(a => {
           ansMap[a.question_id] = a.chosen_answer;
-          if (a.is_doubt) doubts.push(a.question_id); // Asumsi ada kolom is_doubt di DB
+          if (a.is_doubt) doubts.push(a.question_id);
         });
         setAnswers(ansMap);
         setDoubtfulQuestions(doubts);
@@ -166,6 +210,43 @@ const ExamInterface = () => {
     return () => { window.removeEventListener('visibilitychange', handleVisibility); window.removeEventListener('blur', handleCheatDetection); };
   }, [loading, isLocked, sessionId, schedule, violationCount]);
 
+  // --- RADAR AUTO-UNLOCK (NEW) ---
+  // Mengecek status di database setiap 3 detik JIKA layar sedang terkunci
+  useEffect(() => {
+    let interval;
+    if (isLocked && sessionId) {
+      interval = setInterval(async () => {
+        try {
+          const { data } = await supabase
+            .from('exam_sessions')
+            .select('status, violation_count')
+            .eq('id', sessionId)
+            .single();
+
+          if (data && data.status === 'active') {
+            setIsLocked(false);
+            setViolationCount(data.violation_count || 0);
+            
+            // Notifikasi sukses biar siswanya tau
+            Swal.fire({
+              title: 'Akses Dibuka!',
+              text: 'Pengawas telah membuka sesi Anda. Silakan lanjutkan ujian.',
+              icon: 'success',
+              timer: 3000,
+              showConfirmButton: false
+            });
+          }
+        } catch (err) {
+          console.error("Gagal mengecek status:", err);
+        }
+      }, 3000); // Cek setiap 3 detik
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isLocked, sessionId]);
+
   // --- TIMER ---
   useEffect(() => {
     if (loading || isLocked || timeLeft <= 0) return;
@@ -202,11 +283,12 @@ const ExamInterface = () => {
         session_id: sessionId,
         question_id: questionId,
         chosen_answer: option,
-        is_doubt: doubtStatus // Pastikan kolom ini ada di tabel student_answers
+        is_doubt: doubtStatus 
       }, { onConflict: 'session_id, question_id' });
     } catch (err) { console.error("Save error:", err); }
   };
 
+  // --- SUBMIT EXAM DENGAN PENGAMAN ---
   const submitExam = async (isAuto = false) => {
     if (!isAuto && timeLeft > 60) return; // Prevent manual submit via console
 
@@ -216,7 +298,8 @@ const ExamInterface = () => {
       if (answers[q.id]?.toUpperCase() === kunci?.toUpperCase()) correct++;
     });
 
-    const score = Math.round((correct / questions.length) * 100);
+    const score = questions.length > 0 ? Math.round((correct / questions.length) * 100) : 0;
+    
     await supabase.from('exam_sessions').update({ status: 'finished', finished_at: new Date().toISOString(), score }).eq('id', sessionId);
     
     await Swal.fire({
@@ -270,7 +353,6 @@ const ExamInterface = () => {
              <div className="flex justify-between items-center mb-8">
                <span className="bg-orange-600 text-white px-5 py-1.5 rounded-full text-[10px] font-black uppercase italic tracking-widest shadow-lg shadow-orange-500/20">Soal {currentIndex + 1} dari {questions.length}</span>
                
-               {/* TOGGLE RAGU RAGU */}
                <button 
                 onClick={() => toggleDoubt(currentQ.id)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border-2 ${doubtfulQuestions.includes(currentQ.id) ? 'bg-amber-400 border-amber-400 text-slate-900 shadow-lg shadow-amber-400/20' : 'bg-transparent border-slate-100 dark:border-zinc-800 text-slate-400'}`}
@@ -308,7 +390,6 @@ const ExamInterface = () => {
               <div className="bg-orange-100 dark:bg-orange-900/30 text-orange-600 px-6 py-3 rounded-2xl border border-orange-200 dark:border-orange-800/50 flex items-center gap-3">
                  <Clock size={16} className="animate-pulse"/>
                  <p className="text-[10px] font-black uppercase tracking-widest">Berakhir Otomatis Saat Waktu Habis</p>
-                 {/* Tombol Kirim di-hide (class 'hidden') untuk ketenangan ujian */}
                  <button onClick={() => submitExam()} className="hidden bg-emerald-600 text-white px-8 py-3 rounded-xl font-black uppercase text-xs">Kirim</button>
               </div>
             ) : (
@@ -334,8 +415,8 @@ const ExamInterface = () => {
             
             <div className="mt-8 pt-6 border-t dark:border-zinc-800 space-y-4">
                <div className="flex items-center justify-between text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                  <span>Progres</span>
-                  <span className="text-orange-600">{Object.keys(answers).length} / {questions.length}</span>
+                 <span>Progres</span>
+                 <span className="text-orange-600">{Object.keys(answers).length} / {questions.length}</span>
                </div>
                <div className="w-full bg-slate-100 dark:bg-zinc-800 h-2.5 rounded-full overflow-hidden shadow-inner">
                   <div className="bg-gradient-to-r from-orange-500 to-orange-600 h-full transition-all duration-700" style={{width: `${(Object.keys(answers).length / questions.length) * 100}%`}}></div>

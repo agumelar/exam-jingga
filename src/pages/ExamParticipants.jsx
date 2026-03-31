@@ -97,20 +97,26 @@ const ExamParticipants = () => {
       
       setParticipants(students || []);
 
-      // 4. Logistik Ruangan
+      // 4. Logistik Ruangan (PERBAIKAN ANTI-LAG PAS/PAT)
       const studentIds = students?.map(s => s.id) || [];
       if (studentIds.length > 0) {
+        // JANGAN pakai .in('student_id', studentIds) kalau siswanya ratusan/seangkatan
+        // Tarik semua logistik (enteng), lalu saring manual di Javascript
         const { data: logData } = await supabase
           .from('student_logistics')
-          .select('student_id, room_name')
-          .in('student_id', studentIds);
+          .select('student_id, room_name');
         
         const lMap = {};
         const uniqueRooms = new Set();
+        
         logData?.forEach(l => { 
-          lMap[l.student_id] = l; 
-          if(l.room_name) uniqueRooms.add(l.room_name);
+          // Cuma simpan logistik milik siswa yang ikut ujian ini
+          if (studentIds.includes(l.student_id)) {
+            lMap[l.student_id] = l; 
+            if(l.room_name) uniqueRooms.add(l.room_name);
+          }
         });
+        
         setLogisticsMap(lMap);
         setRooms([...uniqueRooms].sort());
       }
