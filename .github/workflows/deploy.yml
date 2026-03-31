@@ -33,7 +33,11 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
 
-      # 5. Kirim File ke Hosting via SFTP (port 65002 - rekomendasi Niagahoster/Hostinger)
+      # 5. Cek IP Runner (untuk whitelist di Niagahoster jika diblokir)
+      - name: Cek IP Publik Runner
+        run: curl -s ifconfig.me
+
+      # 6. Kirim File ke Hosting via SFTP (port 65002 - rekomendasi Niagahoster/Hostinger)
       - name: Kirim File ke Hosting via SFTP
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
