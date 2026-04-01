@@ -53,7 +53,7 @@ jobs:
             exit 0
           fi
 
-          echo "SFTP port 65002 tidak bisa diakses, coba fallback FTP port 21..."
+          echo "Port SFTP 65002 tidak bisa diakses, lanjut coba FTP di port 21..."
           if nc -zvw 15 "$FTP_SERVER" 21; then
             echo "FTP port 21 reachable. Deploy via FTP."
             lftp -u "$FTP_USERNAME","$FTP_PASSWORD" \
@@ -67,6 +67,6 @@ jobs:
             exit 0
           fi
 
-          echo "::error::Tidak bisa konek ke $FTP_SERVER:65002 (SFTP) maupun :21 (FTP) dari runner GitHub Actions."
-          echo "::error::IP runner saat ini: ${RUNNER_PUBLIC_IP:-unknown}. Whitelist IP ini atau gunakan self-hosted runner dengan IP statis."
+          echo "::error::Tidak bisa koneksi ke $FTP_SERVER:65002 (SFTP) maupun :21 (FTP) dari runner GitHub Actions."
+          echo "::error::IP publik runner saat ini: ${RUNNER_PUBLIC_IP:-unknown}. Pastikan IP ini sudah di-whitelist atau gunakan self-hosted runner dengan IP statis."
           exit 1
