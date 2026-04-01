@@ -1,4 +1,4 @@
-name: Deploy Exam Jingga via SFTP
+name: Deploy Exam Jingga via FTP
 
 on:
   push:
@@ -29,44 +29,26 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
 
-      - name: Kirim File ke Hosting via SFTP
+      - name: Kirim File ke Hosting via FTP
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-          SFTP_PORT: ${{ secrets.SFTP_PORT }}
         run: |
           sudo apt-get install -y lftp
           RUNNER_PUBLIC_IP="$(curl -s ifconfig.me || true)"
           echo "Runner public IP: ${RUNNER_PUBLIC_IP:-unknown}"
-          SFTP_PORT="${SFTP_PORT:-65002}"
           REMOTE_PATH="/public_html/exam.smkn1rongga.sch.id/"
-
-          if nc -zvw 15 "$FTP_SERVER" "$SFTP_PORT"; then
-            echo "SFTP port $SFTP_PORT reachable. Deploy via SFTP."
-            lftp -u "$FTP_USERNAME","$FTP_PASSWORD" \
-              -e "set sftp:connect-program 'ssh -p $SFTP_PORT -o StrictHostKeyChecking=no'; \
-                  set net:timeout 20; \
-                  set net:max-retries 2; \
-                  set net:reconnect-interval-base 5; \
-                  mirror -R --delete --no-perms --parallel=2 ./dist/ $REMOTE_PATH; \
-                  bye" \
-              sftp://$FTP_SERVER
-          else
-            echo "::warning::Tidak bisa konek ke $FTP_SERVER:$SFTP_PORT dari runner GitHub Actions."
-            echo "::warning::Coba fallback ke FTP port 21 (passive mode)."
-            if ! nc -zvw 15 "$FTP_SERVER" 21; then
-              echo "::error::SFTP ($SFTP_PORT) dan FTP (21) sama-sama tidak bisa diakses dari runner."
-              echo "::error::Pastikan port hosting terbuka dan IP runner di-whitelist."
-              exit 1
-            fi
-
-            lftp -u "$FTP_USERNAME","$FTP_PASSWORD" \
-              -e "set ftp:passive-mode true; \
-                  set net:timeout 20; \
-                  set net:max-retries 2; \
-                  set net:reconnect-interval-base 5; \
-                  mirror -R --delete --no-perms --parallel=2 ./dist/ $REMOTE_PATH; \
-                  bye" \
-              ftp://$FTP_SERVER
+          if ! nc -zvw 15 "$FTP_SERVER" 21; then
+            echo "::error::Tidak bisa konek ke $FTP_SERVER:21 dari runner GitHub Actions."
+            echo "::error::Pastikan port FTP terbuka dan IP runner di-whitelist."
+            exit 1
           fi
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" \
+            -e "set ftp:passive-mode true; \
+                set net:timeout 20; \
+                set net:max-retries 2; \
+                set net:reconnect-interval-base 5; \
+                mirror -R --delete --no-perms --parallel=2 ./dist/ $REMOTE_PATH; \
+                bye" \
+            ftp://$FTP_SERVER
