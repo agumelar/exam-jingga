@@ -1,4 +1,4 @@
-name: Deploy Exam Jingga via FTP
+name: Deploy Exam Jingga via SFTP/FTP
 
 on:
   push:
@@ -29,7 +29,7 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
 
-      - name: Kirim File ke Hosting via FTP
+      - name: Kirim File ke Hosting via SFTP/FTP fallback
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
@@ -39,16 +39,34 @@ jobs:
           RUNNER_PUBLIC_IP="$(curl -s ifconfig.me || true)"
           echo "Runner public IP: ${RUNNER_PUBLIC_IP:-unknown}"
           REMOTE_PATH="/public_html/exam.smkn1rongga.sch.id/"
-          if ! nc -zvw 15 "$FTP_SERVER" 21; then
-            echo "::error::Tidak bisa konek ke $FTP_SERVER:21 dari runner GitHub Actions."
-            echo "::error::Pastikan port FTP terbuka dan IP runner di-whitelist."
-            exit 1
+          
+          if nc -zvw 15 "$FTP_SERVER" 65002; then
+            echo "SFTP port 65002 reachable. Deploy via SFTP."
+            lftp -u "$FTP_USERNAME","$FTP_PASSWORD" \
+              -e "set sftp:connect-program 'ssh -p 65002 -o StrictHostKeyChecking=no'; \
+                  set net:timeout 20; \
+                  set net:max-retries 2; \
+                  set net:reconnect-interval-base 5; \
+                  mirror -R --delete --no-perms --parallel=2 ./dist/ $REMOTE_PATH; \
+                  bye" \
+              sftp://$FTP_SERVER
+            exit 0
           fi
-          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" \
-            -e "set ftp:passive-mode true; \
-                set net:timeout 20; \
-                set net:max-retries 2; \
-                set net:reconnect-interval-base 5; \
-                mirror -R --delete --no-perms --parallel=2 ./dist/ $REMOTE_PATH; \
-                bye" \
-            ftp://$FTP_SERVER
+
+          echo "Port SFTP 65002 tidak bisa diakses, lanjut coba FTP di port 21..."
+          if nc -zvw 15 "$FTP_SERVER" 21; then
+            echo "FTP port 21 reachable. Deploy via FTP."
+            lftp -u "$FTP_USERNAME","$FTP_PASSWORD" \
+              -e "set ftp:passive-mode true; \
+                  set net:timeout 20; \
+                  set net:max-retries 2; \
+                  set net:reconnect-interval-base 5; \
+                  mirror -R --delete --no-perms --parallel=2 ./dist/ $REMOTE_PATH; \
+                  bye" \
+              ftp://$FTP_SERVER
+            exit 0
+          fi
+
+          echo "::error::Tidak bisa koneksi ke $FTP_SERVER:65002 (SFTP) maupun :21 (FTP) dari runner GitHub Actions."
+          echo "::error::IP publik runner saat ini: ${RUNNER_PUBLIC_IP:-unknown}. Pastikan IP ini sudah di-whitelist atau gunakan self-hosted runner dengan IP statis."
+          exit 1
