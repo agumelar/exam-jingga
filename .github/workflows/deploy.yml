@@ -36,9 +36,18 @@ jobs:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
           sudo apt-get install -y lftp
+          RUNNER_PUBLIC_IP="$(curl -s ifconfig.me || true)"
+          echo "Runner public IP: ${RUNNER_PUBLIC_IP:-unknown}"
+          if ! nc -zvw 15 "$FTP_SERVER" 65002; then
+            echo "::error::Tidak bisa konek ke $FTP_SERVER:65002 dari runner GitHub Actions (timeout/refused)."
+            echo "::error::Pastikan port SFTP 65002 terbuka dan IP runner ini sudah di-whitelist pada hosting/firewall."
+            exit 1
+          fi
           lftp -u "$FTP_USERNAME","$FTP_PASSWORD" \
             -e "set sftp:connect-program 'ssh -p 65002 -o StrictHostKeyChecking=no'; \
-                set net:max-retries 3; \
+                set net:timeout 20; \
+                set net:max-retries 2; \
+                set net:reconnect-interval-base 5; \
                 mirror -R --delete --no-perms --parallel=2 ./dist/ /public_html/exam.smkn1rongga.sch.id/; \
                 bye" \
             sftp://$FTP_SERVER
