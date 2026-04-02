@@ -180,7 +180,7 @@ const ExamInterface = () => {
     }
   };
 
-  // --- LOGIKA ANTI CHEAT ---
+  // --- LOGIKA ANTI CHEAT (FIXED UNTUK PTS & UH) ---
   useEffect(() => {
     if (loading || isLocked || !sessionId || !schedule) return;
 
@@ -191,16 +191,26 @@ const ExamInterface = () => {
 
       const newCount = violationCount + 1;
       setViolationCount(newCount);
-      const isNowLocked = (schedule.exams?.type !== 'UH' && newCount >= 2);
+      
+      // PERBAIKAN: Cek apakah ujian ini termasuk ketat (Selain UH dan PTS)
+      const examType = schedule.exams?.type;
+      const isStrictExam = !['UH', 'PTS'].includes(examType); 
+      
+      // Hanya mengunci jika ujian ketat DAN sudah 2x melanggar
+      const isNowLocked = (isStrictExam && newCount >= 2);
 
       await supabase.from('exam_sessions').update({ violation_count: newCount, status: isNowLocked ? 'locked' : 'active' }).eq('id', sessionId);
 
-      if (schedule.exams?.type === 'UH') {
+      if (!isStrictExam) {
+        // Buat UH dan PTS: Hanya peringatan terus menerus, tidak pernah lock
         Swal.fire('Peringatan!', 'Tetap fokus pada lembar ujian!', 'warning');
       } else {
+        // Buat PAS, PAT, SAJ:
         if (newCount === 1) {
           Swal.fire({ title: 'PERINGATAN!', text: 'Dilarang keluar halaman ujian atau akun Anda akan TERKUNCI!', icon: 'warning' });
-        } else if (isNowLocked) { setIsLocked(true); }
+        } else if (isNowLocked) { 
+          setIsLocked(true); 
+        }
       }
     };
 
@@ -330,7 +340,6 @@ const ExamInterface = () => {
   const currentQ = questions[currentIndex];
 
   return (
-    // DI SINI VAKSINNYA! translate="no" dan className="notranslate"
     <div translate="no" className="notranslate min-h-screen bg-slate-50 dark:bg-zinc-950 flex flex-col font-sans text-left transition-colors">
       <header className="bg-white dark:bg-zinc-900 border-b dark:border-zinc-800 p-4 sticky top-0 z-20 shadow-sm">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
