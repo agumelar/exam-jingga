@@ -17,7 +17,7 @@ const ExamResults = () => {
   const [sessions, setSessions] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [analysisData, setAnalysisData] = useState([]);
-  const [stats, setStats] = useState({ avg: 0, highest: 0, lowest: 0, completed: 0, total: 0 }); // Tambahan State Stats
+  const [stats, setStats] = useState({ avg: 0, highest: 0, lowest: 0, completed: 0, total: 0 }); 
   
   // State Pencarian & Filter
   const [searchTerm, setSearchTerm] = useState('');
@@ -47,14 +47,14 @@ const ExamResults = () => {
       setSchedule(schData);
       setExam(schData.exams);
 
-      // --- LOGIKA SATU RUMAH BANYAK PINTU (SUNTIKAN) ---
+      // --- LOGIKA SATU RUMAH BANYAK PINTU ---
       const { data: allRelatedSch } = await supabase
         .from('schedules')
         .select('id')
         .eq('exam_id', schData.exam_id);
       const allSchIds = allRelatedSch?.map(s => s.id) || [examId];
 
-      // JEMBATAN LOGIKA GURU (SUNTIKAN ANTI BOCOR)
+      // JEMBATAN LOGIKA GURU (ANTI BOCOR)
       let allowedClassIds = null;
       if (role === 'guru') {
         const { data: assignments } = await supabase
@@ -101,16 +101,17 @@ const ExamResults = () => {
       const { data: sessionData } = await supabase
         .from('exam_sessions')
         .select('*')
-        .in('schedule_id', allSchIds); // Pakai allSchIds
+        .in('schedule_id', allSchIds); 
       setSessions(sessionData || []);
 
+      // PERBAIKAN 1: Tambah !inner biar kunci_jawaban pasti ketarik 100%
       const { data: qData } = await supabase
         .from('exam_questions')
-        .select(`question_id, questions(*)`)
+        .select(`question_id, questions!inner(*)`)
         .eq('exam_id', schData.exam_id)
         .order('order_number', { ascending: true });
       
-      const realQuestions = qData?.map(q => q.questions) || [];
+      const realQuestions = qData?.map(q => q.questions).filter(Boolean) || [];
       setQuestions(realQuestions);
 
       const sessionIds = sessionData?.map(s => s.id) || [];
@@ -133,7 +134,7 @@ const ExamResults = () => {
         return studentSessions[0]; 
       };
 
-      // --- KALKULASI STATISTIK (SUNTIKAN) ---
+      // --- KALKULASI STATISTIK ---
       const bestSessionsAll = (students || []).map(p => getBestSession(p.id)).filter(Boolean);
       const completedSessions = bestSessionsAll.filter(s => s.status === 'finished');
       if (completedSessions.length > 0) {
@@ -160,17 +161,25 @@ const ExamResults = () => {
         let distro = { A: 0, B: 0, C: 0, D: 0, E: 0 };
 
         finishedSessionIds.forEach(sId => {
-          // BUNGKUS PAKE String() BIAR ID INTEGER VS UUID GAK BENTROK
-          const studentAns = allAnswers.find(a => String(a.session_id) === String(sId) && String(a.question_id) === String(q.id));
+          // PERBAIKAN 2: Ambil semua jawaban anak untuk soal ini
+          const studentAnswersForQ = allAnswers.filter(a => String(a.session_id) === String(sId) && String(a.question_id) === String(q.id));
+          
+          // PERBAIKAN 3: Sort dari yang terbaru! (Antisipasi ada jawaban duplikat di database)
+          const finalAns = studentAnswersForQ.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+          
+          // Tarik kunci jawaban dari database
           const kunci = q.correct_answer || q.answer_key || q.kunci_jawaban || q.answer;
+          
+          // PERBAIKAN 4: Pake .trim() buat ilangin spasi gaib
+          const validKunci = kunci ? String(kunci).trim().toUpperCase() : null;
 
-          if (!studentAns || !studentAns.chosen_answer) {
+          if (!finalAns || !finalAns.chosen_answer) {
             blank++;
           } else {
-            const chosen = String(studentAns.chosen_answer).toUpperCase();
+            const chosen = String(finalAns.chosen_answer).trim().toUpperCase();
             if (distro.hasOwnProperty(chosen)) distro[chosen]++; 
 
-            if (kunci && chosen === String(kunci).toUpperCase()) {
+            if (validKunci && chosen === validKunci) {
               correct++;
             } else {
               wrong++;
@@ -277,7 +286,7 @@ const ExamResults = () => {
           <button onClick={exportToExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg flex items-center gap-2"><Download size={16}/> Unduh Excel</button>
         </header>
 
-        {/* --- STATS CARDS SUNTIKAN --- */}
+        {/* --- STATS CARDS --- */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-slate-100 dark:border-zinc-800 shadow-sm flex flex-col items-center justify-center text-center">
                 <BarChart3 size={24} className="text-blue-500 mb-2"/>
