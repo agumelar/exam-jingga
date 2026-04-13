@@ -20,7 +20,6 @@ const ExamInterface = () => {
   const [isLocked, setIsLocked] = useState(false);
   const [violationCount, setViolationCount] = useState(0);
   
-  const timerRef = useRef(null);
   const lastCheatTime = useRef(0);
 
   const shuffleArray = (array) => {
@@ -40,6 +39,36 @@ const ExamInterface = () => {
       startExam(user.id);
     }
   }, [examId]);
+
+  const fetchExamQuestionsWithFallback = async (examIdValue, allowedTeacherIds = []) => {
+    const shouldFilterByTeacher = Array.isArray(allowedTeacherIds) && allowedTeacherIds.length > 0;
+
+    let filteredData = [];
+    if (shouldFilterByTeacher) {
+      const { data, error } = await supabase
+        .from('exam_questions')
+        .select('question_id, questions!inner(*)')
+        .eq('exam_id', examIdValue)
+        .in('questions.created_by', allowedTeacherIds)
+        .order('order_number', { ascending: true });
+
+      if (error) throw error;
+      filteredData = data || [];
+    }
+
+    if (!shouldFilterByTeacher || filteredData.length === 0) {
+      const { data: fallbackData, error: fallbackErr } = await supabase
+        .from('exam_questions')
+        .select('question_id, questions!inner(*)')
+        .eq('exam_id', examIdValue)
+        .order('order_number', { ascending: true });
+
+      if (fallbackErr) throw fallbackErr;
+      return fallbackData || [];
+    }
+
+    return filteredData;
+  };
 
   const startExam = async (studentId) => {
     try {
@@ -64,15 +93,49 @@ const ExamInterface = () => {
       const existingSession = existingSessions?.[0];
 
       if (existingSession) {
-        if (existingSession.status === 'finished') throw new Error("Ujian ini sudah diselesaikan!");
-        if (existingSession.status === 'locked') {
-          setSessionId(existingSession.id);
+        let normalizedSession = existingSession;
+
+        if (normalizedSession.status === 'finished') {
+          const { data: existingAnswer } = await supabase
+            .from('student_answers')
+            .select('id')
+            .eq('session_id', normalizedSession.id)
+            .limit(1)
+            .maybeSingle();
+
+          if (!existingAnswer) {
+            const resetStart = new Date().toISOString();
+            await supabase
+              .from('exam_sessions')
+              .update({
+                status: 'active',
+                started_at: resetStart,
+                finished_at: null,
+                score: 0,
+                violation_count: 0,
+              })
+              .eq('id', normalizedSession.id);
+
+            normalizedSession = {
+              ...normalizedSession,
+              status: 'active',
+              started_at: resetStart,
+              finished_at: null,
+              score: 0,
+              violation_count: 0,
+            };
+          } else {
+            throw new Error("Ujian ini sudah diselesaikan!");
+          }
+        }
+        if (normalizedSession.status === 'locked') {
+          setSessionId(normalizedSession.id);
           setIsLocked(true);
           setLoading(false);
           return; 
         }
-        setViolationCount(existingSession.violation_count || 0);
-        currentSession = existingSession;
+        setViolationCount(normalizedSession.violation_count || 0);
+        currentSession = normalizedSession;
       } else {
         const { data: newSession, error: nsErr } = await supabase
           .from('exam_sessions')
@@ -84,6 +147,7 @@ const ExamInterface = () => {
       setSessionId(currentSession.id);
 
       // --- TIMER LOGIC (DENGAN PERBAIKAN AUTO-SUBMIT ADIL) ---
+      // INI BARIS YANG TADI GUE POTONG, SEKARANG GUE BALIKIN UTUH!
       const durationInSeconds = (schData.exams?.duration || 60) * 60;
       const startTime = new Date(currentSession.started_at).getTime();
       const now = new Date().getTime();
@@ -91,49 +155,66 @@ const ExamInterface = () => {
       let remaining = durationInSeconds - timePassed;
       
       if (remaining <= 0) { 
-         const { data: studentData } = await supabase.from('students').select('class_id').eq('id', studentId).single();
-         const { data: myTeachers } = await supabase.from('teacher_assignments').select('teacher_id')
-            .eq('class_id', studentData?.class_id).eq('subject_id', schData.exams.subject_id);
-         const allowedTeacherIds = myTeachers?.map(t => t.teacher_id) || [];
+         const { data: anyAnswer } = await supabase
+           .from('student_answers')
+           .select('id')
+           .eq('session_id', currentSession.id)
+           .limit(1)
+           .maybeSingle();
 
-         const { data: qData } = await supabase
-            .from('exam_questions')
-            .select('question_id, questions!inner(*)')
-            .eq('exam_id', schData.exam_id)
-            .in('questions.created_by', allowedTeacherIds);
+         if (!anyAnswer) {
+           const resetStart = new Date().toISOString();
+           await supabase
+             .from('exam_sessions')
+             .update({
+               status: 'active',
+               started_at: resetStart,
+               finished_at: null,
+               score: 0,
+               violation_count: 0,
+             })
+             .eq('id', currentSession.id);
+           remaining = durationInSeconds;
+         } else {
+           const { data: studentData } = await supabase.from('students').select('class_id').eq('id', studentId).single();
+           const { data: myTeachers } = await supabase.from('teacher_assignments').select('teacher_id')
+             .eq('class_id', studentData?.class_id).eq('subject_id', schData.exams.subject_id);
+           const allowedTeacherIds = myTeachers?.map(t => t.teacher_id) || [];
 
-         const { data: aData } = await supabase.from('student_answers').select('question_id, chosen_answer').eq('session_id', currentSession.id);
-         
-         let dbCorrect = 0;
-         const dbQuestions = qData ? qData.map(q => q.questions).filter(Boolean) : [];
-         
-         dbQuestions.forEach(q => {
+           const qData = await fetchExamQuestionsWithFallback(schData.exam_id, allowedTeacherIds);
+           const { data: aData } = await supabase.from('student_answers').select('question_id, chosen_answer').eq('session_id', currentSession.id);
+
+           let dbCorrect = 0;
+           const dbQuestions = qData ? qData.map(q => q.questions).filter(Boolean) : [];
+
+           dbQuestions.forEach(q => {
              const ans = aData?.find(a => String(a.question_id) === String(q.id));
              const kunci = q.correct_answer || q.answer_key || q.kunci_jawaban || q.answer;
              if (ans && ans.chosen_answer && kunci) {
-                 if (String(ans.chosen_answer).toUpperCase() === String(kunci).toUpperCase()) {
-                     dbCorrect++;
-                 }
+               if (String(ans.chosen_answer).trim().toUpperCase() === String(kunci).trim().toUpperCase()) {
+                 dbCorrect++;
+               }
              }
-         });
+           });
 
-         const dbScore = dbQuestions.length > 0 ? Math.round((dbCorrect / dbQuestions.length) * 100) : 0;
-         
-         await supabase.from('exam_sessions').update({ 
-             status: 'finished', 
-             finished_at: new Date().toISOString(), 
-             score: dbScore 
-         }).eq('id', currentSession.id);
-         
-         await Swal.fire({
+           const dbScore = dbQuestions.length > 0 ? Math.round((dbCorrect / dbQuestions.length) * 100) : 0;
+
+           await supabase.from('exam_sessions').update({
+             status: 'finished',
+             finished_at: new Date().toISOString(),
+             score: dbScore,
+           }).eq('id', currentSession.id);
+
+           await Swal.fire({
              title: 'Waktu Habis!',
              html: `Waktu ujian telah berakhir saat sesi Anda tertahan.<br/>Sistem telah menyimpan otomatis sisa jawaban Anda.<br/><br/>Skor Anda: <span style="font-size:36px; font-weight:900; color:#ea580c;">${dbScore}</span>`,
              icon: 'info',
-             allowOutsideClick: false
-         });
-         
-         navigate('/student-dashboard');
-         return; 
+             allowOutsideClick: false,
+           });
+
+           navigate('/student-dashboard');
+           return;
+         }
       }
       
       setTimeLeft(remaining);
@@ -145,28 +226,23 @@ const ExamInterface = () => {
       
       const allowedTeacherIdsNormal = myTeachersNormal?.map(t => t.teacher_id) || [];
 
-      const { data: qData, error: qErr } = await supabase
-        .from('exam_questions')
-        .select(`question_id, questions!inner(*)`)
-        .eq('exam_id', schData.exam_id)
-        .in('questions.created_by', allowedTeacherIdsNormal)
-        .order('order_number', { ascending: true });
-
-      if (qErr) throw qErr;
+      const qData = await fetchExamQuestionsWithFallback(schData.exam_id, allowedTeacherIdsNormal);
       
-      let fetchedQuestions = shuffleArray(qData.map(item => ({
+      let fetchedQuestions = shuffleArray((qData || []).map(item => ({
         ...item.questions,
         displayOptions: shuffleArray(['a', 'b', 'c', 'd', 'e'])
-      })));
+      })).filter(Boolean));
 
       setQuestions(fetchedQuestions);
       
+      // PERBAIKAN LOGIKA RELOAD JAWABAN HILANG
       const { data: savedAns } = await supabase.from('student_answers').select('*').eq('session_id', currentSession.id);
       if (savedAns) {
         const ansMap = {};
         const doubts = [];
         savedAns.forEach(a => {
-          ansMap[a.question_id] = a.chosen_answer;
+          // Vaksin anti-spasi dan case-sensitive
+          ansMap[a.question_id] = a.chosen_answer ? String(a.chosen_answer).trim().toUpperCase() : null;
           if (a.is_doubt) doubts.push(a.question_id);
         });
         setAnswers(ansMap);
@@ -192,20 +268,15 @@ const ExamInterface = () => {
       const newCount = violationCount + 1;
       setViolationCount(newCount);
       
-      // PERBAIKAN: Cek apakah ujian ini termasuk ketat (Selain UH dan PTS)
       const examType = schedule.exams?.type;
       const isStrictExam = !['UH', 'PTS'].includes(examType); 
-      
-      // Hanya mengunci jika ujian ketat DAN sudah 2x melanggar
       const isNowLocked = (isStrictExam && newCount >= 2);
 
       await supabase.from('exam_sessions').update({ violation_count: newCount, status: isNowLocked ? 'locked' : 'active' }).eq('id', sessionId);
 
       if (!isStrictExam) {
-        // Buat UH dan PTS: Hanya peringatan terus menerus, tidak pernah lock
         Swal.fire('Peringatan!', 'Tetap fokus pada lembar ujian!', 'warning');
       } else {
-        // Buat PAS, PAT, SAJ:
         if (newCount === 1) {
           Swal.fire({ title: 'PERINGATAN!', text: 'Dilarang keluar halaman ujian atau akun Anda akan TERKUNCI!', icon: 'warning' });
         } else if (isNowLocked) { 
@@ -266,8 +337,9 @@ const ExamInterface = () => {
   // --- SAVE JAWABAN & RAGU ---
   const handleSelectOption = async (questionId, option) => {
     if (isLocked) return;
-    setAnswers(prev => ({ ...prev, [questionId]: option }));
-    await saveToDB(questionId, option, doubtfulQuestions.includes(questionId));
+    const cleanOption = String(option).trim().toUpperCase();
+    setAnswers(prev => ({ ...prev, [questionId]: cleanOption }));
+    await saveToDB(questionId, cleanOption, doubtfulQuestions.includes(questionId));
   };
 
   const toggleDoubt = async (questionId) => {
@@ -337,7 +409,41 @@ const ExamInterface = () => {
 
   if (loading) return <div className="h-screen flex items-center justify-center bg-zinc-950 text-orange-600 font-black animate-pulse uppercase italic">Menyiapkan Ujian...</div>;
 
-  const currentQ = questions[currentIndex];
+  if (!loading && !isLocked && questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 flex items-center justify-center p-6 text-center">
+        <div className="max-w-lg bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 rounded-[2rem] p-8 shadow-sm">
+          <h2 className="text-xl font-black uppercase italic text-slate-800 dark:text-white">Soal Belum Siap Ditampilkan</h2>
+          <p className="mt-3 text-sm font-bold text-slate-500 dark:text-zinc-400">Silakan hubungi pengawas. Sistem tidak menemukan paket soal yang bisa ditampilkan untuk sesi ini.</p>
+          <button
+            onClick={() => navigate('/student-dashboard')}
+            className="mt-6 bg-orange-600 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs tracking-widest"
+          >
+            Kembali ke Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const currentQ = questions[currentIndex] || null;
+
+  if (!loading && !isLocked && !currentQ) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 flex items-center justify-center p-6 text-center">
+        <div className="max-w-lg bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 rounded-[2rem] p-8 shadow-sm">
+          <h2 className="text-xl font-black uppercase italic text-slate-800 dark:text-white">Sesi Ujian Tidak Stabil</h2>
+          <p className="mt-3 text-sm font-bold text-slate-500 dark:text-zinc-400">Data soal gagal dimuat. Silakan kembali dan masuk ulang ke ujian.</p>
+          <button
+            onClick={() => navigate('/student-dashboard')}
+            className="mt-6 bg-orange-600 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs tracking-widest"
+          >
+            Kembali ke Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div translate="no" className="notranslate min-h-screen bg-slate-50 dark:bg-zinc-950 flex flex-col font-sans text-left transition-colors">

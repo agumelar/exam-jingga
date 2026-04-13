@@ -45,6 +45,19 @@ const StudentDashboard = () => {
       const { data: stuData } = await supabase.from('students').select('*, classes(id, name)').eq('id', studentId).single();
       const level = parseInt(stuData.classes.name.split(' ')[0]);
 
+      const formatLocalDate = (value) => {
+        const d = new Date(value);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
+      const parseSessionNumber = (sessionName) => {
+        const parsed = parseInt(String(sessionName || '').replace(/\D/g, ''), 10);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+      };
+
       const { data: logData } = await supabase.from('student_logistics').select('*').eq('student_id', studentId).maybeSingle();
       setLogistics(logData);
 
@@ -57,11 +70,11 @@ const StudentDashboard = () => {
       });
 
       const { data: schData } = await supabase.from('schedules').select('*, exams(*, subjects(name)), teachers(full_name)').eq('status', 'active');
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = formatLocalDate(new Date());
 
       // 1. Kumpulkan SEMUA jadwal yang eligible untuk siswa ini
       const validExamsAll = schData?.filter(sch => {
-        const isToday = sch.start_time?.startsWith(todayStr);
+        const isToday = sch.start_time ? formatLocalDate(sch.start_time) === todayStr : false;
         const isReady = ['validated', 'ready', 'live'].includes(sch.exams?.status);
         if (!isToday || !isReady) return false;
 
@@ -71,7 +84,7 @@ const StudentDashboard = () => {
         } else {
            const isLevelOk = parseInt(sch.exams?.level) === level;
            const isTeacherOk = myTeachersBySubject[sch.exams?.subject_id]?.includes(sch.teacher_id);
-           const studentSessionNo = logData ? parseInt(logData.session_name.replace(/\D/g, '')) : 1;
+           const studentSessionNo = parseSessionNumber(logData?.session_name);
            const isSessionOk = sch.session_no === 0 || sch.session_no === studentSessionNo;
            isEligible = isLevelOk && isTeacherOk && isSessionOk;
         }
@@ -113,7 +126,7 @@ const StudentDashboard = () => {
 
       const finalAvailableExams = Array.from(examMap.values());
       
-      setAvailableExams(finalAvailableExams.sort((a,b) => a.studentStatus === 'finished' ? 1 : -1));
+      setAvailableExams(finalAvailableExams.sort((a) => a.studentStatus === 'finished' ? 1 : -1));
 
       const { data: history } = await supabase.from('exam_sessions').select(`score, finished_at, schedules(exams(title, subjects(name)))`)
         .eq('student_id', studentId).eq('status', 'finished').order('finished_at', { ascending: false });
