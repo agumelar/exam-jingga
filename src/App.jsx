@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { supabase } from './supabaseClient';
 import Login from './pages/Login';
+import DemoLogin from './pages/DemoLogin';
 import Dashboard from './pages/Dashboard';
 import MasterMajors from './pages/MasterMajors'; 
 import ImportStudents from './pages/ImportStudents';
@@ -34,6 +34,15 @@ function App() {
       setSession(JSON.parse(user));
     }
     setLoading(false);
+
+    // Auto redirect to demo login if accessed from demo domain
+    const isDemoDomain = window.location.hostname.includes('demo.') ||
+                         window.location.pathname === '/demo' ||
+                         window.location.search.includes('demo=true');
+
+    if (isDemoDomain && !user && window.location.pathname === '/login') {
+      window.location.href = '/demo';
+    }
   }, []);
 
   if (loading) return (
@@ -47,7 +56,8 @@ function App() {
       <Routes>
         {/* Rute Login */}
         <Route path="/login" element={!session ? <Login /> : <Navigate to="/" />} />
-        
+        <Route path="/demo" element={!session ? <DemoLogin /> : <Navigate to="/" />} />
+
         {/* Rute Dashboard Utama (Admin/Guru/Kurikulum) */}
         <Route path="/" element={session ? <Dashboard /> : <Navigate to="/login" />} />
         

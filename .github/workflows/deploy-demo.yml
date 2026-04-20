@@ -1,0 +1,45 @@
+name: Deploy Demo Exam Jingga via FTP
+
+on:
+  push:
+    branches:
+      - demo
+      - claude/create-demo-app-with-role-login
+
+jobs:
+  demo-deploy:
+    name: Build & Deploy Demo
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Ambil Kode Terbaru
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 2. Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # 3. Install Dependencies
+      - name: Install Dependencies
+        run: npm ci
+
+      # 4. Build Demo Project (No Database Required)
+      - name: Build Demo Project
+        run: npm run build
+
+      # 5. Kirim File ke Hosting Demo via FTP
+      - name: Kirim File ke Hosting Demo via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ secrets.DEMO_FTP_SERVER }}
+          username: ${{ secrets.DEMO_FTP_USERNAME }}
+          password: ${{ secrets.DEMO_FTP_PASSWORD }}
+          port: 21
+          protocol: ftp
+          local-dir: ./dist/
+          server-dir: ./public_html/demo.exam.smkn1rongga.sch.id/
+          state-name: .ftp-deploy-sync-state-demo.json
