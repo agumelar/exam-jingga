@@ -1,9 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import Sidebar from '../components/Sidebar';
 import { CheckCircle2, Circle, Save, ArrowLeft, Info } from 'lucide-react';
 import Swal from 'sweetalert2';
+import { resolveStatusAfterQuestionSave } from '../features/schedules/constants';
+import {
+  deleteExamQuestionsByIds,
+  fetchExamQuestionLinksByExamId,
+  fetchOwnExamQuestionLinks,
+  fetchQuestionBankByTeacher,
+  fetchScheduleDetailById,
+  insertExamQuestionLinks,
+  updateExamById,
+} from '../features/schedules/services/scheduleService';
 
 const SelectQuestions = () => {
   const { examId } = useParams();
@@ -17,20 +27,14 @@ const SelectQuestions = () => {
   const [myId, setMyId] = useState(null);
   const [collabInfo, setCollabInfo] = useState({ isCollab: false, quota: 0, myCount: 0 }); 
 
-  useEffect(() => { fetchExamAndQuestions(); }, [examId]);
-
-  const fetchExamAndQuestions = async () => {
+  const fetchExamAndQuestions = useCallback(async () => {
     setLoading(true);
     try {
       const userSession = JSON.parse(localStorage.getItem('user_session'));
       setMyId(userSession.id);
       setUserRole(userSession.role || '');
 
-      const { data: schData } = await supabase
-        .from('schedules')
-        .select(`*, exams(*, subjects(name))`)
-        .eq('id', examId)
-        .single();
+      const { data: schData } = await fetchScheduleDetailById(supabase, examId);
       
       if (!schData) throw new Error("Jadwal tidak ditemukan");
       setExamInfo(schData);
@@ -38,18 +42,18 @@ const SelectQuestions = () => {
       let isCollaboration = ['SAJ', 'PAS', 'PAT', 'PAS/PAT'].includes(schData.exams.type);
       let quotaPerTeacher = schData.teacher_quota || schData.exams.target_question_count;
 
-      const { data: questions } = await supabase.from('questions')
-        .select('*')
-        .eq('subject_id', schData.exams.subject_id)
-        .eq('level', schData.exams.level)
-        .eq('created_by', userSession.id); 
+      const { data: questions } = await fetchQuestionBankByTeacher(supabase, {
+        subjectId: schData.exams.subject_id,
+        level: schData.exams.level,
+        teacherId: userSession.id,
+      });
       
       setBankQuestions(questions || []);
       
-      const { data: allSelected } = await supabase
-        .from('exam_questions')
-        .select('question_id, questions(created_by)')
-        .eq('exam_id', schData.exam_id);
+      const { data: allSelected } = await fetchExamQuestionLinksByExamId(
+        supabase,
+        schData.exam_id
+      );
       
       if (allSelected) {
         const mine = allSelected.filter(q => q.questions?.created_by === userSession.id).map(q => q.question_id);
@@ -68,7 +72,11 @@ const SelectQuestions = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [examId, navigate]);
+
+  useEffect(() => {
+    fetchExamAndQuestions();
+  }, [fetchExamAndQuestions]);
 
   const toggleQuestion = (id) => {
     const totalSelected = selectedIds.length + othersSelectedIds.length;
@@ -106,15 +114,14 @@ const SelectQuestions = () => {
     if (!isConfirmed) return;
 
     try {
-      const { data: myOldQuestions } = await supabase
-        .from('exam_questions')
-        .select('id, questions!inner(created_by)')
-        .eq('exam_id', examInfo.exam_id)
-        .eq('questions.created_by', myId);
+      const { data: myOldQuestions } = await fetchOwnExamQuestionLinks(supabase, {
+        examId: examInfo.exam_id,
+        teacherId: myId,
+      });
 
       if (myOldQuestions?.length > 0) {
         const idsToDelete = myOldQuestions.map(q => q.id);
-        await supabase.from('exam_questions').delete().in('id', idsToDelete);
+        await deleteExamQuestionsByIds(supabase, idsToDelete);
       }
       
       if (selectedIds.length > 0) {
@@ -122,15 +129,17 @@ const SelectQuestions = () => {
           exam_id: examInfo.exam_id,
           question_id: qid
         }));
-        await supabase.from('exam_questions').insert(payload);
+        await insertExamQuestionLinks(supabase, payload);
       }
       
       // --- SUNTIKAN JALUR EKSPRES UH ---
       if (totalNow === examInfo.exams.target_question_count) {
-        // Kalau UH langsung 'validated', selain itu 'waiting_validation'
-        const nextStatus = examInfo.exams.type === 'UH' ? 'validated' : 'waiting_validation';
+        const nextStatus = resolveStatusAfterQuestionSave({
+          examType: examInfo.exams.type,
+          isFull: totalNow === examInfo.exams.target_question_count,
+        });
         
-        await supabase.from('exams').update({ status: nextStatus }).eq('id', examInfo.exam_id);
+        await updateExamById(supabase, examInfo.exam_id, { status: nextStatus });
         
         if (examInfo.exams.type === 'UH') {
           Swal.fire('Berhasil!', 'Soal lengkap & Ujian langsung siap dilaksanakan!', 'success');

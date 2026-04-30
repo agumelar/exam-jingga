@@ -3,6 +3,7 @@ import { LogOut, GraduationCap, User, BookOpen, Clock, LayoutDashboard, Moon, Su
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import { isExamReadyForStudent } from '../features/schedules/constants';
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -75,7 +76,7 @@ const StudentDashboard = () => {
       // 1. Kumpulkan SEMUA jadwal yang eligible untuk siswa ini
       const validExamsAll = schData?.filter(sch => {
         const isToday = sch.start_time ? formatLocalDate(sch.start_time) === todayStr : false;
-        const isReady = ['validated', 'ready', 'live'].includes(sch.exams?.status);
+         const isReady = isExamReadyForStudent(sch.exams?.status);
         if (!isToday || !isReady) return false;
 
         let isEligible = false;
