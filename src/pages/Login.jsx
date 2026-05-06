@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Lock, LogIn, Sun, Moon, GraduationCap, User as UserIcon, Eye, EyeOff, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Lock, LogIn, Sun, Moon, GraduationCap, User as UserIcon, Eye, EyeOff, Sparkles, RefreshCw } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import Swal from 'sweetalert2';
 import logoSekolah from '../assets/logo_sekolah.png'; 
@@ -10,6 +10,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const identifierRef = useRef(null);
 
   useEffect(() => {
     // Set initial theme
@@ -108,6 +109,10 @@ const Login = () => {
             text: error.message,
             icon: 'error',
             confirmButtonColor: '#ea580c'
+        }).then(() => {
+            setIdentifier('');
+            setPassword('');
+            identifierRef.current?.focus();
         });
     } finally {
         setLoading(false);
@@ -155,6 +160,7 @@ const Login = () => {
             <div className="relative">
               <UserIcon className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-orange-600 transition-colors" size={20} />
               <input 
+                  ref={identifierRef}
                   type="text" 
                   required 
                   value={identifier} 

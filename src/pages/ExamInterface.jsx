@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 import Sidebar from '../components/Sidebar';
 import { ChevronLeft, ChevronRight, AlertTriangle, LayoutGrid, CheckCircle2, RefreshCw, Clock, HelpCircle } from 'lucide-react';
 import Swal from 'sweetalert2';
+import { useExamAnswerSync } from '../features/examSessions';
 
 const ExamInterface = () => {
   const { examId } = useParams(); 
@@ -11,14 +12,22 @@ const ExamInterface = () => {
   const [schedule, setSchedule] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState({});
-  const [doubtfulQuestions, setDoubtfulQuestions] = useState([]); 
   const [timeLeft, setTimeLeft] = useState(0);
   const [loading, setLoading] = useState(true);
   
   const [sessionId, setSessionId] = useState(null);
   const [isLocked, setIsLocked] = useState(false);
   const [violationCount, setViolationCount] = useState(0);
+
+  const {
+    answers,
+    doubts: doubtfulQuestions,
+    setAnswers,
+    setDoubts: setDoubtfulQuestions,
+    enqueue,
+    flush,
+    clearCache,
+  } = useExamAnswerSync({ sessionId, isLocked });
   
   const lastCheatTime = useRef(0);
 
@@ -32,12 +41,14 @@ const ExamInterface = () => {
   };
 
   useEffect(() => {
+    let cancelled = false;
     const user = JSON.parse(localStorage.getItem('user_session'));
     if (!user || user.role !== 'siswa') {
       navigate('/login');
-    } else {
-      startExam(user.id);
+      return () => { cancelled = true; };
     }
+    startExam(user.id, () => cancelled);
+    return () => { cancelled = true; };
   }, [examId]);
 
   const fetchExamQuestionsWithFallback = async (examIdValue, allowedTeacherIds = []) => {
@@ -70,13 +81,16 @@ const ExamInterface = () => {
     return filteredData;
   };
 
-  const startExam = async (studentId) => {
+  const startExam = async (studentId, isCancelled = () => false) => {
+    const shouldCancel = () => (typeof isCancelled === 'function' ? isCancelled() : false);
     try {
       const { data: schData } = await supabase
         .from('schedules')
         .select(`*, exams(*, subjects(name))`)
         .eq('id', examId)
         .single();
+
+      if (shouldCancel()) return;
       
       if (!schData) throw new Error("Ujian tidak ditemukan");
       setSchedule(schData);
@@ -129,6 +143,7 @@ const ExamInterface = () => {
           }
         }
         if (normalizedSession.status === 'locked') {
+          if (shouldCancel()) return;
           setSessionId(normalizedSession.id);
           setIsLocked(true);
           setLoading(false);
@@ -144,6 +159,7 @@ const ExamInterface = () => {
         if (nsErr) throw nsErr;
         currentSession = newSession;
       }
+      if (shouldCancel()) return;
       setSessionId(currentSession.id);
 
       // --- TIMER LOGIC (DENGAN PERBAIKAN AUTO-SUBMIT ADIL) ---
@@ -205,18 +221,18 @@ const ExamInterface = () => {
              score: dbScore,
            }).eq('id', currentSession.id);
 
-           await Swal.fire({
-             title: 'Waktu Habis!',
-             html: `Waktu ujian telah berakhir saat sesi Anda tertahan.<br/>Sistem telah menyimpan otomatis sisa jawaban Anda.<br/><br/>Skor Anda: <span style="font-size:36px; font-weight:900; color:#ea580c;">${dbScore}</span>`,
-             icon: 'info',
-             allowOutsideClick: false,
-           });
+            await Swal.fire({
+              title: 'Waktu Habis!',
+              html: `Waktu ujian telah berakhir saat sesi Anda tertahan.<br/>Sistem telah menyimpan otomatis sisa jawaban Anda.<br/><br/>Skor Anda: <span style="font-size:36px; font-weight:900; color:#ea580c;">${dbScore}</span>`,
+              icon: 'info',
+              allowOutsideClick: false,
+            });
 
-           navigate('/student-dashboard');
-           return;
-         }
+            navigate('/student-dashboard');
+            return;
+          }
       }
-      
+      if (shouldCancel()) return;
       setTimeLeft(remaining);
 
       // Fetch Questions (Untuk Ujian Normal)
@@ -227,30 +243,21 @@ const ExamInterface = () => {
       const allowedTeacherIdsNormal = myTeachersNormal?.map(t => t.teacher_id) || [];
 
       const qData = await fetchExamQuestionsWithFallback(schData.exam_id, allowedTeacherIdsNormal);
-      
-      let fetchedQuestions = shuffleArray((qData || []).map(item => ({
-        ...item.questions,
-        displayOptions: shuffleArray(['a', 'b', 'c', 'd', 'e'])
-      })).filter(Boolean));
+      if (shouldCancel()) return;
+
+      let fetchedQuestions = shuffleArray((qData || []).map(item => {
+        const options = ['a', 'b', 'c', 'd', 'e'].filter((opt) => item.questions?.[`option_${opt}`]);
+        return {
+          ...item.questions,
+          displayOptions: shuffleArray(options.length ? options : ['a', 'b', 'c', 'd', 'e']),
+        };
+      }).filter(Boolean));
 
       setQuestions(fetchedQuestions);
-      
-      // PERBAIKAN LOGIKA RELOAD JAWABAN HILANG
-      const { data: savedAns } = await supabase.from('student_answers').select('*').eq('session_id', currentSession.id);
-      if (savedAns) {
-        const ansMap = {};
-        const doubts = [];
-        savedAns.forEach(a => {
-          // Vaksin anti-spasi dan case-sensitive
-          ansMap[a.question_id] = a.chosen_answer ? String(a.chosen_answer).trim().toUpperCase() : null;
-          if (a.is_doubt) doubts.push(a.question_id);
-        });
-        setAnswers(ansMap);
-        setDoubtfulQuestions(doubts);
-      }
-
+      if (shouldCancel()) return;
       setLoading(false);
     } catch (error) {
+      if (shouldCancel()) return;
       Swal.fire('Akses Ditolak', error.message, 'error');
       navigate('/student-dashboard');
     }
@@ -261,6 +268,7 @@ const ExamInterface = () => {
     if (loading || isLocked || !sessionId || !schedule) return;
 
     const handleCheatDetection = async () => {
+      if (!sessionId) return;
       const now = Date.now();
       if (now - lastCheatTime.current < 2000) return; 
       lastCheatTime.current = now;
@@ -334,51 +342,55 @@ const ExamInterface = () => {
     return () => clearInterval(timer);
   }, [loading, isLocked, timeLeft]);
 
+  useEffect(() => {
+    const onHide = () => { flush(); };
+    const onVisibility = () => {
+      if (document.hidden) onHide();
+    };
+    window.addEventListener('beforeunload', onHide);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('beforeunload', onHide);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [flush]);
+
   // --- SAVE JAWABAN & RAGU ---
-  const handleSelectOption = async (questionId, option) => {
+  const handleSelectOption = (questionId, option) => {
     if (isLocked) return;
     const cleanOption = String(option).trim().toUpperCase();
-    setAnswers(prev => ({ ...prev, [questionId]: cleanOption }));
-    await saveToDB(questionId, cleanOption, doubtfulQuestions.includes(questionId));
+    const normalizedId = String(questionId);
+    setAnswers(prev => ({ ...prev, [normalizedId]: cleanOption }));
+    enqueue(normalizedId, cleanOption, doubtfulQuestions.includes(normalizedId));
   };
 
-  const toggleDoubt = async (questionId) => {
-    let newDoubts;
-    if (doubtfulQuestions.includes(questionId)) {
-      newDoubts = doubtfulQuestions.filter(id => id !== questionId);
-    } else {
-      newDoubts = [...doubtfulQuestions, questionId];
-    }
+  const toggleDoubt = (questionId) => {
+    const normalizedId = String(questionId);
+    const newDoubts = doubtfulQuestions.includes(normalizedId)
+      ? doubtfulQuestions.filter(id => id !== normalizedId)
+      : [...doubtfulQuestions, normalizedId];
     setDoubtfulQuestions(newDoubts);
-    if (answers[questionId]) {
-      await saveToDB(questionId, answers[questionId], newDoubts.includes(questionId));
+    if (answers[normalizedId]) {
+      enqueue(normalizedId, answers[normalizedId], newDoubts.includes(normalizedId));
     }
-  };
-
-  const saveToDB = async (questionId, option, doubtStatus) => {
-    try {
-      await supabase.from('student_answers').upsert({
-        session_id: sessionId,
-        question_id: questionId,
-        chosen_answer: option,
-        is_doubt: doubtStatus 
-      }, { onConflict: 'session_id, question_id' });
-    } catch (err) { console.error("Save error:", err); }
   };
 
   // --- SUBMIT EXAM ---
   const submitExam = async (isAuto = false) => {
-    if (!isAuto && timeLeft > 60) return; 
+    if (!sessionId || questions.length === 0) return;
 
     let correct = 0;
     questions.forEach(q => {
       const kunci = q.correct_answer || q.answer_key || q.answer;
-      if (answers[q.id]?.toUpperCase() === kunci?.toUpperCase()) correct++;
+      const normalizedId = String(q.id);
+      if (answers[normalizedId]?.toUpperCase() === kunci?.toUpperCase()) correct++;
     });
 
     const score = questions.length > 0 ? Math.round((correct / questions.length) * 100) : 0;
     
+    await flush();
     await supabase.from('exam_sessions').update({ status: 'finished', finished_at: new Date().toISOString(), score }).eq('id', sessionId);
+    clearCache();
     
     await Swal.fire({
       title: isAuto ? 'Waktu Habis!' : 'Selesai!',
@@ -427,6 +439,7 @@ const ExamInterface = () => {
   }
 
   const currentQ = questions[currentIndex] || null;
+  const currentQId = currentQ ? String(currentQ.id) : '';
 
   if (!loading && !isLocked && !currentQ) {
     return (
@@ -465,24 +478,24 @@ const ExamInterface = () => {
              <div className="flex justify-between items-center mb-8">
                <span className="bg-orange-600 text-white px-5 py-1.5 rounded-full text-[10px] font-black uppercase italic tracking-widest shadow-lg shadow-orange-500/20">Soal {currentIndex + 1} dari {questions.length}</span>
                
-               <button 
-                onClick={() => toggleDoubt(currentQ.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border-2 ${doubtfulQuestions.includes(currentQ.id) ? 'bg-amber-400 border-amber-400 text-slate-900 shadow-lg shadow-amber-400/20' : 'bg-transparent border-slate-100 dark:border-zinc-800 text-slate-400'}`}
-               >
-                 <HelpCircle size={14}/> {doubtfulQuestions.includes(currentQ.id) ? 'Ragu-Ragu Aktif' : 'Tandai Ragu-Ragu'}
-               </button>
+                <button 
+                 onClick={() => toggleDoubt(currentQ.id)}
+                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border-2 ${doubtfulQuestions.includes(currentQId) ? 'bg-amber-400 border-amber-400 text-slate-900 shadow-lg shadow-amber-400/20' : 'bg-transparent border-slate-100 dark:border-zinc-800 text-slate-400'}`}
+                >
+                  <HelpCircle size={14}/> {doubtfulQuestions.includes(currentQId) ? 'Ragu-Ragu Aktif' : 'Tandai Ragu-Ragu'}
+                </button>
              </div>
              
              <h2 className="text-xl font-bold dark:text-white leading-relaxed mb-8 whitespace-pre-wrap">{currentQ?.question_text}</h2>
              {currentQ?.question_image && <img src={currentQ.question_image} className="max-h-64 rounded-3xl mb-8 border border-slate-100 dark:border-zinc-800 shadow-sm" alt="img" />}
              
              <div className="grid grid-cols-1 gap-3">
-               {currentQ?.displayOptions?.map((opt, idx) => {
-                 const letter = String.fromCharCode(65 + idx); 
-                 const val = opt.toUpperCase(); 
-                 const active = answers[currentQ.id] === val;
-                 return (
-                   <button key={val} onClick={() => handleSelectOption(currentQ.id, val)} className={`w-full p-6 rounded-[2rem] border-2 transition-all flex items-center gap-5 text-left ${active ? 'border-orange-600 bg-orange-50 dark:bg-orange-900/10' : 'border-slate-50 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-orange-200'}`}>
+                {currentQ?.displayOptions?.map((opt, idx) => {
+                  const letter = String.fromCharCode(65 + idx); 
+                  const val = opt.toUpperCase(); 
+                  const active = answers[currentQId] === val;
+                  return (
+                    <button key={val} onClick={() => handleSelectOption(currentQ.id, val)} className={`w-full p-6 rounded-[2rem] border-2 transition-all flex items-center gap-5 text-left ${active ? 'border-orange-600 bg-orange-50 dark:bg-orange-900/10' : 'border-slate-50 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-orange-200'}`}>
                      <span className={`w-10 h-10 rounded-full flex items-center justify-center font-black transition-all shrink-0 ${active ? 'bg-orange-600 text-white scale-110 shadow-lg' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500'}`}>{letter}</span>
                      <div className="flex-1 flex flex-col gap-2">
                         <span className="font-bold dark:text-zinc-200">{currentQ[`option_${opt}`]}</span>
@@ -515,8 +528,8 @@ const ExamInterface = () => {
             <h3 className="font-black text-[10px] uppercase text-slate-400 mb-6 flex items-center gap-2 tracking-[0.2em]"><LayoutGrid size={14} className="text-orange-600"/> Navigasi Soal</h3>
             <div className="grid grid-cols-5 gap-3">
               {questions.map((q, idx) => {
-                const isAnswered = !!answers[q.id];
-                const isDoubt = doubtfulQuestions.includes(q.id);
+                const isAnswered = !!answers[String(q.id)];
+                const isDoubt = doubtfulQuestions.includes(String(q.id));
                 return (
                   <button key={q.id} onClick={() => setCurrentIndex(idx)} className={`h-11 rounded-xl text-[10px] font-black transition-all ${currentIndex === idx ? 'ring-2 ring-orange-600 ring-offset-2 dark:ring-offset-zinc-950 scale-110 shadow-lg' : ''} ${isDoubt ? 'bg-amber-400 text-slate-900' : isAnswered ? 'bg-emerald-500 text-white' : 'bg-slate-50 dark:bg-zinc-800 text-slate-400'}`}>
                     {idx + 1}
