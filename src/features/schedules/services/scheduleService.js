@@ -1,4 +1,7 @@
-import { mapScheduleCardItem } from '../utils';
+import { mapScheduleCardItem } from '../utils/index.js';
+
+const EXAM_ID_CHUNK_SIZE = 30;
+const PAGE_SIZE = 1000;
 
 export async function fetchAssignments(supabase) {
   return supabase
@@ -15,10 +18,50 @@ export async function fetchSchedulesWithRelations(supabase) {
     .order('created_at', { ascending: false });
 }
 
-export async function fetchExamQuestionsWithAuthor(supabase) {
-  return supabase
-    .from('exam_questions')
-    .select('exam_id, questions!inner(created_by)');
+export async function fetchExamQuestionsWithAuthor(supabase, examIds = []) {
+  if (!Array.isArray(examIds) || examIds.length === 0) {
+    return { data: [] };
+  }
+
+  const uniqueExamIds = Array.from(new Set(examIds)).filter(Boolean);
+  if (uniqueExamIds.length === 0) {
+    return { data: [] };
+  }
+
+  const collected = [];
+
+  for (let i = 0; i < uniqueExamIds.length; i += EXAM_ID_CHUNK_SIZE) {
+    const chunk = uniqueExamIds.slice(i, i + EXAM_ID_CHUNK_SIZE);
+    let from = 0;
+
+    while (true) {
+      const query = supabase
+        .from('exam_questions')
+        .select('exam_id, questions!inner(created_by)')
+        .in('exam_id', chunk)
+        .order('id', { ascending: true });
+
+      const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
+
+      if (error) {
+        return { data: collected, error };
+      }
+
+      if (!data || data.length === 0) {
+        break;
+      }
+
+      collected.push(...data);
+
+      if (data.length < PAGE_SIZE) {
+        break;
+      }
+
+      from += PAGE_SIZE;
+    }
+  }
+
+  return { data: collected };
 }
 
 export function mapScheduleCards(schedules, allQuestions) {

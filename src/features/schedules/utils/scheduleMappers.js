@@ -1,4 +1,4 @@
-import { toSQLDateTime } from './dateTime';
+import { toSQLDateTime } from './dateTime.js';
 
 export function mapScheduleCardItem(schedule, allQuestions = []) {
   const teacherQuestionCount =

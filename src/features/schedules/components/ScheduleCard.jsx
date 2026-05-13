@@ -13,6 +13,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { isExamReadyForStudent } from '../constants';
+import { getCollabProgressList } from '../utils';
 
 function getStatusBadge(status) {
   switch (status) {
@@ -45,12 +46,16 @@ function getStatusBadge(status) {
 }
 
 function getFinalQuota(exam) {
-  return exam.teacher_quota ?? exam.exams?.target_question_count;
+  const value = exam.teacher_quota ?? exam.exams?.target_question_count ?? 0;
+  return Number.isFinite(Number(value)) ? Number(value) : 0;
 }
 
 function isMyTaskDone(exam) {
   if (!exam.exams || exam.exams.status !== 'pending_selection') return false;
-  return exam.my_question_count >= getFinalQuota(exam);
+  const filled = Number.isFinite(Number(exam.my_question_count))
+    ? Number(exam.my_question_count)
+    : 0;
+  return filled >= getFinalQuota(exam);
 }
 
 export function ScheduleCard({
@@ -66,6 +71,20 @@ export function ScheduleCard({
   onOpenResults,
 }) {
   const tokenActive = isExamReadyForStudent(exam.exams?.status);
+  const progressList = exam.teacher_progress_list || [];
+  const showProgress =
+    userRole === 'admin' &&
+    exam.exams?.status === 'pending_selection' &&
+    progressList.length > 0;
+  const collabProgressList = getCollabProgressList(
+    progressList,
+    exam.teacher_id
+  );
+  const showCollabProgress = showProgress && collabProgressList.length > 0;
+  const myCount = Number.isFinite(Number(exam.my_question_count))
+    ? Number(exam.my_question_count)
+    : 0;
+  const finalQuota = getFinalQuota(exam);
 
   return (
     <div className="bg-white dark:bg-zinc-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-zinc-800 relative group transition-all hover:border-orange-500 overflow-hidden">
@@ -147,6 +166,24 @@ export function ScheduleCard({
       </div>
 
       <div className="flex flex-col gap-2 border-t border-dashed border-zinc-200 dark:border-zinc-800 pt-6">
+        {showCollabProgress && (
+          <div className="w-full rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/40 px-4 py-3 text-[10px] font-bold uppercase">
+            <div className="mb-2 text-slate-500 dark:text-zinc-400">Rekan Colab</div>
+            <div className="space-y-1">
+              {collabProgressList.map((teacher) => (
+                <div
+                  key={teacher.teacher_id || teacher.id || teacher.name}
+                  className="flex justify-between"
+                >
+                  <span className="truncate">{teacher.name}</span>
+                  <span className="text-slate-600 dark:text-zinc-300">
+                    {(teacher.filled ?? 0)}/{(teacher.quota ?? 0)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {userRole === 'admin' && exam.exams?.status === 'pending_selection' && (
           <div
             className={`w-full py-3 px-4 rounded-xl font-bold text-[10px] uppercase flex justify-between items-center mb-1 ${
@@ -164,7 +201,7 @@ export function ScheduleCard({
               Progres: {exam.teachers?.full_name?.split(' ')[0] || 'Guru'}
             </span>
             <span className="text-xs whitespace-nowrap shrink-0">
-              {exam.my_question_count} / {getFinalQuota(exam)} Soal
+              {myCount} / {finalQuota} Soal
             </span>
           </div>
         )}

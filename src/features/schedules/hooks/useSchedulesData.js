@@ -5,6 +5,7 @@ import {
   fetchSchedulesWithRelations,
   mapScheduleCards,
 } from '../services/scheduleService';
+import { attachTeacherProgress } from '../utils';
 
 function parseSession() {
   const raw = localStorage.getItem('user_session');
@@ -33,13 +34,21 @@ export function useSchedulesData({ supabase, navigate }) {
         const { data: schedules } = await fetchSchedulesWithRelations(supabase);
 
         if (schedules) {
-          const { data: allQuestions } = await fetchExamQuestionsWithAuthor(supabase);
+          const examIds = schedules
+            .map((schedule) => schedule.exam_id)
+            .filter(Boolean);
+          const uniqueExamIds = Array.from(new Set(examIds));
+          const { data: allQuestions } = await fetchExamQuestionsWithAuthor(
+            supabase,
+            uniqueExamIds
+          );
           const cleaned = mapScheduleCards(schedules, allQuestions);
+          const withProgress = attachTeacherProgress(cleaned);
 
           const filteredByRole =
             String(sessionData.role || '').toLowerCase() === 'guru'
-              ? cleaned.filter((item) => item.teacher_id === sessionData.id)
-              : cleaned;
+              ? withProgress.filter((item) => item.teacher_id === sessionData.id)
+              : withProgress;
 
           setExams(filteredByRole);
         } else {
