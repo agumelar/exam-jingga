@@ -4,7 +4,10 @@ import { supabase } from '../supabaseClient';
 import Sidebar from '../components/Sidebar';
 import { RefreshCw } from 'lucide-react';
 import Swal from 'sweetalert2';
-import { deleteScheduleById } from '../features/schedules/services/scheduleService';
+import {
+  deleteScheduleById,
+  fetchAllScheduleIds,
+} from '../features/schedules/services/scheduleService';
 import { useSchedulesData } from '../features/schedules/hooks/useSchedulesData';
 import { useScheduleActions } from '../features/schedules/hooks/useScheduleActions';
 import { formatWIB } from '../features/schedules/utils';
@@ -29,7 +32,8 @@ const Schedules = () => {
   
   // --- STATE UNTUK FITUR PENCARIAN & FILTER ---
   const [searchTerm, setSearchTerm] = useState('');
-  const [dateFilter, setDateFilter] = useState('Semua Ujian');
+  const [dateFilter, setDateFilter] = useState('Hari Ini');
+  const [selectedScheduleIds, setSelectedScheduleIds] = useState([]);
 
   const initialForm = {
     title: '', subject_id: '', level: '', class_id: '', teacher_id: '', 
@@ -123,6 +127,63 @@ const Schedules = () => {
     await refreshSchedules();
   };
 
+  const handleToggleSchedule = (scheduleId) => {
+    setSelectedScheduleIds((prev) =>
+      prev.includes(scheduleId)
+        ? prev.filter((id) => id !== scheduleId)
+        : [...prev, scheduleId]
+    );
+  };
+
+  const handleClearSelection = () => setSelectedScheduleIds([]);
+
+  const handleSelectAll = async () => {
+    const { data, error } = await fetchAllScheduleIds(supabase);
+    if (error) {
+      await Swal.fire('Gagal!', error.message, 'error');
+      return;
+    }
+    setSelectedScheduleIds(data || []);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedScheduleIds.length === 0) return;
+
+    const { isConfirmed } = await Swal.fire({
+      title: 'Hapus semua terpilih?',
+      text: `Total ${selectedScheduleIds.length} jadwal akan dihapus.`,
+      icon: 'warning',
+      showCancelButton: true,
+    });
+
+    if (!isConfirmed) return;
+
+    const failedIds = [];
+    let lastError = null;
+
+    for (const scheduleId of selectedScheduleIds) {
+      const { error } = await deleteScheduleById(supabase, scheduleId);
+      if (error) {
+        failedIds.push(scheduleId);
+        lastError = error;
+      }
+    }
+
+    await refreshSchedules();
+
+    if (failedIds.length > 0) {
+      setSelectedScheduleIds(failedIds);
+      await Swal.fire(
+        'Gagal!',
+        lastError?.message || `${failedIds.length} jadwal gagal dihapus.`,
+        'error'
+      );
+      return;
+    }
+
+    setSelectedScheduleIds([]);
+  };
+
   const filteredAssignments = userRole === 'guru' ? allAssignments.filter(a => a.teacher_id === myTeacherId) : allAssignments;
   
   const availableLevels = Array.from(new Set(filteredAssignments.map(a => parseInt(a.classes?.name?.split(' ')[0])))).filter(Boolean).sort((a,b) => a-b);
@@ -203,6 +264,30 @@ const Schedules = () => {
           </div>
         </header>
 
+        {userRole === 'admin' && (
+          <div className="mb-4 flex flex-wrap gap-2">
+            <button
+              onClick={handleSelectAll}
+              className="bg-white border border-slate-200 px-4 py-2 rounded-xl text-xs font-black uppercase text-slate-600 hover:text-orange-600 transition-colors dark:bg-zinc-900 dark:border-zinc-800 dark:text-slate-200 dark:hover:text-orange-400"
+            >
+              Select All
+            </button>
+            <button
+              onClick={handleClearSelection}
+              className="bg-white border border-slate-200 px-4 py-2 rounded-xl text-xs font-black uppercase text-slate-600 hover:text-orange-600 transition-colors dark:bg-zinc-900 dark:border-zinc-800 dark:text-slate-200 dark:hover:text-orange-400"
+            >
+              Clear
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              disabled={selectedScheduleIds.length === 0}
+              className="bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase disabled:opacity-50"
+            >
+              Hapus Terpilih
+            </button>
+          </div>
+        )}
+
         <ScheduleFilters
           searchTerm={searchTerm}
           onSearchTermChange={setSearchTerm}
@@ -235,6 +320,8 @@ const Schedules = () => {
                   onOpenResults={(scheduleId) =>
                     navigate(`/exam-results/${scheduleId}`)
                   }
+                  isSelected={selectedScheduleIds.includes(ex.id)}
+                  onToggleSelected={() => handleToggleSchedule(ex.id)}
                 />
               ))
           )}

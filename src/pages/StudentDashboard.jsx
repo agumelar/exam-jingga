@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { isExamReadyForStudent } from '../features/schedules/constants';
+import { buildTeacherSetKey } from '../features/schedules/utils';
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -74,23 +75,49 @@ const StudentDashboard = () => {
       const todayStr = formatLocalDate(new Date());
 
       // 1. Kumpulkan SEMUA jadwal yang eligible untuk siswa ini
-      const validExamsAll = schData?.filter(sch => {
-        const isToday = sch.start_time ? formatLocalDate(sch.start_time) === todayStr : false;
-         const isReady = isExamReadyForStudent(sch.exams?.status);
-        if (!isToday || !isReady) return false;
+      const collabGroups = new Map();
+      const nonCollabSchedules = [];
+      let hasInvalidTeacherSet = false;
 
-        let isEligible = false;
+      (schData || []).forEach((sch) => {
+        const isToday = sch.start_time ? formatLocalDate(sch.start_time) === todayStr : false;
+        const isReady = isExamReadyForStudent(sch.exams?.status);
+        if (!isToday || !isReady) return;
+
         if (['UH', 'PTS'].includes(sch.exams?.type)) {
-           isEligible = sch.class_id === stuData.class_id;
-        } else {
-           const isLevelOk = parseInt(sch.exams?.level) === level;
-           const isTeacherOk = myTeachersBySubject[sch.exams?.subject_id]?.includes(sch.teacher_id);
-           const studentSessionNo = parseSessionNumber(logData?.session_name);
-           const isSessionOk = sch.session_no === 0 || sch.session_no === studentSessionNo;
-           isEligible = isLevelOk && isTeacherOk && isSessionOk;
+          if (sch.class_id === stuData.class_id) nonCollabSchedules.push(sch);
+          return;
         }
-        return isEligible;
-      }) || [];
+
+        const isLevelOk = parseInt(sch.exams?.level) === level;
+        const studentSessionNo = parseSessionNumber(logData?.session_name);
+        const isSessionOk = sch.session_no === 0 || sch.session_no === studentSessionNo;
+        if (!isLevelOk || !isSessionOk) return;
+
+        if (!collabGroups.has(sch.exam_id)) collabGroups.set(sch.exam_id, []);
+        collabGroups.get(sch.exam_id).push(sch);
+      });
+
+      const collabSchedules = [];
+      collabGroups.forEach((groupSchedules) => {
+        const subjectId = groupSchedules[0]?.exams?.subject_id;
+        const classTeacherSetKey = buildTeacherSetKey(myTeachersBySubject[subjectId] || []);
+        const examTeacherSetKey = buildTeacherSetKey(groupSchedules.map((s) => s.teacher_id));
+
+        if (!examTeacherSetKey) {
+          hasInvalidTeacherSet = true;
+          return;
+        }
+        if (!classTeacherSetKey || classTeacherSetKey !== examTeacherSetKey) return;
+
+        collabSchedules.push(...groupSchedules);
+      });
+
+      if (hasInvalidTeacherSet) {
+        Swal.fire('Error', 'Grup guru tidak valid untuk ujian ini.', 'error');
+      }
+
+      const validExamsAll = [...nonCollabSchedules, ...collabSchedules];
 
       // 2. Tarik Data Session berdasarkan semua jadwal yang valid
       let sessionData = [];

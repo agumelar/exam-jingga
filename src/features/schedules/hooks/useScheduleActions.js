@@ -8,7 +8,11 @@ import {
   canUnlockUh,
   canVerifySchedule,
 } from '../constants';
-import { buildScheduleDateRange } from '../utils';
+import {
+  buildScheduleDateRange,
+  buildTeacherQuotaMap,
+  buildTeacherSetGroups,
+} from '../utils';
 import { buildExamPayload } from '../utils/payloadBuilders';
 import {
   createExam,
@@ -24,35 +28,6 @@ function parseLevelFromClassName(className) {
   return parseInt(String(className || '').split(' ')[0], 10);
 }
 
-function computeMaxTeachersPerClass(assignments) {
-  const teacherCountPerClass = {};
-  assignments.forEach((assignment) => {
-    const classId = assignment.classes?.id;
-    if (!classId) return;
-
-    if (!teacherCountPerClass[classId]) {
-      teacherCountPerClass[classId] = new Set();
-    }
-
-    teacherCountPerClass[classId].add(assignment.teacher_id);
-  });
-
-  let maxTeachersPerClass = 1;
-  Object.values(teacherCountPerClass).forEach((teacherSet) => {
-    if (teacherSet.size > maxTeachersPerClass) {
-      maxTeachersPerClass = teacherSet.size;
-    }
-  });
-
-  return maxTeachersPerClass;
-}
-
-function computeQuotaPieces(totalTarget, teacherCount) {
-  const baseQuota = Math.floor(totalTarget / teacherCount);
-  const remainder = totalTarget % teacherCount;
-
-  return { baseQuota, remainder };
-}
 
 export function useScheduleActions({
   supabase,
@@ -171,15 +146,22 @@ export function useScheduleActions({
         formData.level,
         formData.subject_id
       );
-      const maxTeachersPerClass = computeMaxTeachersPerClass(matchedAssignments);
-      const { baseQuota, remainder } = computeQuotaPieces(
-        totalTarget,
-        maxTeachersPerClass
+      if (matchedAssignments.length === 0) {
+        throw new Error('Tidak ada guru yang ditugaskan untuk mapel dan jenjang ini.');
+      }
+
+      const currentTeacherIds = new Set(
+        (existingSchedules || []).map((s) => s.teacher_id)
       );
+      const groupAssignments = matchedAssignments.filter((assignment) =>
+        currentTeacherIds.has(assignment.teacher_id)
+      );
+
+      const quotaMap = buildTeacherQuotaMap(groupAssignments, totalTarget);
 
       for (let index = 0; index < (existingSchedules || []).length; index += 1) {
         const schedule = existingSchedules[index];
-        const quota = baseQuota + (index < remainder ? 1 : 0);
+        const quota = quotaMap[schedule.teacher_id] ?? 0;
 
         await updateScheduleById(supabase, schedule.id, {
           start_time: finalStart,
@@ -258,44 +240,46 @@ export function useScheduleActions({
       throw new Error('Tidak ada guru yang ditugaskan untuk mapel dan jenjang ini.');
     }
 
-    const uniqueTeachers = Array.from(
-      new Set(matchedAssignments.map((item) => item.teacher_id))
-    );
-    const maxTeachersPerClass = computeMaxTeachersPerClass(matchedAssignments);
+    const teacherSetGroups = buildTeacherSetGroups(matchedAssignments);
+    if (teacherSetGroups.length === 0) {
+      throw new Error('Tidak ada grup guru yang valid untuk mapel dan jenjang ini.');
+    }
 
-    const examPayload = buildExamPayload({
-      type: formData.type,
-      title: formData.title,
-      subType: formData.sub_type,
-      duration: formData.duration,
-      targetQuestionCount: totalTarget,
-      level: formData.level,
-      subjectId: formData.subject_id,
-      teacherId: myTeacherId,
-      token: formData.token,
-    });
+    for (const group of teacherSetGroups) {
+      const examPayload = buildExamPayload({
+        type: formData.type,
+        title: formData.title,
+        subType: formData.sub_type,
+        duration: formData.duration,
+        targetQuestionCount: totalTarget,
+        level: formData.level,
+        subjectId: formData.subject_id,
+        teacherId: myTeacherId,
+        token: formData.token,
+      });
 
-    const { data: examData, error } = await createExam(supabase, examPayload);
-    if (error) throw error;
+      const { data: examData, error } = await createExam(supabase, examPayload);
+      if (error) throw error;
 
-    const { baseQuota, remainder } = computeQuotaPieces(
-      totalTarget,
-      maxTeachersPerClass
-    );
+      const groupAssignments = matchedAssignments.filter((assignment) =>
+        group.classIds.includes(assignment.classes?.id ?? assignment.class_id)
+      );
+      const quotaMap = buildTeacherQuotaMap(groupAssignments, totalTarget);
 
-    const scheduleRows = uniqueTeachers.map((teacherId, index) => ({
-      exam_id: examData.id,
-      class_id: null,
-      teacher_id: teacherId,
-      start_time: finalStart,
-      end_time: finalEnd,
-      token: formData.token,
-      session_no: formData.session_no === 'Semua Sesi' ? 0 : Number(formData.session_no),
-      status: 'active',
-      teacher_quota: baseQuota + (index < remainder ? 1 : 0),
-    }));
+      const scheduleRows = group.teacherSet.map((teacherId) => ({
+        exam_id: examData.id,
+        class_id: null,
+        teacher_id: teacherId,
+        start_time: finalStart,
+        end_time: finalEnd,
+        token: formData.token,
+        session_no: formData.session_no === 'Semua Sesi' ? 0 : Number(formData.session_no),
+        status: 'active',
+        teacher_quota: quotaMap[teacherId] ?? 0,
+      }));
 
-    await insertSchedules(supabase, scheduleRows);
+      await insertSchedules(supabase, scheduleRows);
+    }
   };
 
   const handleSaveSchedule = async ({ editingId, formData }) => {

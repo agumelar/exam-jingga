@@ -69,6 +69,8 @@ export function ScheduleCard({
   onUnlockUH,
   onOpenParticipants,
   onOpenResults,
+  isSelected,
+  onToggleSelected,
 }) {
   const tokenActive = isExamReadyForStudent(exam.exams?.status);
   const progressList = exam.teacher_progress_list || [];
@@ -88,6 +90,20 @@ export function ScheduleCard({
 
   return (
     <div className="bg-white dark:bg-zinc-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-200 dark:border-zinc-800 relative group transition-all hover:border-orange-500 overflow-hidden">
+      {userRole === 'admin' && (
+        <button
+          type="button"
+          onClick={onToggleSelected}
+          className={`absolute top-4 left-4 w-7 h-7 rounded-full border flex items-center justify-center text-xs font-black ${
+            isSelected
+              ? 'bg-emerald-500 border-emerald-500 text-white'
+              : 'bg-white border-slate-200'
+          }`}
+          title="Pilih Jadwal"
+        >
+          {isSelected ? '✓' : ''}
+        </button>
+      )}
       <div className="absolute top-0 right-0 bg-orange-100 dark:bg-orange-900/30 text-orange-600 font-black text-[10px] px-4 py-2 rounded-bl-2xl z-10">
         {exam.exams?.type || 'UH'}
       </div>

@@ -108,6 +108,14 @@ export async function deleteScheduleById(supabase, scheduleId) {
   return supabase.from('schedules').delete().eq('id', scheduleId);
 }
 
+export async function fetchAllScheduleIds(supabase) {
+  const { data, error } = await supabase.from('schedules').select('id');
+  if (error) {
+    return { data: [], error };
+  }
+  return { data: (data || []).map((row) => row.id) };
+}
+
 export async function createExam(supabase, payload) {
   return supabase.from('exams').insert([payload]).select().single();
 }

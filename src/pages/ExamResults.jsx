@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
+import { buildTeacherSetKey } from '../features/schedules/utils';
 import Sidebar from '../components/Sidebar';
 import { ArrowLeft, Download, FileSpreadsheet, BarChart3, Users, CheckCircle2, AlertTriangle, RefreshCw, Search, Filter, Trophy, AlertCircle } from 'lucide-react';
 import Swal from 'sweetalert2';
@@ -50,9 +51,20 @@ const ExamResults = () => {
       // --- LOGIKA SATU RUMAH BANYAK PINTU ---
       const { data: allRelatedSch } = await supabase
         .from('schedules')
-        .select('id')
+        .select('id, teacher_id')
         .eq('exam_id', schData.exam_id);
       const allSchIds = allRelatedSch?.map(s => s.id) || [examId];
+      const examTeacherSetKey = buildTeacherSetKey(
+        (allRelatedSch || []).map((s) => s.teacher_id)
+      );
+
+      if (['PAS/PAT', 'SAJ'].includes(schData.exams.type) && !examTeacherSetKey) {
+        Swal.fire('Error', 'Grup guru tidak valid untuk ujian ini.', 'error');
+        setParticipants([]);
+        setAnalysisData([]);
+        setLoading(false);
+        return;
+      }
 
       // JEMBATAN LOGIKA GURU (ANTI BOCOR)
       let allowedClassIds = null;
@@ -69,15 +81,33 @@ const ExamResults = () => {
       if (['UH', 'PTS'].includes(schData.exams.type) && schData.class_id) {
         idsToFetch = [schData.class_id];
       } else {
-         const { data: allClasses } = await supabase.from('classes').select('id, name');
+         const { data: allClasses } = await supabase
+           .from('classes')
+           .select('id, name');
          const classIdsForLevel = allClasses
-            ?.filter(c => c.name.startsWith(schData.exams.level.toString()))
-            .map(c => c.id) || [];
+           ?.filter((c) => c.name.startsWith(schData.exams.level.toString()))
+           .map((c) => c.id) || [];
+
+         const { data: subjectAssignments } = await supabase
+           .from('teacher_assignments')
+           .select('class_id, teacher_id')
+           .eq('subject_id', schData.exams.subject_id)
+           .in('class_id', classIdsForLevel);
+
+         const teacherIdsByClass = new Map();
+         subjectAssignments?.forEach((assignment) => {
+           if (!teacherIdsByClass.has(assignment.class_id)) {
+             teacherIdsByClass.set(assignment.class_id, []);
+           }
+           teacherIdsByClass.get(assignment.class_id).push(assignment.teacher_id);
+         });
+
+         idsToFetch = classIdsForLevel.filter((classId) =>
+           buildTeacherSetKey(teacherIdsByClass.get(classId) || []) === examTeacherSetKey
+         );
 
          if (role === 'guru' && allowedClassIds) {
-            idsToFetch = classIdsForLevel.filter(id => allowedClassIds.includes(id));
-         } else {
-            idsToFetch = classIdsForLevel;
+            idsToFetch = idsToFetch.filter((id) => allowedClassIds.includes(id));
          }
       }
 

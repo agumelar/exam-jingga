@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
+import { buildTeacherSetKey } from '../features/schedules/utils';
 import Sidebar from '../components/Sidebar';
 import { Users, ArrowLeft, LayoutGrid, UserCheck, ShieldAlert, Clock, RefreshCw, Unlock, AlertTriangle, CheckCircle2, Search, Filter } from 'lucide-react';
 import Swal from 'sweetalert2';
@@ -52,10 +53,20 @@ const ExamParticipants = () => {
       // 2. Cari Semua "Pintu" (Schedules) yang menuju ke "Rumah" (Exam) ini
       const { data: allRelatedSch } = await supabase
         .from('schedules')
-        .select('id')
+        .select('id, teacher_id')
         .eq('exam_id', schData.exam_id);
       
       const allSchIds = allRelatedSch?.map(s => s.id) || [examId];
+      const examTeacherSetKey = buildTeacherSetKey(
+        (allRelatedSch || []).map((s) => s.teacher_id)
+      );
+
+      if (['PAS/PAT', 'SAJ'].includes(schData.exams.type) && !examTeacherSetKey) {
+        Swal.fire('Error', 'Grup guru tidak valid untuk ujian ini.', 'error');
+        setParticipants([]);
+        setLoading(false);
+        return;
+      }
       setRelatedScheduleIds(allSchIds);
 
       // 3. JEMBATAN LOGIKA GURU (Strict Class Filter)
@@ -76,13 +87,34 @@ const ExamParticipants = () => {
         studentQuery = studentQuery.eq('class_id', schData.class_id);
       } else {
         // PAS/PAT/SAJ - Filter seangkatan, tapi potong berdasarkan guru yang login
-        const { data: allClassIds } = await supabase.from('classes').select('id').like('name', `${schData.exams.level} %`);
-        let ids = allClassIds?.map(c => c.id) || [];
-        
-        if (role === 'guru') {
-           // Irisan: Kelas di angkatan itu YANG diajar oleh guru ini
-           ids = ids.filter(id => allowedClassIds.includes(id));
-        }
+         const { data: allClasses } = await supabase
+           .from('classes')
+           .select('id, name')
+           .like('name', `${schData.exams.level} %`);
+
+         const classIdsForLevel = allClasses?.map((c) => c.id) || [];
+         const { data: subjectAssignments } = await supabase
+           .from('teacher_assignments')
+           .select('class_id, teacher_id')
+           .eq('subject_id', schData.exams.subject_id)
+           .in('class_id', classIdsForLevel);
+
+         const teacherIdsByClass = new Map();
+         subjectAssignments?.forEach((assignment) => {
+           if (!teacherIdsByClass.has(assignment.class_id)) {
+             teacherIdsByClass.set(assignment.class_id, []);
+           }
+           teacherIdsByClass.get(assignment.class_id).push(assignment.teacher_id);
+         });
+
+         let ids = classIdsForLevel.filter((classId) =>
+           buildTeacherSetKey(teacherIdsByClass.get(classId) || []) === examTeacherSetKey
+         );
+
+         if (role === 'guru') {
+           const teacherClassIds = assignments?.map((a) => a.class_id) || [];
+           ids = ids.filter((id) => teacherClassIds.includes(id));
+         }
 
         if (ids.length === 0) {
            setParticipants([]); 
