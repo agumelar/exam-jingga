@@ -1,8 +1,5 @@
 # Pilot Refactor Schedules Implementation Plan
 
-Dokumen plan detail juga tersedia di:
-`docs/superpowers/plans/2026-04-18-pilot-schedules-refactor-implementation.md`
-
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Memecah modul `Schedules` menjadi struktur `page + hooks + services + utils + constants`, sambil menjaga workflow ujian tetap kompatibel (admin jadwalkan -> guru pilih soal -> admin verifikasi -> ujian dimulai) tanpa perubahan schema database.
@@ -51,7 +48,7 @@ Dokumen plan detail juga tersedia di:
 - `src/pages/Schedules.jsx`
 - `src/pages/SelectQuestions.jsx`
 - `src/pages/StudentDashboard.jsx`
-- `src/package.json` (opsional: script unit test)
+- `package.json` (opsional: script unit test)
 
 ---
 

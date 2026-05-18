@@ -225,7 +225,12 @@ const StudentDashboard = () => {
           </div>
           <div className="flex items-center gap-4">
             <button onClick={toggleDarkMode} className="p-3 rounded-2xl bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-orange-400 active:scale-90 transition-all">{isDark ? <Sun size={20} /> : <Moon size={20} />}</button>
-            <button onClick={() => { localStorage.removeItem('user_session'); navigate('/login'); }} className="hidden md:flex items-center gap-2 text-red-500 font-black uppercase text-[10px] tracking-widest bg-red-50 dark:bg-red-950/20 px-5 py-3 rounded-2xl hover:bg-red-500 hover:text-white transition-all"><LogOut size={16}/> Keluar</button>
+            <button
+              onClick={() => { localStorage.removeItem('user_session'); navigate('/login'); }}
+              className="flex items-center gap-2 text-red-500 font-black uppercase text-[10px] tracking-widest bg-red-50 dark:bg-red-950/20 px-5 py-3 rounded-2xl hover:bg-red-500 hover:text-white transition-all"
+            >
+              <LogOut size={16}/> Keluar
+            </button>
           </div>
         </div>
       </nav>

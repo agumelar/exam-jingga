@@ -5,6 +5,12 @@ import Sidebar from '../components/Sidebar';
 import { ChevronLeft, ChevronRight, AlertTriangle, LayoutGrid, CheckCircle2, RefreshCw, Clock, HelpCircle } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { useExamAnswerSync } from '../features/examSessions';
+import {
+  DEFAULT_DRIFT_THRESHOLD_MS,
+  DEFAULT_DRIFT_TICK_MS,
+  DEFAULT_FOCUS_POLL_MS,
+  isDrift
+} from '../features/examSessions/utils/antiCheatSignals.js';
 
 const ExamInterface = () => {
   const { examId } = useParams(); 
@@ -18,6 +24,22 @@ const ExamInterface = () => {
   const [sessionId, setSessionId] = useState(null);
   const [isLocked, setIsLocked] = useState(false);
   const [violationCount, setViolationCount] = useState(0);
+  const [debugLogs, setDebugLogs] = useState([]);
+  const [debugStatus, setDebugStatus] = useState({
+    hidden: false,
+    hasFocus: null,
+    lastDelta: null
+  });
+  const [debugCopied, setDebugCopied] = useState(false);
+  const [debugAntiCheat] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const param = params.get('debug');
+      return param === '1' || param === 'true' || localStorage.getItem('anticheat_debug') === '1';
+    } catch (err) {
+      return false;
+    }
+  });
 
   const {
     answers,
@@ -30,6 +52,48 @@ const ExamInterface = () => {
   } = useExamAnswerSync({ sessionId, isLocked });
   
   const lastCheatTime = useRef(0);
+  const lastTickRef = useRef(0);
+
+  const pushDebugLog = (payload) => {
+    if (!debugAntiCheat) return;
+    const entry = {
+      t: new Date().toISOString().slice(11, 19),
+      ...payload
+    };
+    setDebugLogs((prev) => [...prev, entry].slice(-40));
+  };
+
+  const buildDebugText = () => {
+    const lines = [
+      `time=${new Date().toISOString()}`,
+      `url=${window.location.href}`,
+      `hidden=${String(debugStatus.hidden)}`,
+      `focus=${debugStatus.hasFocus === null ? 'n/a' : String(debugStatus.hasFocus)}`,
+      `delta=${debugStatus.lastDelta === null ? '-' : `${debugStatus.lastDelta}ms`}`,
+      `violationCount=${violationCount}`,
+      `userAgent=${navigator.userAgent}`,
+      'events:'
+    ];
+    const events = [...debugLogs]
+      .reverse()
+      .map((log) => {
+        const delta = typeof log.delta === 'number' ? `${log.delta}ms` : '-';
+        const focus = log.focus === null ? 'n/a' : String(log.focus);
+        return `${log.t} ${log.event} hidden=${String(log.hidden)} focus=${focus} cooldown=${String(log.cooldown)} delta=${delta}`;
+      });
+    return [...lines, ...events].join('\n');
+  };
+
+  const handleCopyDebug = async () => {
+    const text = buildDebugText();
+    try {
+      await navigator.clipboard.writeText(text);
+      setDebugCopied(true);
+      setTimeout(() => setDebugCopied(false), 1500);
+    } catch (err) {
+      window.prompt('Salin log di bawah ini:', text);
+    }
+  };
 
   const shuffleArray = (array) => {
     let newArr = [...array];
@@ -267,37 +331,99 @@ const ExamInterface = () => {
   useEffect(() => {
     if (loading || isLocked || !sessionId || !schedule) return;
 
-    const handleCheatDetection = async () => {
+    const reportViolation = async (source, meta = {}) => {
       if (!sessionId) return;
       const now = Date.now();
-      if (now - lastCheatTime.current < 2000) return; 
+      const cooldown = now - lastCheatTime.current < 2000;
+      const hasFocus = typeof document.hasFocus === 'function' ? document.hasFocus() : null;
+      pushDebugLog({
+        event: source,
+        hidden: document.hidden,
+        focus: hasFocus,
+        cooldown,
+        ...meta
+      });
+      if (cooldown) return;
       lastCheatTime.current = now;
 
       const newCount = violationCount + 1;
       setViolationCount(newCount);
-      
-      const examType = schedule.exams?.type;
-      const isStrictExam = !['UH', 'PTS'].includes(examType); 
-      const isNowLocked = (isStrictExam && newCount >= 2);
 
-      await supabase.from('exam_sessions').update({ violation_count: newCount, status: isNowLocked ? 'locked' : 'active' }).eq('id', sessionId);
+      const examType = schedule.exams?.type;
+      const isStrictExam = !['UH', 'PTS'].includes(examType);
+      const isNowLocked = isStrictExam && newCount >= 2;
+
+      await supabase
+        .from('exam_sessions')
+        .update({
+          violation_count: newCount,
+          status: isNowLocked ? 'locked' : 'active'
+        })
+        .eq('id', sessionId);
 
       if (!isStrictExam) {
         Swal.fire('Peringatan!', 'Tetap fokus pada lembar ujian!', 'warning');
-      } else {
-        if (newCount === 1) {
-          Swal.fire({ title: 'PERINGATAN!', text: 'Dilarang keluar halaman ujian atau akun Anda akan TERKUNCI!', icon: 'warning' });
-        } else if (isNowLocked) { 
-          setIsLocked(true); 
-        }
+        return;
       }
+
+      if (newCount === 1) {
+        Swal.fire({
+          title: 'PERINGATAN!',
+          text: 'Dilarang keluar halaman ujian atau akun Anda akan TERKUNCI!',
+          icon: 'warning'
+        });
+        return;
+      }
+
+      if (isNowLocked) setIsLocked(true);
     };
 
-    const handleVisibility = () => { if (document.hidden) handleCheatDetection(); };
-    window.addEventListener('visibilitychange', handleVisibility);
-    window.addEventListener('blur', handleCheatDetection);
-    return () => { window.removeEventListener('visibilitychange', handleVisibility); window.removeEventListener('blur', handleCheatDetection); };
-  }, [loading, isLocked, sessionId, schedule, violationCount]);
+    const onVisibility = () => {
+      if (document.hidden) reportViolation('visibility');
+    };
+    const onBlur = () => reportViolation('blur');
+    const onPageHide = () => reportViolation('pagehide');
+    const onFreeze = () => reportViolation('freeze');
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('blur', onBlur);
+    window.addEventListener('pagehide', onPageHide);
+    document.addEventListener('freeze', onFreeze);
+
+    const driftTimer = setInterval(() => {
+      const now = performance.now();
+      if (lastTickRef.current) {
+        const delta = now - lastTickRef.current;
+        if (debugAntiCheat) {
+          const hasFocus = typeof document.hasFocus === 'function' ? document.hasFocus() : null;
+          setDebugStatus({
+            hidden: document.hidden,
+            hasFocus,
+            lastDelta: Math.round(delta)
+          });
+        }
+        if (isDrift(delta, DEFAULT_DRIFT_THRESHOLD_MS)) {
+          reportViolation('drift', { delta: Math.round(delta) });
+        }
+      }
+      lastTickRef.current = now;
+    }, DEFAULT_DRIFT_TICK_MS);
+
+    const focusTimer = setInterval(() => {
+      if (!document.hidden && typeof document.hasFocus === 'function' && !document.hasFocus()) {
+        reportViolation('focus');
+      }
+    }, DEFAULT_FOCUS_POLL_MS);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('pagehide', onPageHide);
+      document.removeEventListener('freeze', onFreeze);
+      clearInterval(driftTimer);
+      clearInterval(focusTimer);
+    };
+  }, [loading, isLocked, sessionId, schedule, violationCount, debugAntiCheat]);
 
   // --- RADAR AUTO-UNLOCK ---
   useEffect(() => {
@@ -554,6 +680,34 @@ const ExamInterface = () => {
             </div>
           </div>
         </aside>
+        {debugAntiCheat && (
+          <div className="fixed bottom-4 right-4 z-50 w-64 bg-black/80 text-white text-[10px] font-mono rounded-xl p-3 space-y-2">
+            <div className="font-bold uppercase tracking-wider">AntiCheat Debug</div>
+            <div className="flex justify-between"><span>hidden</span><span>{String(debugStatus.hidden)}</span></div>
+            <div className="flex justify-between"><span>focus</span><span>{debugStatus.hasFocus === null ? 'n/a' : String(debugStatus.hasFocus)}</span></div>
+            <div className="flex justify-between"><span>delta</span><span>{debugStatus.lastDelta === null ? '-' : `${debugStatus.lastDelta}ms`}</span></div>
+            <button
+              type="button"
+              onClick={handleCopyDebug}
+              className="w-full rounded-lg border border-white/30 px-3 py-1 text-[9px] uppercase font-bold tracking-widest hover:bg-white/10 transition"
+            >
+              {debugCopied ? 'Copied' : 'Copy Logs'}
+            </button>
+            <div className="border-t border-white/20 pt-2 space-y-1 max-h-40 overflow-auto">
+              {debugLogs.length === 0 ? (
+                <div className="opacity-70">no events</div>
+              ) : (
+                [...debugLogs].reverse().map((log, idx) => (
+                  <div key={`${log.t}-${idx}`} className="flex justify-between gap-2">
+                    <span>{log.t}</span>
+                    <span className="flex-1 truncate">{log.event}</span>
+                    <span className="opacity-80">{log.hidden ? 'H' : 'V'}{log.focus === null ? '' : log.focus ? 'F' : 'N'}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
