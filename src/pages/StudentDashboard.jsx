@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import { isExamReadyForStudent } from '../features/schedules/constants';
-import { buildTeacherSetKey } from '../features/schedules/utils';
+import { buildTeacherSetKey, isWithinLocalRange } from '../features/schedules/utils';
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -72,7 +72,7 @@ const StudentDashboard = () => {
       });
 
       const { data: schData } = await supabase.from('schedules').select('*, exams(*, subjects(name)), teachers(full_name)').eq('status', 'active');
-      const todayStr = formatLocalDate(new Date());
+      const now = new Date();
 
       // 1. Kumpulkan SEMUA jadwal yang eligible untuk siswa ini
       const collabGroups = new Map();
@@ -80,9 +80,14 @@ const StudentDashboard = () => {
       let hasInvalidTeacherSet = false;
 
       (schData || []).forEach((sch) => {
-        const isToday = sch.start_time ? formatLocalDate(sch.start_time) === todayStr : false;
         const isReady = isExamReadyForStudent(sch.exams?.status);
-        if (!isToday || !isReady) return;
+        const isInWindow = isWithinLocalRange({
+          now,
+          startTime: sch.start_time,
+          endTime: sch.end_time,
+          durationMinutes: sch.exams?.duration,
+        });
+        if (!isInWindow || !isReady) return;
 
         if (['UH', 'PTS'].includes(sch.exams?.type)) {
           if (sch.class_id === stuData.class_id) nonCollabSchedules.push(sch);

@@ -10,7 +10,7 @@ import {
 } from '../features/schedules/services/scheduleService';
 import { useSchedulesData } from '../features/schedules/hooks/useSchedulesData';
 import { useScheduleActions } from '../features/schedules/hooks/useScheduleActions';
-import { formatWIB } from '../features/schedules/utils';
+import { formatWIB, parseLocalDateTime, toLocalDateKey } from '../features/schedules/utils';
 import { ScheduleFilters } from '../features/schedules/components/ScheduleFilters';
 import { ScheduleCard } from '../features/schedules/components/ScheduleCard';
 import { ScheduleFormModal } from '../features/schedules/components/ScheduleFormModal';
@@ -219,14 +219,11 @@ const Schedules = () => {
     
     // Pencarian berdasarkan Hari Ini
     let dateMatch = true;
-    if (dateFilter === 'Hari Ini') {
-      const today = new Date();
-      const p = (n) => n.toString().padStart(2, '0');
-      const todayStr = `${today.getFullYear()}-${p(today.getMonth() + 1)}-${p(today.getDate())}`; // YYYY-MM-DD
-      
-      // ex.start_time formatnya YYYY-MM-DD HH:mm:ss
-      dateMatch = ex.start_time && ex.start_time.startsWith(todayStr);
-    }
+      if (dateFilter === 'Hari Ini') {
+        const todayStr = toLocalDateKey(new Date());
+        const parsed = parseLocalDateTime(ex.start_time);
+        dateMatch = parsed ? toLocalDateKey(parsed) === todayStr : false;
+      }
     
     return searchMatch && dateMatch;
   });

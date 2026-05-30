@@ -5,6 +5,7 @@ import Sidebar from '../components/Sidebar';
 import { ChevronLeft, ChevronRight, AlertTriangle, LayoutGrid, CheckCircle2, RefreshCw, Clock, HelpCircle } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { useExamAnswerSync } from '../features/examSessions';
+import { toSQLDateTime } from '../features/schedules/utils';
 import {
   DEFAULT_DRIFT_THRESHOLD_MS,
   DEFAULT_DRIFT_TICK_MS,
@@ -57,7 +58,7 @@ const ExamInterface = () => {
   const pushDebugLog = (payload) => {
     if (!debugAntiCheat) return;
     const entry = {
-      t: new Date().toISOString().slice(11, 19),
+      t: toSQLDateTime(new Date()).slice(11, 19),
       ...payload
     };
     setDebugLogs((prev) => [...prev, entry].slice(-40));
@@ -65,7 +66,7 @@ const ExamInterface = () => {
 
   const buildDebugText = () => {
     const lines = [
-      `time=${new Date().toISOString()}`,
+      `time=${toSQLDateTime(new Date())}`,
       `url=${window.location.href}`,
       `hidden=${String(debugStatus.hidden)}`,
       `focus=${debugStatus.hasFocus === null ? 'n/a' : String(debugStatus.hasFocus)}`,
@@ -182,7 +183,7 @@ const ExamInterface = () => {
             .maybeSingle();
 
           if (!existingAnswer) {
-            const resetStart = new Date().toISOString();
+            const resetStart = toSQLDateTime(new Date());
             await supabase
               .from('exam_sessions')
               .update({
@@ -243,7 +244,7 @@ const ExamInterface = () => {
            .maybeSingle();
 
          if (!anyAnswer) {
-           const resetStart = new Date().toISOString();
+            const resetStart = toSQLDateTime(new Date());
            await supabase
              .from('exam_sessions')
              .update({
@@ -279,11 +280,11 @@ const ExamInterface = () => {
 
            const dbScore = dbQuestions.length > 0 ? Math.round((dbCorrect / dbQuestions.length) * 100) : 0;
 
-           await supabase.from('exam_sessions').update({
-             status: 'finished',
-             finished_at: new Date().toISOString(),
-             score: dbScore,
-           }).eq('id', currentSession.id);
+            await supabase.from('exam_sessions').update({
+              status: 'finished',
+              finished_at: toSQLDateTime(new Date()),
+              score: dbScore,
+            }).eq('id', currentSession.id);
 
             await Swal.fire({
               title: 'Waktu Habis!',
@@ -515,7 +516,11 @@ const ExamInterface = () => {
     const score = questions.length > 0 ? Math.round((correct / questions.length) * 100) : 0;
     
     await flush();
-    await supabase.from('exam_sessions').update({ status: 'finished', finished_at: new Date().toISOString(), score }).eq('id', sessionId);
+    await supabase.from('exam_sessions').update({
+      status: 'finished',
+      finished_at: toSQLDateTime(new Date()),
+      score,
+    }).eq('id', sessionId);
     clearCache();
     
     await Swal.fire({
