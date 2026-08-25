@@ -1,15 +1,30 @@
 <!doctype html>
-<html lang="en">
+<html lang="id">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="logo_sekolah.png" />
+    <link rel="icon" type="image/png" href="/logo_sekolah.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#ea580c" />
     <meta name="google" content="notranslate" />
     <meta class="notranslate" />
-    <script type="module" src="/src/main.jsx"></script>
-    <title>Exam jingga - SMKN 1 Rongga</title>
+    <title>Exam Jingga - SMKN 1 Rongga</title>
+    
+    <!-- Instant Zero-FOUC Theme Initializer (Frame 0 Execution) -->
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (saved === 'dark' || (!saved && prefersDark)) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
-  <body>
+  <body class="bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 antialiased selection:bg-orange-500 selection:text-white">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

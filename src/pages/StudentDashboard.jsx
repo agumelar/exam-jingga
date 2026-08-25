@@ -7,6 +7,7 @@ import Swal from 'sweetalert2';
 import { isExamReadyForStudent } from '../features/schedules/constants';
 import { buildTeacherSetKey, isWithinLocalRange } from '../features/schedules/utils';
 import TokenInputOTP from '../components/TokenInputOTP';
+import { isDarkMode, toggleTheme } from '../utils/theme';
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -15,13 +16,21 @@ const StudentDashboard = () => {
   const [logistics, setLogistics] = useState(null);
   const [availableExams, setAvailableExams] = useState([]);
   const [examHistory, setExamHistory] = useState([]); 
-  const [isDark, setIsDark] = useState(false); 
+  const [isDark, setIsDark] = useState(isDarkMode()); 
   const [loading, setLoading] = useState(true);
   const [validatingToken, setValidatingToken] = useState(false);
   
   // State Modal Token OTP
   const [showTokenModal, setShowTokenModal] = useState(false);
   const [selectedExam, setSelectedExam] = useState(null);
+
+  useEffect(() => {
+    const handleThemeChange = (e) => {
+      setIsDark(e.detail.theme === 'dark');
+    };
+    window.addEventListener('exam-jingga-theme-change', handleThemeChange);
+    return () => window.removeEventListener('exam-jingga-theme-change', handleThemeChange);
+  }, []);
 
   useEffect(() => {
     const session = localStorage.getItem('user_session');
@@ -35,11 +44,6 @@ const StudentDashboard = () => {
       }
     } else {
       navigate('/login');
-    }
-
-    if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      setIsDark(true);
-      document.documentElement.classList.add('dark');
     }
   }, [navigate]);
 
@@ -215,11 +219,9 @@ const StudentDashboard = () => {
     }
   };
 
-  const toggleDarkMode = () => {
-    const newDark = !isDark;
-    setIsDark(newDark);
-    document.documentElement.classList.toggle('dark');
-    localStorage.theme = newDark ? 'dark' : 'light';
+  const handleToggleTheme = () => {
+    const nextDark = toggleTheme();
+    setIsDark(nextDark);
   };
 
   if (loading) {
@@ -253,9 +255,9 @@ const StudentDashboard = () => {
           </div>
           <div className="flex items-center gap-2.5">
             <button 
-              onClick={toggleDarkMode} 
+              onClick={handleToggleTheme} 
               aria-label="Toggle Dark Mode"
-              className="p-2.5 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-orange-400 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+              className="p-2.5 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-orange-400 hover:scale-105 active:scale-95 transition-colors cursor-pointer"
             >
               {isDark ? <Sun size={18} /> : <Moon size={18} />}
             </button>

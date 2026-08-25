@@ -24,10 +24,11 @@ import {
 } from 'lucide-react';
 import { logoutKeycloak } from '../services/keycloakAuth';
 import { useAuth } from '../context/AuthContext';
+import { isDarkMode, toggleTheme } from '../utils/theme';
 
 const Sidebar = ({ role: propRole }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [isDark, setIsDark] = useState(localStorage.getItem('theme') === 'dark');
+  const [isDark, setIsDark] = useState(isDarkMode());
 
   // Ambil role secara otomatis dan tangguh dari context / storage
   let authRole = null;
@@ -50,14 +51,17 @@ const Sidebar = ({ role: propRole }) => {
   const activeRole = String(propRole || authRole || sessionRole || 'admin').toLowerCase();
 
   useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  }, [isDark]);
+    const handleThemeChange = (e) => {
+      setIsDark(e.detail.theme === 'dark');
+    };
+    window.addEventListener('exam-jingga-theme-change', handleThemeChange);
+    return () => window.removeEventListener('exam-jingga-theme-change', handleThemeChange);
+  }, []);
+
+  const handleToggleTheme = () => {
+    const nextDark = toggleTheme();
+    setIsDark(nextDark);
+  };
 
   const handleLogout = () => {
     logoutKeycloak();
@@ -181,7 +185,7 @@ const Sidebar = ({ role: propRole }) => {
         {/* M3 Drawer Footer (Theme & Logout) */}
         <div className="p-4 bg-stone-900/90 dark:bg-stone-950 border-t border-stone-800/80 space-y-2">
           <button 
-            onClick={() => setIsDark(!isDark)}
+            onClick={handleToggleTheme}
             className="flex items-center justify-between w-full px-4 py-2.5 bg-stone-800/60 hover:bg-stone-800 rounded-full border border-stone-700/60 transition-all text-xs font-bold uppercase tracking-wider text-stone-300 hover:text-white cursor-pointer"
           >
             <span>{isDark ? 'Mode Gelap' : 'Mode Terang'}</span>
