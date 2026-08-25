@@ -2,214 +2,215 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import Sidebar from '../components/Sidebar';
 import { 
-  UserCheck, Search, Plus, Trash2, Edit, X, 
-  Briefcase, Mail, FileUp, FileDown 
+  UserCheck, Search, ShieldCheck, Database, RefreshCw, Download, Mail, Briefcase 
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import * as XLSX from 'xlsx';
+import { masterDataSyncService } from '../services/masterDataSync';
+import M3Button from '../components/ui/M3Button';
+import M3Card from '../components/ui/M3Card';
+import M3Badge from '../components/ui/M3Badge';
 
 const MasterTeachers = () => {
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isEdit, setIsEdit] = useState(false);
-  const [currentId, setCurrentId] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
 
-  const [formData, setFormData] = useState({
-    full_name: '',
-    email: '',
-    role_level: 'guru',
-    password: ''
-  });
-
-  useEffect(() => { fetchTeachers(); }, []);
+  useEffect(() => { 
+    fetchTeachers(); 
+  }, []);
 
   const fetchTeachers = async () => {
     setLoading(true);
     const { data, error } = await supabase.from('teachers').select('*').order('full_name');
-    if (!error) setTeachers(data);
+    if (!error) setTeachers(data || []);
     setLoading(false);
   };
 
-  const downloadTemplate = () => {
-    const template = [
-      { Nama: 'Guru Jingga, S.Pd', Email: 'guru@smkn1rongga.sch.id', Role: 'guru', Password: 'Jingga123' }
-    ];
-    const worksheet = XLSX.utils.json_to_sheet(template);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Template Guru");
-    XLSX.writeFile(workbook, "Template_Import_Guru_Jingga.xlsx");
+  const handleSyncTeachers = async () => {
+    setSyncing(true);
+    Swal.fire({
+      title: 'Menyinkronkan Data Guru...',
+      text: 'Menghubungkan ke data.smkn1rongga.sch.id/v1/staff...',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+
+    const res = await masterDataSyncService.syncTeachers();
+    setSyncing(false);
+
+    if (res.success) {
+      await fetchTeachers();
+      Swal.fire('Berhasil!', `Data ${res.count} Guru & GTK tersinkronisasi.`, 'success');
+    } else {
+      Swal.fire('Gagal!', res.error, 'error');
+    }
   };
 
   const exportTeacherAccounts = () => {
-    const dataToExport = filteredTeachers.map((t) => ({
+    const dataToExport = filteredTeachers.map((t, idx) => ({
+      No: idx + 1,
       Nama: t.full_name || '-',
-      Akun: t.email || '-',
-      Password: t.password || 'Jingga123'
+      NIP: t.nip || '-',
+      Email: t.email || '-',
+      Role: (t.role_level || t.role || 'guru').toUpperCase()
     }));
 
     if (dataToExport.length === 0) {
-      Swal.fire('Tidak ada data', 'Belum ada akun guru yang bisa diexport.', 'info');
+      Swal.fire('Tidak ada data', 'Belum ada data guru yang bisa diexport.', 'info');
       return;
     }
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Akun Guru");
-    XLSX.writeFile(workbook, "Data_Akun_Guru_Jingga.xlsx");
-  };
-
-  const handleImportExcel = (e) => {
-    const file = e.target.files[0];
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const data = new Uint8Array(event.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-
-        const formattedData = jsonData.map(item => ({
-          full_name: item.Nama || item.full_name,
-          email: item.Email || item.email,
-          role_level: (item.Role || item.role_level || 'guru').toLowerCase(),
-          password: item.Password || 'Jingga123' 
-        }));
-
-        const { error } = await supabase.from('teachers').insert(formattedData);
-        if (error) throw error;
-        Swal.fire('Berhasil!', `${formattedData.length} Guru diimport.`, 'success');
-        fetchTeachers();
-      } catch (error) {
-        Swal.fire('Gagal!', 'Cek kolom Excel (Nama, Email, Role, Password)', 'error');
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSaving(true);
-    
-    const dataToSave = {
-      ...formData,
-      role_level: formData.role_level.toLowerCase(),
-      password: formData.password || 'Jingga123'
-    };
-
-    let result;
-    if (isEdit) {
-      result = await supabase.from('teachers').update(dataToSave).eq('id', currentId);
-    } else {
-      result = await supabase.from('teachers').insert([dataToSave]);
-    }
-    
-    setIsSaving(false);
-    if (result.error) { 
-      Swal.fire('Gagal!', result.error.message, 'error'); 
-    } else {
-      Swal.fire({ title: 'Berhasil!', text: `Password: ${dataToSave.password}`, icon: 'success' });
-      setShowModal(false); resetForm(); fetchTeachers();
-    }
-  };
-
-  const resetForm = () => { 
-    setFormData({ full_name: '', email: '', role_level: 'guru', password: '' }); 
-    setIsEdit(false); setCurrentId(null); 
-  };
-
-  const handleDelete = async (id) => {
-    const { isConfirmed } = await Swal.fire({ title: 'Hapus Guru?', icon: 'warning', showCancelButton: true });
-    if (isConfirmed) { await supabase.from('teachers').delete().eq('id', id); fetchTeachers(); }
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Data Guru CBT");
+    XLSX.writeFile(workbook, "Data_Guru_CBT_Jingga.xlsx");
   };
 
   const filteredTeachers = teachers.filter(t => 
-    t.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || t.email?.toLowerCase().includes(searchTerm.toLowerCase())
+    (t.full_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (t.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (t.nip || '').includes(searchTerm)
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 flex font-sans text-left">
-      <Sidebar role="admin" />
-      <main className="flex-1 lg:ml-64 p-4 lg:p-8">
-        <header className="mb-8 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-          <div className="text-left">
-            <h2 className="text-3xl font-black text-slate-800 dark:text-zinc-100 flex items-center gap-3 italic uppercase tracking-tighter">
-              <UserCheck className="text-orange-600" size={32} /> Master Guru
-            </h2>
-            <p className="text-slate-500 font-medium">Pengelolaan Akun Pengajar</p>
+    <div className="flex h-screen bg-stone-50 dark:bg-stone-950 font-sans text-left transition-colors duration-300">
+      <Sidebar />
+      <div className="flex-1 lg:ml-64 flex flex-col overflow-hidden">
+        
+        {/* M3 Header */}
+        <header className="bg-white/90 dark:bg-stone-900/90 backdrop-blur-md border-b border-stone-200 dark:border-stone-800 p-4 lg:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 z-10">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 rounded-2xl">
+              <UserCheck size={22} />
+            </div>
+            <div>
+              <h1 className="text-xl font-black text-stone-900 dark:text-white uppercase italic tracking-tight">
+                Data Guru & Pembuat Soal
+              </h1>
+              <p className="text-[10px] font-bold text-stone-500 dark:text-stone-400 uppercase tracking-widest">
+                Total Terdaftar: {teachers.length} Guru / GTK
+              </p>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <button onClick={downloadTemplate} className="bg-slate-800 text-white px-5 py-3 rounded-2xl font-black text-xs uppercase"><FileDown size={18} className="inline mr-2"/> Template</button>
-            <button onClick={exportTeacherAccounts} className="bg-blue-600 text-white px-5 py-3 rounded-2xl font-black text-xs uppercase"><FileDown size={18} className="inline mr-2"/> Export Akun</button>
-            <label className="cursor-pointer bg-emerald-600 text-white px-5 py-3 rounded-2xl font-black text-xs uppercase">
-              <FileUp size={18} className="inline mr-2"/> Import
-              <input type="file" className="hidden" onChange={handleImportExcel} />
-            </label>
-            <button onClick={() => { resetForm(); setShowModal(true); }} className="bg-orange-600 text-white px-5 py-3 rounded-2xl font-black text-xs uppercase"><Plus size={18} className="inline mr-2"/> Tambah</button>
+
+          <div className="flex items-center gap-2.5 w-full sm:w-auto">
+            <M3Button 
+              variant="outlined"
+              size="sm"
+              onClick={exportTeacherAccounts} 
+              icon={Download}
+              iconPosition="left"
+              className="flex-1 sm:flex-none"
+            >
+              Export Excel
+            </M3Button>
+
+            <M3Button 
+              variant="filled"
+              size="sm"
+              onClick={handleSyncTeachers} 
+              loading={syncing}
+              icon={RefreshCw}
+              iconPosition="left"
+              className="flex-1 sm:flex-none shadow-md shadow-orange-600/20"
+            >
+              Tarik Data Guru
+            </M3Button>
           </div>
         </header>
 
-        <div className="mb-8 relative">
-          <Search className="absolute left-4 top-4 text-slate-400" size={20} />
-          <input type="text" placeholder="Cari guru..." className="w-full pl-12 pr-4 py-4 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl outline-none dark:text-zinc-100 shadow-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {loading ? (
-            <div className="col-span-full py-20 text-center animate-pulse font-bold text-slate-400 italic uppercase">Memuat guru...</div>
-          ) : filteredTeachers.map((t) => (
-            <div key={t.id} className="bg-white dark:bg-zinc-900 p-6 rounded-[2.5rem] border border-slate-100 dark:border-zinc-800 shadow-sm hover:border-orange-500 transition-all text-left">
-              <div className="flex items-start justify-between mb-4">
-                <div className={`p-4 rounded-2xl ${t.role_level === 'kurikulum' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/20' : 'bg-orange-100 text-orange-600 dark:bg-orange-900/20'}`}><Briefcase size={24} /></div>
-                <div className="flex gap-1">
-                  <button onClick={() => { setIsEdit(true); setCurrentId(t.id); setFormData({full_name: t.full_name, email: t.email, role_level: t.role_level, password: t.password}); setShowModal(true); }} className="p-2 text-slate-300 hover:text-blue-500"><Edit size={18}/></button>
-                  <button onClick={() => handleDelete(t.id)} className="p-2 text-slate-300 hover:text-red-500"><Trash2 size={18}/></button>
-                </div>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
+          
+          {/* M3 Master Data Truth Banner */}
+          <M3Card variant="filled" className="bg-orange-50/80 dark:bg-orange-950/30 border border-orange-200/80 dark:border-orange-900/40 p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="p-2.5 bg-orange-600 text-white rounded-2xl shrink-0 shadow-md shadow-orange-600/20">
+                <ShieldCheck size={22} />
               </div>
-              <h3 className="text-xl font-black dark:text-white uppercase leading-tight mb-2 tracking-tighter">{t.full_name}</h3>
-              <p className="text-xs text-slate-400 mb-5">{t.email}</p>
-              <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${t.role_level === 'kurikulum' ? 'bg-purple-600 text-white' : 'bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-400'}`}>{t.role_level}</span>
-            </div>
-          ))}
-        </div>
-
-        {showModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 text-left">
-            <div className="bg-white dark:bg-zinc-950 w-full max-w-md rounded-[3rem] p-10 shadow-2xl animate-in zoom-in-95">
-              <div className="flex justify-between items-center mb-8">
-                <h3 className="text-2xl font-black dark:text-white italic uppercase tracking-tighter">{isEdit ? 'Edit Guru' : 'Guru Baru'}</h3>
-                <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-red-500"><X size={20}/></button>
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-stone-900 dark:text-white flex items-center gap-2">
+                  <span>Single Source of Truth: data.smkn1rongga.sch.id</span>
+                  <M3Badge variant="success" size="sm">SYNCED REPLICA</M3Badge>
+                </h4>
+                <p className="text-[11px] text-stone-600 dark:text-stone-400 mt-0.5 font-medium">
+                  Seluruh akun PTK terhubung ke Keycloak SSO. Data NIP, Nama, dan Hak Akses otomatis terbarui saat sinkronisasi.
+                </p>
               </div>
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-2 block">Nama Lengkap</label>
-                  <input type="text" required className="w-full bg-slate-50 dark:bg-zinc-900 p-4 rounded-2xl dark:text-white border-none shadow-inner" value={formData.full_name} onChange={(e) => setFormData({...formData, full_name: e.target.value})} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-2 block">Email Login</label>
-                  <input type="email" required className="w-full bg-slate-50 dark:bg-zinc-900 p-4 rounded-2xl dark:text-white border-none shadow-inner" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-2 block">Password</label>
-                  <input type="text" className="w-full bg-slate-50 dark:bg-zinc-900 p-4 rounded-2xl dark:text-white border-none shadow-inner font-mono" placeholder="Default: Jingga123" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-2 block">Jabatan</label>
-                  <select className="w-full bg-slate-50 dark:bg-zinc-900 p-4 rounded-2xl dark:text-white border-none appearance-none" value={formData.role_level} onChange={(e) => setFormData({...formData, role_level: e.target.value})}>
-                    <option value="guru">Guru</option>
-                    <option value="kurikulum">Kurikulum</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </div>
-                <button type="submit" disabled={isSaving} className="w-full bg-orange-600 text-white py-5 rounded-2xl font-black uppercase shadow-lg shadow-orange-600/30">
-                  {isSaving ? "PROSES..." : "SIMPAN"}
-                </button>
-              </form>
             </div>
-          </div>
-        )}
-      </main>
+            <a 
+              href="https://data.smkn1rongga.sch.id" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="shrink-0 text-xs font-black uppercase text-orange-600 dark:text-orange-400 hover:text-orange-700 bg-white dark:bg-stone-800 px-4 py-2 rounded-full border border-orange-200 dark:border-stone-700 shadow-xs flex items-center gap-1.5 transition"
+            >
+              <Database size={14} /> Kelola di Pusat
+            </a>
+          </M3Card>
+
+          {/* M3 Search Bar */}
+          <M3Card variant="elevated" className="p-4 border border-stone-200 dark:border-stone-800 flex items-center">
+            <div className="relative w-full">
+              <Search className="absolute left-4 top-3 text-stone-400" size={18}/>
+              <input 
+                type="text" 
+                placeholder="Cari Nama Guru, NIP, atau Email..." 
+                value={searchTerm} 
+                onChange={(e) => setSearchTerm(e.target.value)} 
+                className="w-full pl-11 pr-4 py-2 bg-stone-100 dark:bg-stone-800 rounded-full text-xs font-bold text-stone-900 dark:text-white border-0 outline-none focus:ring-2 focus:ring-orange-500 transition-all placeholder:text-stone-400"
+              />
+            </div>
+          </M3Card>
+
+          {/* M3 Teachers Table Surface */}
+          <M3Card variant="elevated" className="border border-stone-200 dark:border-stone-800 overflow-hidden m3-elevation-1">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-stone-200 dark:border-stone-800 text-[10px] font-black uppercase tracking-widest text-stone-500 dark:text-stone-400 bg-stone-100/60 dark:bg-stone-900/60">
+                    <th className="p-4 pl-6">No</th>
+                    <th className="p-4">Nama Lengkap</th>
+                    <th className="p-4">NIP</th>
+                    <th className="p-4">Email SSO</th>
+                    <th className="p-4 pr-6 text-center">Peran</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100 dark:divide-stone-800 text-xs font-bold text-stone-800 dark:text-stone-300">
+                  {loading ? (
+                    <tr>
+                      <td colSpan="5" className="p-12 text-center text-stone-400 font-bold uppercase tracking-wider animate-pulse">
+                        Memuat data guru CBT...
+                      </td>
+                    </tr>
+                  ) : filteredTeachers.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="p-12 text-center text-stone-400 italic">
+                        Tidak ada data guru ditemukan.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTeachers.map((t, idx) => (
+                      <tr key={t.id} className="hover:bg-stone-50 dark:hover:bg-stone-800/50 transition-colors">
+                        <td className="p-4 pl-6 text-stone-400 font-mono text-[11px]">{idx + 1}</td>
+                        <td className="p-4 font-black uppercase text-stone-900 dark:text-white">{t.full_name}</td>
+                        <td className="p-4 font-mono font-bold text-stone-500 dark:text-stone-400">{t.nip || '-'}</td>
+                        <td className="p-4 font-mono text-[11px] text-stone-500 dark:text-stone-400">{t.email}</td>
+                        <td className="p-4 pr-6 text-center">
+                          <M3Badge variant={t.role_level === 'admin' ? 'primary' : 'default'} size="sm">
+                            {(t.role_level || t.role || 'GURU').toUpperCase()}
+                          </M3Badge>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </M3Card>
+
+        </main>
+      </div>
     </div>
   );
 };

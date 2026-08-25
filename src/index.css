@@ -1,3 +1,185 @@
 @import "tailwindcss";
 
 @variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    /* M3 Color Roles - Light Mode (Jingga Palette) */
+    --md-sys-color-primary: #ea580c;
+    --md-sys-color-on-primary: #ffffff;
+    --md-sys-color-primary-container: #ffedd5;
+    --md-sys-color-on-primary-container: #7c2d12;
+    --md-sys-color-primary-fixed: #ffedd5;
+    --md-sys-color-on-primary-fixed: #7c2d12;
+    --md-sys-color-primary-fixed-dim: #fed7aa;
+    
+    --md-sys-color-secondary: #f97316;
+    --md-sys-color-on-secondary: #ffffff;
+    --md-sys-color-secondary-container: #fff7ed;
+    --md-sys-color-on-secondary-container: #9a3412;
+
+    --md-sys-color-tertiary: #0284c7;
+    --md-sys-color-on-tertiary: #ffffff;
+    --md-sys-color-tertiary-container: #e0f2fe;
+    --md-sys-color-on-tertiary-container: #0369a1;
+
+    --md-sys-color-error: #dc2626;
+    --md-sys-color-on-error: #ffffff;
+    --md-sys-color-error-container: #fee2e2;
+    --md-sys-color-on-error-container: #7f1d1d;
+
+    --md-sys-color-success: #16a34a;
+    --md-sys-color-on-success: #ffffff;
+    --md-sys-color-success-container: #dcfce7;
+    --md-sys-color-on-success-container: #14532d;
+
+    --md-sys-color-surface: #fafaf9;
+    --md-sys-color-surface-dim: #f5f5f4;
+    --md-sys-color-surface-bright: #ffffff;
+    --md-sys-color-surface-container-lowest: #ffffff;
+    --md-sys-color-surface-container-low: #f5f5f4;
+    --md-sys-color-surface-container: #f0f0ef;
+    --md-sys-color-surface-container-high: #e7e5e4;
+    --md-sys-color-surface-container-highest: #d6d3d1;
+
+    --md-sys-color-on-surface: #1c1917;
+    --md-sys-color-on-surface-variant: #57534e;
+    --md-sys-color-outline: #a8a29e;
+    --md-sys-color-outline-variant: #e7e5e4;
+
+    /* M3 Elevation Shadows */
+    --md-sys-elevation-1: 0 1px 3px 1px rgba(0, 0, 0, 0.08), 0 1px 2px 0 rgba(0, 0, 0, 0.12);
+    --md-sys-elevation-2: 0 2px 6px 2px rgba(0, 0, 0, 0.10), 0 1px 2px 0 rgba(0, 0, 0, 0.15);
+    --md-sys-elevation-3: 0 4px 8px 3px rgba(0, 0, 0, 0.12), 0 1px 3px 0 rgba(0, 0, 0, 0.20);
+    --md-sys-elevation-4: 0 6px 10px 4px rgba(0, 0, 0, 0.14), 0 2px 4px 0 rgba(0, 0, 0, 0.22);
+    --md-sys-elevation-5: 0 8px 12px 6px rgba(0, 0, 0, 0.16), 0 4px 6px 0 rgba(0, 0, 0, 0.25);
+  }
+
+  .dark {
+    /* M3 Color Roles - Dark Mode (Jingga Dark) */
+    --md-sys-color-primary: #fb923c;
+    --md-sys-color-on-primary: #431407;
+    --md-sys-color-primary-container: #7c2d12;
+    --md-sys-color-on-primary-container: #ffedd5;
+    --md-sys-color-primary-fixed: #ffedd5;
+    --md-sys-color-on-primary-fixed: #7c2d12;
+    --md-sys-color-primary-fixed-dim: #fed7aa;
+
+    --md-sys-color-secondary: #fdba74;
+    --md-sys-color-on-secondary: #431407;
+    --md-sys-color-secondary-container: #9a3412;
+    --md-sys-color-on-secondary-container: #ffedd5;
+
+    --md-sys-color-tertiary: #38bdf8;
+    --md-sys-color-on-tertiary: #082f49;
+    --md-sys-color-tertiary-container: #0369a1;
+    --md-sys-color-on-tertiary-container: #e0f2fe;
+
+    --md-sys-color-error: #f87171;
+    --md-sys-color-on-error: #450a0a;
+    --md-sys-color-error-container: #991b1b;
+    --md-sys-color-on-error-container: #fee2e2;
+
+    --md-sys-color-success: #4ade80;
+    --md-sys-color-on-success: #052e16;
+    --md-sys-color-success-container: #166534;
+    --md-sys-color-on-success-container: #dcfce7;
+
+    --md-sys-color-surface: #0c0a09;
+    --md-sys-color-surface-dim: #090807;
+    --md-sys-color-surface-bright: #292524;
+    --md-sys-color-surface-container-lowest: #090807;
+    --md-sys-color-surface-container-low: #141210;
+    --md-sys-color-surface-container: #1c1917;
+    --md-sys-color-surface-container-high: #292524;
+    --md-sys-color-surface-container-highest: #383431;
+
+    --md-sys-color-on-surface: #f5f5f4;
+    --md-sys-color-on-surface-variant: #a8a29e;
+    --md-sys-color-outline: #57534e;
+    --md-sys-color-outline-variant: #292524;
+
+    /* M3 Elevation in Dark (Surface Tinting + Soft Shadow) */
+    --md-sys-elevation-1: 0 1px 3px 1px rgba(0, 0, 0, 0.4), 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+    --md-sys-elevation-2: 0 2px 6px 2px rgba(0, 0, 0, 0.5), 0 1px 2px 0 rgba(0, 0, 0, 0.6);
+    --md-sys-elevation-3: 0 4px 8px 3px rgba(0, 0, 0, 0.6), 0 1px 3px 0 rgba(0, 0, 0, 0.7);
+    --md-sys-elevation-4: 0 6px 10px 4px rgba(0, 0, 0, 0.7), 0 2px 4px 0 rgba(0, 0, 0, 0.8);
+    --md-sys-elevation-5: 0 8px 12px 6px rgba(0, 0, 0, 0.8), 0 4px 6px 0 rgba(0, 0, 0, 0.9);
+  }
+
+  body {
+    background-color: var(--md-sys-color-surface);
+    color: var(--md-sys-color-on-surface);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* M3 Utility Classes */
+@layer utilities {
+  .m3-surface {
+    background-color: var(--md-sys-color-surface);
+    color: var(--md-sys-color-on-surface);
+  }
+  .m3-surface-container-lowest {
+    background-color: var(--md-sys-color-surface-container-lowest);
+    color: var(--md-sys-color-on-surface);
+  }
+  .m3-surface-container-low {
+    background-color: var(--md-sys-color-surface-container-low);
+    color: var(--md-sys-color-on-surface);
+  }
+  .m3-surface-container {
+    background-color: var(--md-sys-color-surface-container);
+    color: var(--md-sys-color-on-surface);
+  }
+  .m3-surface-container-high {
+    background-color: var(--md-sys-color-surface-container-high);
+    color: var(--md-sys-color-on-surface);
+  }
+  .m3-surface-container-highest {
+    background-color: var(--md-sys-color-surface-container-highest);
+    color: var(--md-sys-color-on-surface);
+  }
+  
+  .m3-elevation-1 {
+    box-shadow: var(--md-sys-elevation-1);
+  }
+  .m3-elevation-2 {
+    box-shadow: var(--md-sys-elevation-2);
+  }
+  .m3-elevation-3 {
+    box-shadow: var(--md-sys-elevation-3);
+  }
+  .m3-elevation-4 {
+    box-shadow: var(--md-sys-elevation-4);
+  }
+  .m3-elevation-5 {
+    box-shadow: var(--md-sys-elevation-5);
+  }
+
+  /* M3 Ripple and State Layers */
+  .m3-state-layer {
+    position: relative;
+    overflow: hidden;
+  }
+  .m3-state-layer::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-color: currentColor;
+    opacity: 0;
+    transition: opacity 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+    border-radius: inherit;
+  }
+  .m3-state-layer:hover::before {
+    opacity: 0.08;
+  }
+  .m3-state-layer:focus-visible::before {
+    opacity: 0.12;
+  }
+  .m3-state-layer:active::before {
+    opacity: 0.14;
+  }
+}

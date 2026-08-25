@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { supabase } from './supabaseClient';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
+import AuthCallback from './pages/AuthCallback';
 import Dashboard from './pages/Dashboard';
 import MasterMajors from './pages/MasterMajors'; 
 import ImportStudents from './pages/ImportStudents';
@@ -23,63 +24,172 @@ import ExamCards from './pages/ExamCards';
 import AttendanceList from './pages/AttendanceList';
 import ExamResults from './pages/ExamResults';
 
-function App() {
-  const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true);
+// Komponen Pelindung Rute (Protected Route)
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const { user, loading } = useAuth();
 
-  useEffect(() => {
-    // SUNTIKAN: Cek session manual dari localStorage (Sesuai sistem Login baru)
-    const user = localStorage.getItem('user_session');
-    if (user) {
-      setSession(JSON.parse(user));
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-50 dark:bg-zinc-950">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-600"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    // Jika siswa coba akses admin -> lempar ke student-dashboard
+    if (user.role === 'siswa') {
+      return <Navigate to="/student-dashboard" replace />;
     }
-    setLoading(false);
-  }, []);
+    // Jika guru/admin coba akses siswa -> lempar ke dashboard admin
+    return <Navigate to="/" replace />;
+  }
 
-  if (loading) return (
-    <div className="h-screen flex items-center justify-center bg-slate-50 dark:bg-zinc-950">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-600"></div>
-    </div>
-  );
+  return children;
+};
+
+function AppRoutes() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-50 dark:bg-zinc-950">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-orange-600"></div>
+      </div>
+    );
+  }
 
   return (
-    <Router>
-      <Routes>
-        {/* Rute Login */}
-        <Route path="/login" element={!session ? <Login /> : <Navigate to="/" />} />
-        
-        {/* Rute Dashboard Utama (Admin/Guru/Kurikulum) */}
-        <Route path="/" element={session ? <Dashboard /> : <Navigate to="/login" />} />
-        
-        {/* Rute Master Data */}
-        <Route path="/master" element={session ? <MasterMajors /> : <Navigate to="/login" />} />
-        <Route path="/master-kelas" element={session ? <MasterClasses /> : <Navigate to="/login" />} />
-        <Route path="/master-guru" element={session ? <MasterTeachers /> : <Navigate to="/login" />} />
-        <Route path="/master-mapel" element={session ? <MasterSubjects /> : <Navigate to="/login" />} />
-        <Route path="/penugasan-guru" element={session ? <TeacherAssignments /> : <Navigate to="/login" />} />
+    <Routes>
+      {/* Rute Otentikasi */}
+      <Route path="/login" element={!user ? <Login /> : (user.role === 'siswa' ? <Navigate to="/student-dashboard" replace /> : <Navigate to="/" replace />)} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
+      
+      {/* Rute Dashboard Utama (Admin / Guru / Kurikulum) */}
+      <Route path="/" element={
+        <ProtectedRoute allowedRoles={['admin', 'guru', 'kurikulum', 'pengawas']}>
+          <Dashboard />
+        </ProtectedRoute>
+      } />
+      
+      {/* Rute Master Data */}
+      <Route path="/master" element={
+        <ProtectedRoute allowedRoles={['admin', 'kurikulum']}>
+          <MasterMajors />
+        </ProtectedRoute>
+      } />
+      <Route path="/master-kelas" element={
+        <ProtectedRoute allowedRoles={['admin', 'kurikulum']}>
+          <MasterClasses />
+        </ProtectedRoute>
+      } />
+      <Route path="/master-guru" element={
+        <ProtectedRoute allowedRoles={['admin', 'kurikulum']}>
+          <MasterTeachers />
+        </ProtectedRoute>
+      } />
+      <Route path="/master-mapel" element={
+        <ProtectedRoute allowedRoles={['admin', 'kurikulum']}>
+          <MasterSubjects />
+        </ProtectedRoute>
+      } />
+      <Route path="/penugasan-guru" element={
+        <ProtectedRoute allowedRoles={['admin', 'kurikulum']}>
+          <TeacherAssignments />
+        </ProtectedRoute>
+      } />
 
-        {/* Rute Akademik & Siswa */}
-        <Route path="/bank-soal" element={session ? <BankSoal /> : <Navigate to="/login" />} />
-        <Route path="/schedules" element={session ? <Schedules /> : <Navigate to="/login" />} />
-        <Route path="/select-questions/:examId" element={session ? <SelectQuestions /> : <Navigate to="/login" />} />
-        <Route path="/data-siswa" element={session ? <MasterStudents /> : <Navigate to="/login" />} />
-        <Route path="/import-siswa" element={session ? <ImportStudents /> : <Navigate to="/login" />} />
-        <Route path="/exam-participants/:examId" element={session ? <ExamParticipants /> : <Navigate to="/login" />} />
-        <Route path="/exam-interface/:examId" element={<ExamInterface />} />
-        <Route path="/logistics" element={<Logistics />} />
-        <Route path="/session-management" element={<SessionManagement />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/exam-cards" element={session ? <ExamCards /> : <Navigate to="/login" />} />
-        <Route path="/attendance-list" element={<AttendanceList />} />
-        <Route path="/exam-results/:examId" element={<ExamResults />} />
+      {/* Rute Akademik & Ujian */}
+      <Route path="/bank-soal" element={
+        <ProtectedRoute allowedRoles={['admin', 'guru', 'kurikulum']}>
+          <BankSoal />
+        </ProtectedRoute>
+      } />
+      <Route path="/schedules" element={
+        <ProtectedRoute allowedRoles={['admin', 'guru', 'kurikulum']}>
+          <Schedules />
+        </ProtectedRoute>
+      } />
+      <Route path="/select-questions/:examId" element={
+        <ProtectedRoute allowedRoles={['admin', 'guru', 'kurikulum']}>
+          <SelectQuestions />
+        </ProtectedRoute>
+      } />
+      <Route path="/data-siswa" element={
+        <ProtectedRoute allowedRoles={['admin', 'kurikulum']}>
+          <MasterStudents />
+        </ProtectedRoute>
+      } />
+      <Route path="/import-siswa" element={
+        <ProtectedRoute allowedRoles={['admin', 'kurikulum']}>
+          <ImportStudents />
+        </ProtectedRoute>
+      } />
+      <Route path="/exam-participants/:examId" element={
+        <ProtectedRoute allowedRoles={['admin', 'guru', 'kurikulum', 'pengawas']}>
+          <ExamParticipants />
+        </ProtectedRoute>
+      } />
+      <Route path="/exam-interface/:examId" element={
+        <ProtectedRoute allowedRoles={['siswa']}>
+          <ExamInterface />
+        </ProtectedRoute>
+      } />
+      <Route path="/logistics" element={
+        <ProtectedRoute allowedRoles={['admin', 'kurikulum']}>
+          <Logistics />
+        </ProtectedRoute>
+      } />
+      <Route path="/session-management" element={
+        <ProtectedRoute allowedRoles={['admin', 'kurikulum']}>
+          <SessionManagement />
+        </ProtectedRoute>
+      } />
+      <Route path="/settings" element={
+        <ProtectedRoute allowedRoles={['admin', 'kurikulum']}>
+          <Settings />
+        </ProtectedRoute>
+      } />
+      <Route path="/exam-cards" element={
+        <ProtectedRoute allowedRoles={['admin', 'kurikulum', 'pengawas']}>
+          <ExamCards />
+        </ProtectedRoute>
+      } />
+      <Route path="/attendance-list" element={
+        <ProtectedRoute allowedRoles={['admin', 'kurikulum', 'pengawas']}>
+          <AttendanceList />
+        </ProtectedRoute>
+      } />
+      <Route path="/exam-results/:examId" element={
+        <ProtectedRoute allowedRoles={['admin', 'guru', 'kurikulum', 'pengawas']}>
+          <ExamResults />
+        </ProtectedRoute>
+      } />
 
-        {/* Dashboard Khusus Siswa */}
-        <Route path="/student-dashboard" element={session?.role === 'siswa' ? <StudentDashboard /> : <Navigate to="/login" />} />
-        
-        {/* Redirect jika alamat ngawur */}
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
-    </Router>
+      {/* Dashboard Khusus Siswa */}
+      <Route path="/student-dashboard" element={
+        <ProtectedRoute allowedRoles={['siswa']}>
+          <StudentDashboard />
+        </ProtectedRoute>
+      } />
+      
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <AppRoutes />
+      </Router>
+    </AuthProvider>
   );
 }
 

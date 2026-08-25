@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import Sidebar from '../components/Sidebar';
-import { LayoutGrid, Trash2, Plus, School } from 'lucide-react';
+import { School, RefreshCw, ShieldCheck, Database, GraduationCap } from 'lucide-react';
 import Swal from 'sweetalert2';
+import { masterDataSyncService } from '../services/masterDataSync';
+import M3Button from '../components/ui/M3Button';
+import M3Card from '../components/ui/M3Card';
+import M3Badge from '../components/ui/M3Badge';
 
 const MasterClasses = () => {
   const [classes, setClasses] = useState([]);
-  const [majors, setMajors] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [formData, setFormData] = useState({ name: '', major_id: '' });
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     fetchInitialData();
@@ -16,110 +19,131 @@ const MasterClasses = () => {
 
   const fetchInitialData = async () => {
     setLoading(true);
-    // Ambil data kelas beserta nama jurusannya
     const { data: classData } = await supabase.from('classes').select('*, majors(name)').order('name');
-    // Ambil data jurusan buat dropdown
-    const { data: majorData } = await supabase.from('majors').select('*').order('name');
-    
     setClasses(classData || []);
-    setMajors(majorData || []);
     setLoading(false);
   };
 
-  const handleAddClass = async (e) => {
-    e.preventDefault();
-    if (!formData.name || !formData.major_id) return;
-
-    const { error } = await supabase.from('classes').insert([formData]);
-    if (!error) {
-      setFormData({ name: '', major_id: '' });
-      fetchInitialData();
-      Swal.fire({ icon: 'success', title: 'Kelas Berhasil Ditambah!', timer: 1500, showConfirmButton: false });
-    }
-  };
-  // fungsi  delete!
-const handleDelete = async (id) => {
-    const result = await Swal.fire({
-      title: 'Yakin mau hapus?',
-      text: "Siswa di kelas ini bakal kehilangan relasi kelasnya lho!",
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonColor: '#ea580c',
-      cancelButtonColor: '#64748b',
-      confirmButtonText: 'Ya, Hapus!',
-      background: document.documentElement.classList.contains('dark') ? '#18181b' : '#fff',
-      color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+  const handleSyncClasses = async () => {
+    setSyncing(true);
+    Swal.fire({
+      title: 'Menyinkronkan Data Kelas...',
+      text: 'Menghubungkan ke data.smkn1rongga.sch.id...',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
     });
-  
-    if (result.isConfirmed) {
-      const { error } = await supabase.from('classes').delete().eq('id', id);
-      if (error) {
-        Swal.fire('Gagal!', error.message, 'error');
-      } else {
-        Swal.fire('Terhapus!', 'Kelas berhasil dibuang.', 'success');
-        fetchInitialData(); // Refresh listnya
-      }
+
+    const res = await masterDataSyncService.syncClasses();
+    setSyncing(false);
+
+    if (res.success) {
+      await fetchInitialData();
+      Swal.fire('Berhasil!', `Data ${res.count} Rombel / Kelas tersinkronisasi.`, 'success');
+    } else {
+      Swal.fire('Gagal!', res.error, 'error');
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 flex transition-colors duration-300">
-      <Sidebar role="admin" />
-      <main className="flex-1 lg:ml-64 p-4 lg:p-8">
-        <header className="mb-8 text-left">
-          <h2 className="text-3xl font-bold text-slate-800 dark:text-zinc-100 flex items-center gap-3">
-            <School className="text-orange-600" size={32} /> Master Kelas
-          </h2>
-          <p className="text-slate-500 dark:text-zinc-400">Kelola daftar kelas dan relasi jurusan</p>
+    <div className="flex h-screen bg-stone-50 dark:bg-stone-950 font-sans text-left transition-colors duration-300">
+      <Sidebar />
+      <div className="flex-1 lg:ml-64 flex flex-col overflow-hidden">
+        
+        {/* M3 Header */}
+        <header className="bg-white/90 dark:bg-stone-900/90 backdrop-blur-md border-b border-stone-200 dark:border-stone-800 p-4 lg:p-6 flex justify-between items-center z-10">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 rounded-2xl">
+              <School size={22} />
+            </div>
+            <div>
+              <h1 className="text-xl font-black text-stone-900 dark:text-white uppercase italic tracking-tight">
+                Data Rombel & Kelas
+              </h1>
+              <p className="text-[10px] font-bold text-stone-500 dark:text-stone-400 uppercase tracking-widest">
+                Total Terdaftar: {classes.length} Rombel / Kelas
+              </p>
+            </div>
+          </div>
+
+          <M3Button 
+            variant="filled"
+            size="sm"
+            onClick={handleSyncClasses} 
+            loading={syncing}
+            icon={RefreshCw}
+            iconPosition="left"
+            className="shadow-md shadow-orange-600/20"
+          >
+            Tarik Data Kelas
+          </M3Button>
         </header>
 
-        {/* Form Tambah Kelas */}
-        <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-zinc-800 mb-8">
-          <form onSubmit={handleAddClass} className="flex flex-col md:flex-row gap-4">
-            <input 
-              type="text" 
-              placeholder="Nama Kelas (Contoh: 10 RPL 1)"
-              className="flex-1 bg-slate-50 dark:bg-zinc-800 border-none p-3 rounded-xl outline-none focus:ring-2 focus:ring-orange-500 dark:text-white"
-              value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
-            />
-            <select 
-              className="flex-1 bg-slate-50 dark:bg-zinc-800 border-none p-3 rounded-xl outline-none focus:ring-2 focus:ring-orange-500 dark:text-white"
-              value={formData.major_id}
-              onChange={(e) => setFormData({...formData, major_id: e.target.value})}
-            >
-              <option value="">-- Pilih Jurusan --</option>
-              {majors.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
-            <button className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all">
-              <Plus size={20} /> Tambah
-            </button>
-          </form>
-        </div>
-
-        {/* Grid List Kelas */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {loading ? (
-            <p className="dark:text-white animate-pulse font-bold italic">Narik data kelas dulu bro...</p>
-          ) : (
-            classes.map((c) => (
-              <div key={c.id} className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-slate-200 dark:border-zinc-800 flex justify-between items-center group hover:border-orange-500 transition-all">
-                <div className="text-left">
-                  <h3 className="text-xl font-bold dark:text-white uppercase">{c.name}</h3>
-                  <p className="text-sm text-orange-600 font-medium italic">{c.majors?.name || 'Tanpa Jurusan'}</p>
-                </div>
-                <button 
-                    onClick={() => handleDelete(c.id)} // <--- Tambahkan ini bro!
-                    className="text-slate-300 hover:text-red-500 transition-colors"
-                >
-                 <Trash2 size={20} />
-                </button>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
+          
+          {/* M3 Master Data Truth Banner */}
+          <M3Card variant="filled" className="bg-orange-50/80 dark:bg-orange-950/30 border border-orange-200/80 dark:border-orange-900/40 p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="p-2.5 bg-orange-600 text-white rounded-2xl shrink-0 shadow-md shadow-orange-600/20">
+                <ShieldCheck size={22} />
               </div>
-            ))
-          )}
-        </div>
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-stone-900 dark:text-white flex items-center gap-2">
+                  <span>Single Source of Truth: data.smkn1rongga.sch.id</span>
+                  <M3Badge variant="success" size="sm">SYNCED REPLICA</M3Badge>
+                </h4>
+                <p className="text-[11px] text-stone-600 dark:text-stone-400 mt-0.5 font-medium">
+                  Daftar rombongan belajar (Tingkat 10, 11, 12) dan jurusan terdaftar disinkronkan secara otomatis dari Data Master Sekolah.
+                </p>
+              </div>
+            </div>
+            <a 
+              href="https://data.smkn1rongga.sch.id" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="shrink-0 text-xs font-black uppercase text-orange-600 dark:text-orange-400 hover:text-orange-700 bg-white dark:bg-stone-800 px-4 py-2 rounded-full border border-orange-200 dark:border-stone-700 shadow-xs flex items-center gap-1.5 transition"
+            >
+              <Database size={14} /> Kelola di Pusat
+            </a>
+          </M3Card>
 
-      </main>
+          {/* M3 Classes Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {loading ? (
+              <div className="col-span-full p-12 text-center text-stone-400 font-bold uppercase tracking-wider animate-pulse">
+                Memuat data rombel kelas...
+              </div>
+            ) : classes.length === 0 ? (
+              <div className="col-span-full p-12 text-center text-stone-400 italic">
+                Belum ada data rombel kelas tersimpan.
+              </div>
+            ) : (
+              classes.map(c => (
+                <M3Card 
+                  key={c.id} 
+                  variant="elevated" 
+                  className="p-5 border border-stone-200 dark:border-stone-800 hover:border-orange-500/50 transition-all flex items-center justify-between"
+                >
+                  <div>
+                    <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest block mb-1">
+                      Tingkat {c.level || 10}
+                    </span>
+                    <h3 className="text-lg font-black text-stone-900 dark:text-white uppercase italic">
+                      {c.name}
+                    </h3>
+                    <p className="text-xs font-bold text-stone-500 dark:text-stone-400 mt-1">
+                      {c.majors?.name || 'Konsentrasi Keahlian Terdaftar'}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 rounded-2xl">
+                    <GraduationCap size={24} />
+                  </div>
+                </M3Card>
+              ))
+            )}
+          </div>
+
+        </main>
+      </div>
     </div>
   );
 };

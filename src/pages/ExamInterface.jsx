@@ -1,17 +1,16 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
-import Sidebar from '../components/Sidebar';
-import { ChevronLeft, ChevronRight, AlertTriangle, LayoutGrid, CheckCircle2, RefreshCw, Clock, HelpCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, AlertTriangle, LayoutGrid, CheckCircle2, RefreshCw, Clock, HelpCircle, ZoomIn, Check, Send } from 'lucide-react';
 import Swal from 'sweetalert2';
 import { useExamAnswerSync } from '../features/examSessions';
 import { toSQLDateTime } from '../features/schedules/utils';
-import {
-  DEFAULT_DRIFT_THRESHOLD_MS,
-  DEFAULT_DRIFT_TICK_MS,
-  DEFAULT_FOCUS_POLL_MS,
-  isDrift
-} from '../features/examSessions/utils/antiCheatSignals.js';
+import ImageLightbox from '../components/ImageLightbox';
+import ExamQuestionDrawer from '../components/ExamQuestionDrawer';
+import M3Button from '../components/ui/M3Button';
+import M3Card from '../components/ui/M3Card';
+import M3RadioCard from '../components/ui/M3RadioCard';
+import M3Badge from '../components/ui/M3Badge';
 
 const ExamInterface = () => {
   const { examId } = useParams(); 
@@ -25,22 +24,10 @@ const ExamInterface = () => {
   const [sessionId, setSessionId] = useState(null);
   const [isLocked, setIsLocked] = useState(false);
   const [violationCount, setViolationCount] = useState(0);
-  const [debugLogs, setDebugLogs] = useState([]);
-  const [debugStatus, setDebugStatus] = useState({
-    hidden: false,
-    hasFocus: null,
-    lastDelta: null
-  });
-  const [debugCopied, setDebugCopied] = useState(false);
-  const [debugAntiCheat] = useState(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const param = params.get('debug');
-      return param === '1' || param === 'true' || localStorage.getItem('anticheat_debug') === '1';
-    } catch (err) {
-      return false;
-    }
-  });
+
+  // Mobile Bottom Sheet Drawer & Lightbox States
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [lightboxImg, setLightboxImg] = useState(null);
 
   const {
     answers,
@@ -51,50 +38,9 @@ const ExamInterface = () => {
     flush,
     clearCache,
   } = useExamAnswerSync({ sessionId, isLocked });
-  
+
   const lastCheatTime = useRef(0);
   const lastTickRef = useRef(0);
-
-  const pushDebugLog = (payload) => {
-    if (!debugAntiCheat) return;
-    const entry = {
-      t: toSQLDateTime(new Date()).slice(11, 19),
-      ...payload
-    };
-    setDebugLogs((prev) => [...prev, entry].slice(-40));
-  };
-
-  const buildDebugText = () => {
-    const lines = [
-      `time=${toSQLDateTime(new Date())}`,
-      `url=${window.location.href}`,
-      `hidden=${String(debugStatus.hidden)}`,
-      `focus=${debugStatus.hasFocus === null ? 'n/a' : String(debugStatus.hasFocus)}`,
-      `delta=${debugStatus.lastDelta === null ? '-' : `${debugStatus.lastDelta}ms`}`,
-      `violationCount=${violationCount}`,
-      `userAgent=${navigator.userAgent}`,
-      'events:'
-    ];
-    const events = [...debugLogs]
-      .reverse()
-      .map((log) => {
-        const delta = typeof log.delta === 'number' ? `${log.delta}ms` : '-';
-        const focus = log.focus === null ? 'n/a' : String(log.focus);
-        return `${log.t} ${log.event} hidden=${String(log.hidden)} focus=${focus} cooldown=${String(log.cooldown)} delta=${delta}`;
-      });
-    return [...lines, ...events].join('\n');
-  };
-
-  const handleCopyDebug = async () => {
-    const text = buildDebugText();
-    try {
-      await navigator.clipboard.writeText(text);
-      setDebugCopied(true);
-      setTimeout(() => setDebugCopied(false), 1500);
-    } catch (err) {
-      window.prompt('Salin log di bawah ini:', text);
-    }
-  };
 
   const shuffleArray = (array) => {
     let newArr = [...array];
@@ -112,399 +58,284 @@ const ExamInterface = () => {
       navigate('/login');
       return () => { cancelled = true; };
     }
-    startExam(user.id, () => cancelled);
+
+    startExamSession(user.id, () => cancelled);
     return () => { cancelled = true; };
   }, [examId]);
 
-  const fetchExamQuestionsWithFallback = async (examIdValue, allowedTeacherIds = []) => {
-    const shouldFilterByTeacher = Array.isArray(allowedTeacherIds) && allowedTeacherIds.length > 0;
+  const startExamSession = async (studentId, isCancelled) => {
+    try {
+      setLoading(true);
 
-    let filteredData = [];
-    if (shouldFilterByTeacher) {
-      const { data, error } = await supabase
-        .from('exam_questions')
-        .select('question_id, questions!inner(*)')
-        .eq('exam_id', examIdValue)
-        .in('questions.created_by', allowedTeacherIds)
-        .order('order_number', { ascending: true });
+      // 1. Cek apakah ada data inisialisasi dari RPC token sebelumnya
+      const cachedInitStr = sessionStorage.getItem(`exam_init_${examId}`);
+      let initData = cachedInitStr ? JSON.parse(cachedInitStr) : null;
 
-      if (error) throw error;
-      filteredData = data || [];
+      if (!initData) {
+        // Fallback: Panggil RPC fn_start_student_exam jika direct navigation
+        const { data: rpcData, error: rpcErr } = await supabase.rpc('fn_start_student_exam', {
+          p_schedule_id: examId,
+          p_token: '', // default / resume
+          p_student_id: studentId
+        });
+
+        if (!rpcErr && rpcData?.session_id) {
+          initData = rpcData;
+        }
+      }
+
+      if (isCancelled()) return;
+
+      if (initData) {
+        setSessionId(initData.session_id);
+        setTimeLeft(initData.remaining_seconds || 3600);
+        setIsLocked(initData.is_locked || false);
+        setViolationCount(initData.violation_count || 0);
+
+        // Format soal
+        let loadedQuestions = (initData.questions || []).map(q => ({
+          ...q,
+          displayOptions: ['a', 'b', 'c', 'd', 'e']
+        }));
+
+        if (initData.shuffle_questions) {
+          loadedQuestions = shuffleArray(loadedQuestions);
+        }
+
+        setQuestions(loadedQuestions);
+
+        // Muat jawaban yang tersimpan
+        if (initData.saved_answers) {
+          setAnswers(initData.saved_answers);
+        }
+
+        // Ambil info jadwal untuk header
+        const { data: sch } = await supabase
+          .from('schedules')
+          .select('*, exams(title, type, duration)')
+          .eq('id', examId)
+          .maybeSingle();
+        if (sch) setSchedule(sch);
+
+      } else {
+        // Fallback Tradisional
+        await startExamLegacy(studentId, isCancelled);
+      }
+
+    } catch (err) {
+      console.error('Error starting exam session:', err);
+      if (!isCancelled()) {
+        Swal.fire({
+          title: 'Gagal Membuka Ujian',
+          text: err.message || 'Terjadi gangguan saat memuat sesi ujian.',
+          icon: 'error',
+          confirmButtonColor: '#ea580c'
+        }).then(() => navigate('/student-dashboard'));
+      }
+    } finally {
+      if (!isCancelled()) setLoading(false);
     }
-
-    if (!shouldFilterByTeacher || filteredData.length === 0) {
-      const { data: fallbackData, error: fallbackErr } = await supabase
-        .from('exam_questions')
-        .select('question_id, questions!inner(*)')
-        .eq('exam_id', examIdValue)
-        .order('order_number', { ascending: true });
-
-      if (fallbackErr) throw fallbackErr;
-      return fallbackData || [];
-    }
-
-    return filteredData;
   };
 
-  const startExam = async (studentId, isCancelled = () => false) => {
-    const shouldCancel = () => (typeof isCancelled === 'function' ? isCancelled() : false);
-    try {
-      const { data: schData } = await supabase
-        .from('schedules')
-        .select(`*, exams(*, subjects(name))`)
-        .eq('id', examId)
+  const startExamLegacy = async (studentId, isCancelled) => {
+    const { data: sch, error: schErr } = await supabase
+      .from('schedules')
+      .select('*, exams(*)')
+      .eq('id', examId)
+      .single();
+
+    if (schErr || !sch) throw new Error('Jadwal ujian tidak ditemukan.');
+    if (isCancelled()) return;
+    setSchedule(sch);
+
+    // Ambil atau buat sesi
+    let { data: session } = await supabase
+      .from('exam_sessions')
+      .select('*')
+      .eq('schedule_id', examId)
+      .eq('student_id', studentId)
+      .maybeSingle();
+
+    if (!session) {
+      const now = new Date();
+      const duration = sch.exams?.duration || 90;
+      const endTime = new Date(now.getTime() + duration * 60000);
+
+      const { data: newSession, error: createErr } = await supabase
+        .from('exam_sessions')
+        .insert({
+          schedule_id: examId,
+          student_id: studentId,
+          started_at: toSQLDateTime(now),
+          end_time: toSQLDateTime(endTime),
+          status: 'active'
+        })
+        .select()
         .single();
 
-      if (shouldCancel()) return;
-      
-      if (!schData) throw new Error("Ujian tidak ditemukan");
-      setSchedule(schData);
+      if (createErr) throw createErr;
+      session = newSession;
+    }
 
-      let currentSession;
-      const { data: existingSessions } = await supabase
-        .from('exam_sessions')
-        .select('*')
-        .eq('student_id', studentId)
-        .eq('schedule_id', examId)
-        .order('started_at', { ascending: false })
-        .limit(1);
+    if (isCancelled()) return;
+    setSessionId(session.id);
+    setIsLocked(session.is_locked || false);
 
-      const existingSession = existingSessions?.[0];
+    // Hitung sisa waktu
+    const end = new Date(session.end_time).getTime();
+    const now = Date.now();
+    const rem = Math.max(0, Math.floor((end - now) / 1000));
+    setTimeLeft(rem);
 
-      if (existingSession) {
-        let normalizedSession = existingSession;
+    // Ambil soal
+    const { data: examQData } = await supabase
+      .from('exam_questions')
+      .select('question_id, questions(*)')
+      .eq('exam_id', sch.exam_id)
+      .order('order_number', { ascending: true });
 
-        if (normalizedSession.status === 'finished') {
-          const { data: existingAnswer } = await supabase
-            .from('student_answers')
-            .select('id')
-            .eq('session_id', normalizedSession.id)
-            .limit(1)
-            .maybeSingle();
+    let loadedQuestions = (examQData || []).map(item => item.questions).filter(Boolean);
+    if (sch.exams?.shuffle_questions) {
+      loadedQuestions = shuffleArray(loadedQuestions);
+    }
+    loadedQuestions = loadedQuestions.map(q => ({
+      ...q,
+      displayOptions: ['a', 'b', 'c', 'd', 'e']
+    }));
+    setQuestions(loadedQuestions);
 
-          if (!existingAnswer) {
-            const resetStart = toSQLDateTime(new Date());
-            await supabase
-              .from('exam_sessions')
-              .update({
-                status: 'active',
-                started_at: resetStart,
-                finished_at: null,
-                score: 0,
-                violation_count: 0,
-              })
-              .eq('id', normalizedSession.id);
+    // Ambil jawaban sebelumnya
+    const { data: savedAnswers } = await supabase
+      .from('student_answers')
+      .select('question_id, chosen_answer, is_doubt')
+      .eq('session_id', session.id);
 
-            normalizedSession = {
-              ...normalizedSession,
-              status: 'active',
-              started_at: resetStart,
-              finished_at: null,
-              score: 0,
-              violation_count: 0,
-            };
-          } else {
-            throw new Error("Ujian ini sudah diselesaikan!");
-          }
-        }
-        if (normalizedSession.status === 'locked') {
-          if (shouldCancel()) return;
-          setSessionId(normalizedSession.id);
-          setIsLocked(true);
-          setLoading(false);
-          return; 
-        }
-        setViolationCount(normalizedSession.violation_count || 0);
-        currentSession = normalizedSession;
-      } else {
-        const { data: newSession, error: nsErr } = await supabase
-          .from('exam_sessions')
-          .insert([{ student_id: studentId, schedule_id: examId, status: 'active' }])
-          .select().single();
-        if (nsErr) throw nsErr;
-        currentSession = newSession;
-      }
-      if (shouldCancel()) return;
-      setSessionId(currentSession.id);
-
-      // --- TIMER LOGIC (DENGAN PERBAIKAN AUTO-SUBMIT ADIL) ---
-      // INI BARIS YANG TADI GUE POTONG, SEKARANG GUE BALIKIN UTUH!
-      const durationInSeconds = (schData.exams?.duration || 60) * 60;
-      const startTime = new Date(currentSession.started_at).getTime();
-      const now = new Date().getTime();
-      const timePassed = Math.floor((now - startTime) / 1000);
-      let remaining = durationInSeconds - timePassed;
-      
-      if (remaining <= 0) { 
-         const { data: anyAnswer } = await supabase
-           .from('student_answers')
-           .select('id')
-           .eq('session_id', currentSession.id)
-           .limit(1)
-           .maybeSingle();
-
-         if (!anyAnswer) {
-            const resetStart = toSQLDateTime(new Date());
-           await supabase
-             .from('exam_sessions')
-             .update({
-               status: 'active',
-               started_at: resetStart,
-               finished_at: null,
-               score: 0,
-               violation_count: 0,
-             })
-             .eq('id', currentSession.id);
-           remaining = durationInSeconds;
-         } else {
-           const { data: studentData } = await supabase.from('students').select('class_id').eq('id', studentId).single();
-           const { data: myTeachers } = await supabase.from('teacher_assignments').select('teacher_id')
-             .eq('class_id', studentData?.class_id).eq('subject_id', schData.exams.subject_id);
-           const allowedTeacherIds = myTeachers?.map(t => t.teacher_id) || [];
-
-           const qData = await fetchExamQuestionsWithFallback(schData.exam_id, allowedTeacherIds);
-           const { data: aData } = await supabase.from('student_answers').select('question_id, chosen_answer').eq('session_id', currentSession.id);
-
-           let dbCorrect = 0;
-           const dbQuestions = qData ? qData.map(q => q.questions).filter(Boolean) : [];
-
-           dbQuestions.forEach(q => {
-             const ans = aData?.find(a => String(a.question_id) === String(q.id));
-             const kunci = q.correct_answer || q.answer_key || q.kunci_jawaban || q.answer;
-             if (ans && ans.chosen_answer && kunci) {
-               if (String(ans.chosen_answer).trim().toUpperCase() === String(kunci).trim().toUpperCase()) {
-                 dbCorrect++;
-               }
-             }
-           });
-
-           const dbScore = dbQuestions.length > 0 ? Math.round((dbCorrect / dbQuestions.length) * 100) : 0;
-
-            await supabase.from('exam_sessions').update({
-              status: 'finished',
-              finished_at: toSQLDateTime(new Date()),
-              score: dbScore,
-            }).eq('id', currentSession.id);
-
-            await Swal.fire({
-              title: 'Waktu Habis!',
-              html: `Waktu ujian telah berakhir saat sesi Anda tertahan.<br/>Sistem telah menyimpan otomatis sisa jawaban Anda.<br/><br/>Skor Anda: <span style="font-size:36px; font-weight:900; color:#ea580c;">${dbScore}</span>`,
-              icon: 'info',
-              allowOutsideClick: false,
-            });
-
-            navigate('/student-dashboard');
-            return;
-          }
-      }
-      if (shouldCancel()) return;
-      setTimeLeft(remaining);
-
-      // Fetch Questions (Untuk Ujian Normal)
-      const { data: studentDataNormal } = await supabase.from('students').select('class_id').eq('id', studentId).single();
-      const { data: myTeachersNormal } = await supabase.from('teacher_assignments').select('teacher_id')
-        .eq('class_id', studentDataNormal?.class_id).eq('subject_id', schData.exams.subject_id);
-      
-      const allowedTeacherIdsNormal = myTeachersNormal?.map(t => t.teacher_id) || [];
-
-      const qData = await fetchExamQuestionsWithFallback(schData.exam_id, allowedTeacherIdsNormal);
-      if (shouldCancel()) return;
-
-      let fetchedQuestions = shuffleArray((qData || []).map(item => {
-        const options = ['a', 'b', 'c', 'd', 'e'].filter((opt) => item.questions?.[`option_${opt}`]);
-        return {
-          ...item.questions,
-          displayOptions: shuffleArray(options.length ? options : ['a', 'b', 'c', 'd', 'e']),
-        };
-      }).filter(Boolean));
-
-      setQuestions(fetchedQuestions);
-      if (shouldCancel()) return;
-      setLoading(false);
-    } catch (error) {
-      if (shouldCancel()) return;
-      Swal.fire('Akses Ditolak', error.message, 'error');
-      navigate('/student-dashboard');
+    if (savedAnswers) {
+      const ansMap = {};
+      const doubtList = [];
+      savedAnswers.forEach(a => {
+        ansMap[String(a.question_id)] = a.chosen_answer;
+        if (a.is_doubt) doubtList.push(String(a.question_id));
+      });
+      setAnswers(ansMap);
+      setDoubtfulQuestions(doubtList);
     }
   };
 
-  // --- LOGIKA ANTI CHEAT (FIXED UNTUK PTS & UH) ---
-  useEffect(() => {
-    if (loading || isLocked || !sessionId || !schedule) return;
-
-    const reportViolation = async (source, meta = {}) => {
-      if (!sessionId) return;
-      const now = Date.now();
-      const cooldown = now - lastCheatTime.current < 2000;
-      const hasFocus = typeof document.hasFocus === 'function' ? document.hasFocus() : null;
-      pushDebugLog({
-        event: source,
-        hidden: document.hidden,
-        focus: hasFocus,
-        cooldown,
-        ...meta
-      });
-      if (cooldown) return;
-      lastCheatTime.current = now;
-
-      const newCount = violationCount + 1;
-      setViolationCount(newCount);
-
-      const examType = schedule.exams?.type;
-      const isStrictExam = !['UH', 'PTS'].includes(examType);
-      const isNowLocked = isStrictExam && newCount >= 2;
-
-      await supabase
-        .from('exam_sessions')
-        .update({
-          violation_count: newCount,
-          status: isNowLocked ? 'locked' : 'active'
-        })
-        .eq('id', sessionId);
-
-      if (!isStrictExam) {
-        Swal.fire('Peringatan!', 'Tetap fokus pada lembar ujian!', 'warning');
-        return;
-      }
-
-      if (newCount === 1) {
-        Swal.fire({
-          title: 'PERINGATAN!',
-          text: 'Dilarang keluar halaman ujian atau akun Anda akan TERKUNCI!',
-          icon: 'warning'
-        });
-        return;
-      }
-
-      if (isNowLocked) setIsLocked(true);
-    };
-
-    const onVisibility = () => {
-      if (document.hidden) reportViolation('visibility');
-    };
-    const onBlur = () => reportViolation('blur');
-    const onPageHide = () => reportViolation('pagehide');
-    const onFreeze = () => reportViolation('freeze');
-
-    document.addEventListener('visibilitychange', onVisibility);
-    window.addEventListener('blur', onBlur);
-    window.addEventListener('pagehide', onPageHide);
-    document.addEventListener('freeze', onFreeze);
-
-    const driftTimer = setInterval(() => {
-      const now = performance.now();
-      if (lastTickRef.current) {
-        const delta = now - lastTickRef.current;
-        if (debugAntiCheat) {
-          const hasFocus = typeof document.hasFocus === 'function' ? document.hasFocus() : null;
-          setDebugStatus({
-            hidden: document.hidden,
-            hasFocus,
-            lastDelta: Math.round(delta)
-          });
-        }
-        if (isDrift(delta, DEFAULT_DRIFT_THRESHOLD_MS)) {
-          reportViolation('drift', { delta: Math.round(delta) });
-        }
-      }
-      lastTickRef.current = now;
-    }, DEFAULT_DRIFT_TICK_MS);
-
-    const focusTimer = setInterval(() => {
-      if (!document.hidden && typeof document.hasFocus === 'function' && !document.hasFocus()) {
-        reportViolation('focus');
-      }
-    }, DEFAULT_FOCUS_POLL_MS);
-
-    return () => {
-      document.removeEventListener('visibilitychange', onVisibility);
-      window.removeEventListener('blur', onBlur);
-      window.removeEventListener('pagehide', onPageHide);
-      document.removeEventListener('freeze', onFreeze);
-      clearInterval(driftTimer);
-      clearInterval(focusTimer);
-    };
-  }, [loading, isLocked, sessionId, schedule, violationCount, debugAntiCheat]);
-
-  // --- RADAR AUTO-UNLOCK ---
-  useEffect(() => {
-    let interval;
-    if (isLocked && sessionId) {
-      interval = setInterval(async () => {
-        try {
-          const { data } = await supabase
-            .from('exam_sessions')
-            .select('status, violation_count')
-            .eq('id', sessionId)
-            .single();
-
-          if (data && data.status === 'active') {
-            setIsLocked(false);
-            setViolationCount(data.violation_count || 0);
-            Swal.fire({
-              title: 'Akses Dibuka!',
-              text: 'Pengawas telah membuka sesi Anda. Silakan lanjutkan ujian.',
-              icon: 'success',
-              timer: 3000,
-              showConfirmButton: false
-            });
-          }
-        } catch (err) {
-          console.error("Gagal mengecek status:", err);
-        }
-      }, 3000); 
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isLocked, sessionId]);
-
-  // --- TIMER ---
+  // --- TIMER HITUNG MUNDUR ---
   useEffect(() => {
     if (loading || isLocked || timeLeft <= 0) return;
-    const timer = setInterval(() => setTimeLeft(prev => {
-      if (prev <= 1) { submitExam(true); return 0; }
-      return prev - 1;
-    }), 1000);
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          submitExam(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
     return () => clearInterval(timer);
   }, [loading, isLocked, timeLeft]);
 
+  // --- ANTI-CHEAT PROTECTION (BLUR / VISIBILITY) ---
   useEffect(() => {
-    const onHide = () => { flush(); };
-    const onVisibility = () => {
-      if (document.hidden) onHide();
-    };
-    window.addEventListener('beforeunload', onHide);
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      window.removeEventListener('beforeunload', onHide);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [flush]);
+    if (loading || isLocked) return;
 
-  // --- SAVE JAWABAN & RAGU ---
-  const handleSelectOption = (questionId, option) => {
+    const handleVisibilityChange = async () => {
+      if (document.hidden) {
+        const now = Date.now();
+        if (now - lastCheatTime.current > 3000) {
+          lastCheatTime.current = now;
+          const newViolations = violationCount + 1;
+          setViolationCount(newViolations);
+
+          if (sessionId) {
+            await supabase.from('exam_sessions').update({
+              violation_count: newViolations,
+              is_locked: newViolations >= 3
+            }).eq('id', sessionId);
+          }
+
+          if (newViolations >= 3) {
+            setIsLocked(true);
+          } else {
+            Swal.fire({
+              title: 'Peringatan Anti-Cheat!',
+              text: `Anda terdeteksi berpindah aplikasi/layar (${newViolations}/3). Ujian akan terkunci jika terulang!`,
+              icon: 'warning',
+              confirmButtonColor: '#ea580c'
+            });
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [loading, isLocked, violationCount, sessionId]);
+
+  // --- PILIH JAWABAN ---
+  const handleSelectOption = (questionId, optionLetter) => {
     if (isLocked) return;
-    const cleanOption = String(option).trim().toUpperCase();
     const normalizedId = String(questionId);
-    setAnswers(prev => ({ ...prev, [normalizedId]: cleanOption }));
-    enqueue(normalizedId, cleanOption, doubtfulQuestions.includes(normalizedId));
+    const letter = optionLetter.toUpperCase();
+
+    const newAnswers = { ...answers, [normalizedId]: letter };
+    setAnswers(newAnswers);
+
+    const isDoubt = doubtfulQuestions.includes(normalizedId);
+    enqueue(normalizedId, letter, isDoubt);
   };
 
+  // --- TANDAI RAGU-RAGU ---
   const toggleDoubt = (questionId) => {
+    if (isLocked) return;
     const normalizedId = String(questionId);
-    const newDoubts = doubtfulQuestions.includes(normalizedId)
-      ? doubtfulQuestions.filter(id => id !== normalizedId)
-      : [...doubtfulQuestions, normalizedId];
+    let newDoubts;
+
+    if (doubtfulQuestions.includes(normalizedId)) {
+      newDoubts = doubtfulQuestions.filter(id => id !== normalizedId);
+    } else {
+      newDoubts = [...doubtfulQuestions, normalizedId];
+    }
     setDoubtfulQuestions(newDoubts);
+
     if (answers[normalizedId]) {
       enqueue(normalizedId, answers[normalizedId], newDoubts.includes(normalizedId));
     }
   };
 
-  // --- SUBMIT EXAM ---
+  // --- SUBMIT UJIAN ---
   const submitExam = async (isAuto = false) => {
     if (!sessionId || questions.length === 0) return;
+
+    if (!isAuto) {
+      const unansweredCount = questions.length - Object.keys(answers).length;
+      const doubtCount = doubtfulQuestions.length;
+
+      let confirmText = 'Apakah Anda yakin ingin menyelesaikan ujian ini?';
+      if (unansweredCount > 0) {
+        confirmText = `Masih ada ${unansweredCount} soal yang belum dijawab! Yakin ingin menyelesaikan?`;
+      } else if (doubtCount > 0) {
+        confirmText = `Masih ada ${doubtCount} soal dengan status ragu-ragu! Yakin ingin menyelesaikan?`;
+      }
+
+      const result = await Swal.fire({
+        title: 'Selesaikan Ujian?',
+        text: confirmText,
+        icon: unansweredCount > 0 ? 'warning' : 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#ea580c',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'Ya, Selesaikan!',
+        cancelButtonText: 'Batal Periksa Dulu'
+      });
+
+      if (!result.isConfirmed) return;
+    }
 
     let correct = 0;
     questions.forEach(q => {
@@ -521,12 +352,15 @@ const ExamInterface = () => {
       finished_at: toSQLDateTime(new Date()),
       score,
     }).eq('id', sessionId);
+    
     clearCache();
+    sessionStorage.removeItem(`exam_init_${examId}`);
     
     await Swal.fire({
-      title: isAuto ? 'Waktu Habis!' : 'Selesai!',
-      html: `Ujian berakhir. Skor Anda: <br/><span style="font-size:48px; font-weight:900; color:#ea580c;">${score}</span>`,
+      title: isAuto ? 'Waktu Habis!' : 'Ujian Selesai!',
+      html: `Jawaban Anda telah berhasil dikirim ke server.`,
       icon: 'success',
+      confirmButtonColor: '#ea580c',
       allowOutsideClick: false
     });
     navigate('/student-dashboard');
@@ -541,30 +375,22 @@ const ExamInterface = () => {
 
   if (isLocked) return (
     <div className="h-screen w-screen bg-red-600 flex flex-col items-center justify-center text-white p-6 fixed inset-0 z-50 text-center font-sans">
-      <AlertTriangle size={80} className="mb-6 animate-bounce" />
-      <h1 className="text-4xl font-black uppercase italic mb-4">Ujian Terkunci!</h1>
-      <p className="max-w-md font-bold opacity-90">Sistem mendeteksi aktivitas mencurigakan. Silakan lapor ke pengawas untuk membuka kembali sesi Anda.</p>
-      <div className="mt-8 px-6 py-3 bg-black/20 rounded-xl flex items-center gap-3 border border-white/10">
-        <RefreshCw size={16} className="animate-spin" /> <span className="text-xs uppercase font-black">Menunggu Konfirmasi Admin...</span>
+      <AlertTriangle size={72} className="mb-4 animate-bounce" />
+      <h1 className="text-3xl sm:text-4xl font-black uppercase italic mb-2">Ujian Terkunci!</h1>
+      <p className="max-w-md font-bold text-sm opacity-90 leading-relaxed">
+        Sistem mendeteksi perpindahan aplikasi melebihi batas toleransi. Silakan laporkan kepada pengawas ruangan Anda.
+      </p>
+      <div className="mt-6 px-5 py-3 bg-black/25 rounded-2xl flex items-center gap-3 border border-white/10 text-xs font-black uppercase">
+        <RefreshCw size={16} className="animate-spin" />
+        <span>Menunggu Pembukaan Kunci oleh Pengawas...</span>
       </div>
     </div>
   );
 
-  if (loading) return <div className="h-screen flex items-center justify-center bg-zinc-950 text-orange-600 font-black animate-pulse uppercase italic">Menyiapkan Ujian...</div>;
-
-  if (!loading && !isLocked && questions.length === 0) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 flex items-center justify-center p-6 text-center">
-        <div className="max-w-lg bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 rounded-[2rem] p-8 shadow-sm">
-          <h2 className="text-xl font-black uppercase italic text-slate-800 dark:text-white">Soal Belum Siap Ditampilkan</h2>
-          <p className="mt-3 text-sm font-bold text-slate-500 dark:text-zinc-400">Silakan hubungi pengawas. Sistem tidak menemukan paket soal yang bisa ditampilkan untuk sesi ini.</p>
-          <button
-            onClick={() => navigate('/student-dashboard')}
-            className="mt-6 bg-orange-600 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs tracking-widest"
-          >
-            Kembali ke Dashboard
-          </button>
-        </div>
+      <div className="h-screen flex items-center justify-center bg-slate-50 dark:bg-zinc-950 text-orange-600 font-black animate-pulse uppercase tracking-widest text-xs">
+        Menyiapkan Lembar Kerja Ujian...
       </div>
     );
   }
@@ -572,148 +398,300 @@ const ExamInterface = () => {
   const currentQ = questions[currentIndex] || null;
   const currentQId = currentQ ? String(currentQ.id) : '';
 
-  if (!loading && !isLocked && !currentQ) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 flex items-center justify-center p-6 text-center">
-        <div className="max-w-lg bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 rounded-[2rem] p-8 shadow-sm">
-          <h2 className="text-xl font-black uppercase italic text-slate-800 dark:text-white">Sesi Ujian Tidak Stabil</h2>
-          <p className="mt-3 text-sm font-bold text-slate-500 dark:text-zinc-400">Data soal gagal dimuat. Silakan kembali dan masuk ulang ke ujian.</p>
-          <button
-            onClick={() => navigate('/student-dashboard')}
-            className="mt-6 bg-orange-600 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs tracking-widest"
-          >
-            Kembali ke Dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div translate="no" className="notranslate min-h-screen bg-slate-50 dark:bg-zinc-950 flex flex-col font-sans text-left transition-colors">
-      <header className="bg-white dark:bg-zinc-900 border-b dark:border-zinc-800 p-4 sticky top-0 z-20 shadow-sm">
+    <div translate="no" className="notranslate min-h-screen bg-slate-50 dark:bg-zinc-950 flex flex-col font-sans text-left transition-colors pb-28 lg:pb-10">
+      
+      {/* Sticky Header */}
+      <header className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-slate-100 dark:border-zinc-800 px-4 sm:px-6 py-3 sticky top-0 z-30 shadow-xs">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="text-left">
-            <h1 className="text-orange-600 font-black italic text-sm uppercase tracking-tighter leading-none">EXAM JINGGA LIVE</h1>
-            <p className="text-[9px] font-bold text-slate-400 uppercase mt-1 truncate max-w-[200px] md:max-w-md">{schedule?.exams?.title}</p>
+            <h1 className="text-orange-600 font-black italic text-xs sm:text-sm uppercase tracking-tight leading-none">
+              EXAM JINGGA LIVE
+            </h1>
+            <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase mt-0.5 truncate max-w-[150px] sm:max-w-md">
+              {schedule?.exams?.title}
+            </p>
           </div>
-          <div className={`px-6 py-2 rounded-2xl font-black font-mono text-xl transition-all shadow-inner ${timeLeft < 300 ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-900 text-white dark:bg-white dark:text-black'}`}>
-            {formatTime(timeLeft)}
+
+          <div className="flex items-center gap-2.5">
+            {/* Tombol Drawer Mobile */}
+            <button
+              onClick={() => setIsDrawerOpen(true)}
+              className="lg:hidden flex items-center gap-1.5 bg-orange-50 dark:bg-orange-950/40 text-orange-600 border border-orange-200/80 dark:border-orange-900/40 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase cursor-pointer"
+            >
+              <LayoutGrid size={14} />
+              <span>{currentIndex + 1}/{questions.length}</span>
+            </button>
+
+            {/* Countdown Timer Badge */}
+            <div className={`px-4 py-1.5 rounded-xl font-black font-mono text-sm sm:text-base transition-all shadow-inner flex items-center gap-1.5 ${
+              timeLeft < 300 
+                ? 'bg-red-500 text-white animate-pulse' 
+                : 'bg-slate-900 text-white dark:bg-white dark:text-black'
+            }`}>
+              <Clock size={14} />
+              <span>{formatTime(timeLeft)}</span>
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col lg:flex-row max-w-7xl mx-auto w-full p-4 lg:p-8 gap-8">
+      {/* Main Container */}
+      <div className="flex-1 flex flex-col lg:flex-row max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 gap-6 sm:gap-8">
+        
+        {/* Left Column: Active Question & Options */}
         <main className="flex-1 space-y-6">
-          <div className="bg-white dark:bg-zinc-900 p-8 lg:p-12 rounded-[3rem] shadow-sm border border-slate-100 dark:border-zinc-800 relative">
-             <div className="flex justify-between items-center mb-8">
-               <span className="bg-orange-600 text-white px-5 py-1.5 rounded-full text-[10px] font-black uppercase italic tracking-widest shadow-lg shadow-orange-500/20">Soal {currentIndex + 1} dari {questions.length}</span>
+          {/* M3 Elevated Question Card */}
+          <M3Card variant="elevated" className="p-6 sm:p-10 border border-stone-200 dark:border-stone-800 relative m3-elevation-2">
+             
+             {/* Question Badge & Doubt Button */}
+             <div className="flex justify-between items-center mb-6">
+               <span className="bg-orange-600 text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase italic tracking-widest shadow-md shadow-orange-600/20">
+                 Soal {currentIndex + 1} dari {questions.length}
+               </span>
                
-                <button 
-                 onClick={() => toggleDoubt(currentQ.id)}
-                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all border-2 ${doubtfulQuestions.includes(currentQId) ? 'bg-amber-400 border-amber-400 text-slate-900 shadow-lg shadow-amber-400/20' : 'bg-transparent border-slate-100 dark:border-zinc-800 text-slate-400'}`}
-                >
-                  <HelpCircle size={14}/> {doubtfulQuestions.includes(currentQId) ? 'Ragu-Ragu Aktif' : 'Tandai Ragu-Ragu'}
-                </button>
+               <button 
+                onClick={() => toggleDoubt(currentQ.id)}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all border cursor-pointer ${
+                  doubtfulQuestions.includes(currentQId) 
+                    ? 'bg-amber-400 border-amber-400 text-slate-950 font-black shadow-md shadow-amber-400/20' 
+                    : 'bg-transparent border-stone-200 dark:border-stone-800 text-stone-400 hover:border-amber-400'
+                }`}
+               >
+                 <HelpCircle size={14}/> 
+                 <span>{doubtfulQuestions.includes(currentQId) ? 'Ragu-Ragu Aktif' : 'Tandai Ragu'}</span>
+               </button>
              </div>
              
-             <h2 className="text-xl font-bold dark:text-white leading-relaxed mb-8 whitespace-pre-wrap">{currentQ?.question_text}</h2>
-             {currentQ?.question_image && <img src={currentQ.question_image} className="max-h-64 rounded-3xl mb-8 border border-slate-100 dark:border-zinc-800 shadow-sm" alt="img" />}
-             
-             <div className="grid grid-cols-1 gap-3">
-                {currentQ?.displayOptions?.map((opt, idx) => {
-                  const letter = String.fromCharCode(65 + idx); 
-                  const val = opt.toUpperCase(); 
-                  const active = answers[currentQId] === val;
-                  return (
-                    <button key={val} onClick={() => handleSelectOption(currentQ.id, val)} className={`w-full p-6 rounded-[2rem] border-2 transition-all flex items-center gap-5 text-left ${active ? 'border-orange-600 bg-orange-50 dark:bg-orange-900/10' : 'border-slate-50 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-orange-200'}`}>
-                     <span className={`w-10 h-10 rounded-full flex items-center justify-center font-black transition-all shrink-0 ${active ? 'bg-orange-600 text-white scale-110 shadow-lg' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500'}`}>{letter}</span>
-                     <div className="flex-1 flex flex-col gap-2">
-                        <span className="font-bold dark:text-zinc-200">{currentQ[`option_${opt}`]}</span>
-                        {currentQ[`image_${opt}`] && <img src={currentQ[`image_${opt}`]} className="h-20 w-20 object-cover rounded-xl border border-slate-100" alt="opt" />}
-                     </div>
-                     {active && <CheckCircle2 className="text-orange-600 shrink-0" size={24}/>}
-                   </button>
-                 );
-               })}
-             </div>
-          </div>
+             {/* Question Text */}
+             <h2 className="text-base sm:text-lg font-bold text-stone-900 dark:text-stone-100 leading-relaxed mb-6 whitespace-pre-wrap">
+               {currentQ?.question_text}
+             </h2>
 
-          <div className="flex justify-between items-center pb-10">
-            <button disabled={currentIndex === 0} onClick={() => setCurrentIndex(prev => prev - 1)} className="px-6 py-3 font-black text-slate-400 uppercase text-[10px] flex items-center gap-2 hover:text-orange-600 disabled:opacity-20 transition-all"><ChevronLeft size={18}/> Kembali</button>
+             {/* Question Image (with Tap-to-Zoom Lightbox) */}
+             {currentQ?.question_image && (
+               <div className="relative group inline-block mb-6 cursor-pointer" onClick={() => setLightboxImg(currentQ.question_image)}>
+                 <img 
+                   src={currentQ.question_image} 
+                   className="max-h-72 rounded-2xl border border-stone-200 dark:border-stone-800 shadow-xs object-contain" 
+                   alt="Ilustrasi Soal" 
+                 />
+                 <div className="absolute bottom-2 right-2 bg-black/70 backdrop-blur-md text-white text-[9px] font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
+                   <ZoomIn size={12} /> Ketuk untuk perbesar
+                 </div>
+               </div>
+             )}
+             
+             {/* Multiple Choice Options (M3RadioCard) */}
+             <div className="grid grid-cols-1 gap-3.5">
+                {currentQ?.displayOptions?.map((opt, idx) => {
+                  const letter = String.fromCharCode(65 + idx); // A, B, C, D, E
+                  const val = opt.toUpperCase(); 
+                  const optionText = currentQ[`option_${opt}`] || currentQ[`option_${letter}`] || '';
+                  const optionImg = currentQ[`image_${opt}`] || currentQ[`image_${letter}`] || null;
+                  const active = answers[currentQId] === val;
+                  const isDoubt = doubtfulQuestions.includes(currentQId);
+
+                  if (!optionText && !optionImg) return null;
+
+                  return (
+                    <M3RadioCard
+                      key={val}
+                      optionKey={letter}
+                      optionText={optionText}
+                      selected={active}
+                      doubtful={isDoubt}
+                      onClick={() => handleSelectOption(currentQ.id, val)}
+                    />
+                  );
+                })}
+             </div>
+          </M3Card>
+
+          {/* Desktop Navigation Row */}
+          <div className="hidden lg:flex justify-between items-center pb-6">
+            <M3Button 
+              variant="outlined"
+              size="md"
+              disabled={currentIndex === 0} 
+              onClick={() => setCurrentIndex(prev => prev - 1)} 
+              icon={ChevronLeft}
+              iconPosition="left"
+            >
+              Sebelumnya
+            </M3Button>
             
             {currentIndex === questions.length - 1 ? (
-              <div className="bg-orange-100 dark:bg-orange-900/30 text-orange-600 px-6 py-3 rounded-2xl border border-orange-200 dark:border-orange-800/50 flex items-center gap-3">
-                 <Clock size={16} className="animate-pulse"/>
-                 <p className="text-[10px] font-black uppercase tracking-widest">Berakhir Otomatis Saat Waktu Habis</p>
-                 <button onClick={() => submitExam()} className="hidden bg-emerald-600 text-white px-8 py-3 rounded-xl font-black uppercase text-xs">Kirim</button>
-              </div>
+              <M3Button 
+                variant="filled"
+                size="md"
+                onClick={() => submitExam(false)} 
+                icon={Send}
+                iconPosition="right"
+                className="bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/20"
+              >
+                Selesai & Kirim Jawaban
+              </M3Button>
             ) : (
-              <button onClick={() => setCurrentIndex(prev => prev + 1)} className="bg-slate-900 dark:bg-white dark:text-black text-white px-10 py-4 rounded-2xl font-black uppercase text-[10px] shadow-lg hover:scale-105 transition-all flex items-center gap-2 tracking-widest">Selanjutnya <ChevronRight size={18}/></button>
+              <M3Button 
+                variant="filled"
+                size="md"
+                onClick={() => setCurrentIndex(prev => prev + 1)} 
+                icon={ChevronRight}
+                iconPosition="right"
+              >
+                Selanjutnya
+              </M3Button>
             )}
           </div>
         </main>
 
-        <aside className="w-full lg:w-80">
-          <div className="bg-white dark:bg-zinc-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-zinc-800 shadow-sm sticky top-28">
-            <h3 className="font-black text-[10px] uppercase text-slate-400 mb-6 flex items-center gap-2 tracking-[0.2em]"><LayoutGrid size={14} className="text-orange-600"/> Navigasi Soal</h3>
-            <div className="grid grid-cols-5 gap-3">
+        {/* Desktop Sidebar: Navigation Grid */}
+        <aside className="hidden lg:block w-80 shrink-0">
+          <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2.5rem] border border-slate-100 dark:border-zinc-800 shadow-xs sticky top-24">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-black text-[10px] uppercase text-slate-400 dark:text-zinc-500 flex items-center gap-2 tracking-[0.2em]">
+                <LayoutGrid size={14} className="text-orange-600"/> Nomor Soal
+              </h3>
+              <span className="text-[10px] font-black text-orange-600">
+                {Object.keys(answers).length}/{questions.length}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-5 gap-2 max-h-[320px] overflow-y-auto pr-1 custom-scrollbar">
               {questions.map((q, idx) => {
-                const isAnswered = !!answers[String(q.id)];
-                const isDoubt = doubtfulQuestions.includes(String(q.id));
+                const qIdStr = String(q.id);
+                const isAnswered = !!answers[qIdStr];
+                const isDoubt = doubtfulQuestions.includes(qIdStr);
+                const isCurrent = currentIndex === idx;
+
+                let btnStyle = 'bg-slate-50 dark:bg-zinc-800/80 text-slate-500 dark:text-zinc-400';
+                if (isDoubt) {
+                  btnStyle = 'bg-amber-400 text-slate-950 font-black shadow-md shadow-amber-400/20';
+                } else if (isAnswered) {
+                  btnStyle = 'bg-emerald-500 text-white font-black shadow-md shadow-emerald-500/20';
+                }
+
                 return (
-                  <button key={q.id} onClick={() => setCurrentIndex(idx)} className={`h-11 rounded-xl text-[10px] font-black transition-all ${currentIndex === idx ? 'ring-2 ring-orange-600 ring-offset-2 dark:ring-offset-zinc-950 scale-110 shadow-lg' : ''} ${isDoubt ? 'bg-amber-400 text-slate-900' : isAnswered ? 'bg-emerald-500 text-white' : 'bg-slate-50 dark:bg-zinc-800 text-slate-400'}`}>
-                    {idx + 1}
+                  <button 
+                    key={q.id} 
+                    onClick={() => setCurrentIndex(idx)} 
+                    className={`h-11 rounded-xl text-xs font-black transition-all cursor-pointer flex flex-col items-center justify-center ${btnStyle} ${
+                      isCurrent ? 'ring-2 ring-orange-600 ring-offset-2 dark:ring-offset-zinc-950 scale-105 shadow-md z-10' : ''
+                    }`}
+                  >
+                    <span>{idx + 1}</span>
+                    {isAnswered && <span className="text-[7px] leading-none uppercase">{answers[qIdStr]}</span>}
                   </button>
                 );
               })}
             </div>
             
-            <div className="mt-8 pt-6 border-t dark:border-zinc-800 space-y-4">
-               <div className="flex items-center justify-between text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                 <span>Progres</span>
-                 <span className="text-orange-600">{Object.keys(answers).length} / {questions.length}</span>
+            {/* Progress Bar & Legend */}
+            <div className="mt-6 pt-5 border-t border-slate-100 dark:border-zinc-800 space-y-3">
+               <div className="w-full bg-slate-100 dark:bg-zinc-800 h-2 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-orange-500 to-orange-600 h-full transition-all duration-500" 
+                    style={{ width: `${questions.length > 0 ? (Object.keys(answers).length / questions.length) * 100 : 0}%` }}
+                  ></div>
                </div>
-               <div className="w-full bg-slate-100 dark:bg-zinc-800 h-2.5 rounded-full overflow-hidden shadow-inner">
-                  <div className="bg-gradient-to-r from-orange-500 to-orange-600 h-full transition-all duration-700" style={{width: `${(Object.keys(answers).length / questions.length) * 100}%`}}></div>
-               </div>
-               <div className="flex gap-4 pt-2">
-                  <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-emerald-500 rounded-sm"></div><span className="text-[8px] font-black text-slate-400 uppercase">Isi</span></div>
-                  <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-amber-400 rounded-sm"></div><span className="text-[8px] font-black text-slate-400 uppercase">Ragu</span></div>
-                  <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-slate-100 dark:bg-zinc-800 rounded-sm"></div><span className="text-[8px] font-black text-slate-400 uppercase">Kosong</span></div>
+               <div className="flex justify-between pt-1 text-[8px] font-black uppercase text-slate-400">
+                  <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-emerald-500 rounded-sm"></div><span>Terjawab</span></div>
+                  <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-amber-400 rounded-sm"></div><span>Ragu</span></div>
+                  <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-slate-100 dark:bg-zinc-800 rounded-sm"></div><span>Kosong</span></div>
                </div>
             </div>
+
+            {/* Selesai Button in Sidebar */}
+            <button
+              onClick={() => submitExam(false)}
+              className="mt-6 w-full py-3.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-orange-600 hover:text-white transition-all shadow-md cursor-pointer"
+            >
+              Kirim Jawaban
+            </button>
           </div>
         </aside>
-        {debugAntiCheat && (
-          <div className="fixed bottom-4 right-4 z-50 w-64 bg-black/80 text-white text-[10px] font-mono rounded-xl p-3 space-y-2">
-            <div className="font-bold uppercase tracking-wider">AntiCheat Debug</div>
-            <div className="flex justify-between"><span>hidden</span><span>{String(debugStatus.hidden)}</span></div>
-            <div className="flex justify-between"><span>focus</span><span>{debugStatus.hasFocus === null ? 'n/a' : String(debugStatus.hasFocus)}</span></div>
-            <div className="flex justify-between"><span>delta</span><span>{debugStatus.lastDelta === null ? '-' : `${debugStatus.lastDelta}ms`}</span></div>
-            <button
-              type="button"
-              onClick={handleCopyDebug}
-              className="w-full rounded-lg border border-white/30 px-3 py-1 text-[9px] uppercase font-bold tracking-widest hover:bg-white/10 transition"
-            >
-              {debugCopied ? 'Copied' : 'Copy Logs'}
-            </button>
-            <div className="border-t border-white/20 pt-2 space-y-1 max-h-40 overflow-auto">
-              {debugLogs.length === 0 ? (
-                <div className="opacity-70">no events</div>
-              ) : (
-                [...debugLogs].reverse().map((log, idx) => (
-                  <div key={`${log.t}-${idx}`} className="flex justify-between gap-2">
-                    <span>{log.t}</span>
-                    <span className="flex-1 truncate">{log.event}</span>
-                    <span className="opacity-80">{log.hidden ? 'H' : 'V'}{log.focus === null ? '' : log.focus ? 'F' : 'N'}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* 📱 THUMB-ZONE STICKY BOTTOM ACTION BAR (Mobile Ergonomics) */}
+      <nav 
+        aria-label="Navigasi Ujian Jempol"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-zinc-800 px-4 py-3 shadow-2xl"
+      >
+        <div className="max-w-md mx-auto flex items-center justify-between gap-2">
+          
+          {/* Tombol Sebelumnya */}
+          <button
+            disabled={currentIndex === 0}
+            onClick={() => setCurrentIndex(prev => prev - 1)}
+            className="flex-1 py-3.5 px-3 bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 rounded-2xl font-black text-xs uppercase flex items-center justify-center gap-1 disabled:opacity-30 active:scale-95 transition-all cursor-pointer"
+          >
+            <ChevronLeft size={16} />
+            <span>Prev</span>
+          </button>
+
+          {/* Tombol Ragu-Ragu Toggle (Tengah) */}
+          <button
+            onClick={() => toggleDoubt(currentQ?.id)}
+            className={`py-3.5 px-4 rounded-2xl font-black text-xs uppercase flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
+              doubtfulQuestions.includes(currentQId)
+                ? 'bg-amber-400 text-slate-950 font-black shadow-md shadow-amber-400/20'
+                : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400'
+            }`}
+          >
+            <HelpCircle size={16} />
+            <span>{doubtfulQuestions.includes(currentQId) ? 'Ragu' : 'Ragu?'}</span>
+          </button>
+
+          {/* Tombol Drawer Trigger */}
+          <button
+            onClick={() => setIsDrawerOpen(true)}
+            className="py-3.5 px-4 bg-orange-100 dark:bg-orange-950/40 text-orange-600 rounded-2xl font-black text-xs uppercase flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+          >
+            <LayoutGrid size={16} />
+            <span>{currentIndex + 1}</span>
+          </button>
+
+          {/* Tombol Selanjutnya / Selesai */}
+          {currentIndex === questions.length - 1 ? (
+            <button
+              onClick={() => submitExam(false)}
+              className="flex-1 py-3.5 px-3 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase flex items-center justify-center gap-1 shadow-md shadow-emerald-600/25 active:scale-95 transition-all cursor-pointer"
+            >
+              <Send size={14} />
+              <span>Kirim</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setCurrentIndex(prev => prev + 1)}
+              className="flex-1 py-3.5 px-3 bg-orange-600 text-white rounded-2xl font-black text-xs uppercase flex items-center justify-center gap-1 shadow-md shadow-orange-600/25 active:scale-95 transition-all cursor-pointer"
+            >
+              <span>Next</span>
+              <ChevronRight size={16} />
+            </button>
+          )}
+
+        </div>
+      </nav>
+
+      {/* Mobile Question Bottom Sheet Drawer */}
+      <ExamQuestionDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        questions={questions}
+        currentIndex={currentIndex}
+        onSelectQuestion={(idx) => setCurrentIndex(idx)}
+        answers={answers}
+        doubts={doubtfulQuestions}
+      />
+
+      {/* Tap-to-Zoom Lightbox Modal */}
+      {lightboxImg && (
+        <ImageLightbox
+          src={lightboxImg}
+          onClose={() => setLightboxImg(null)}
+        />
+      )}
     </div>
   );
 };
