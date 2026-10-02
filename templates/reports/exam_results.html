@@ -1,0 +1,348 @@
+{% extends 'layouts/app.html' %}
+{% load static %}
+
+{% block page_header %}
+<div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+  <div class="flex items-center gap-3">
+    <a
+      href="{% url 'schedules:list' %}"
+      class="p-2.5 bg-white dark:bg-stone-900 rounded-2xl border border-stone-200/80 dark:border-stone-800 text-stone-600 dark:text-stone-300 hover:text-orange-600 transition shadow-xs"
+    >
+      <i data-lucide="arrow-left" class="w-5 h-5"></i>
+    </a>
+    <div>
+      <h2 class="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 dark:text-white">
+        {% if exam %}Hasil Ujian: {{ exam.title }}{% else %}Rekapitulasi Hasil Ujian{% endif %}
+      </h2>
+      <p class="text-emerald-600 dark:text-emerald-500 font-semibold text-xs mt-1">
+        {% if exam %}{{ exam.subject.name|default:'Umum' }} &bull; {{ exam.exam_type }} &bull; Kelas {{ exam.level|default:'Semua' }}{% else %}Pilih paket ujian untuk melihat rekapitulasi nilai{% endif %}
+      </p>
+    </div>
+  </div>
+
+  {% if exam %}
+    <div class="flex items-center gap-3">
+      <a
+        href="{% url 'reports:exam_results_export' exam.id %}"
+        class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-semibold text-xs tracking-wide transition shadow-lg shadow-emerald-600/20 active:scale-95 flex items-center gap-2"
+      >
+        <i data-lucide="download" class="w-4 h-4"></i>
+        <span>Unduh Rekap Excel</span>
+      </a>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Exam Selector Dropdown -->
+  <div class="bg-white dark:bg-stone-900 p-4 sm:p-5 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+    <div class="flex items-center gap-3 w-full sm:w-auto">
+      <div class="p-2.5 bg-orange-100 dark:bg-orange-950/40 text-orange-600 rounded-xl">
+        <i data-lucide="award" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <p class="text-xs font-medium text-stone-400">Pilih Paket Ujian</p>
+        <p class="text-xs font-medium text-stone-800 dark:text-stone-200">Ganti naskah ujian untuk melihat hasil</p>
+      </div>
+    </div>
+
+    <form method="get" class="w-full sm:w-auto flex-1 max-w-md">
+      <select
+        onchange="if(this.value) window.location.href='/exam-results/' + this.value + '/';"
+        class="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-2xl px-4 py-2.5 text-xs font-medium text-stone-900 dark:text-stone-100 outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
+      >
+        {% for ex in all_exams %}
+          <option value="{{ ex.id }}" {% if exam and ex.id == exam.id %}selected{% endif %}>
+            [{{ ex.exam_type }}] {{ ex.title }} - {{ ex.subject.name|default:'Umum' }}
+          </option>
+        {% empty %}
+          <option value="">Belum ada data ujian</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  {% if exam %}
+    <!-- Summary Statistics Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-sm flex flex-col items-center justify-center text-center">
+        <div class="p-2.5 bg-blue-50 dark:bg-blue-950/40 text-blue-600 rounded-xl mb-2">
+          <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
+        </div>
+        <p class="text-xs font-medium text-stone-400 mb-1">Rata-Rata Nilai</p>
+        <p class="text-3xl font-bold text-stone-900 dark:text-white">{{ stats.avg }}</p>
+      </div>
+
+      <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-sm flex flex-col items-center justify-center text-center">
+        <div class="p-2.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 rounded-xl mb-2">
+          <i data-lucide="trophy" class="w-5 h-5"></i>
+        </div>
+        <p class="text-xs font-medium text-stone-400 mb-1">Nilai Tertinggi</p>
+        <p class="text-3xl font-bold text-emerald-600">{{ stats.highest }}</p>
+      </div>
+
+      <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-sm flex flex-col items-center justify-center text-center">
+        <div class="p-2.5 bg-red-50 dark:bg-red-950/40 text-red-600 rounded-xl mb-2">
+          <i data-lucide="alert-circle" class="w-5 h-5"></i>
+        </div>
+        <p class="text-xs font-medium text-stone-400 mb-1">Nilai Terendah</p>
+        <p class="text-3xl font-bold text-red-600">{{ stats.lowest }}</p>
+      </div>
+
+      <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-sm flex flex-col items-center justify-center text-center">
+        <div class="p-2.5 bg-orange-50 dark:bg-orange-950/40 text-orange-600 rounded-xl mb-2">
+          <i data-lucide="users" class="w-5 h-5"></i>
+        </div>
+        <p class="text-xs font-medium text-stone-400 mb-1">Progres Selesai</p>
+        <p class="text-3xl font-bold text-stone-900 dark:text-white">
+          {{ stats.completed }} <span class="text-sm font-semibold text-stone-400">/ {{ stats.total }}</span>
+        </p>
+      </div>
+
+      <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-sm flex flex-col items-center justify-center text-center col-span-2 md:col-span-1">
+        <div class="p-2.5 bg-purple-50 dark:bg-purple-950/40 text-purple-600 rounded-xl mb-2">
+          <i data-lucide="check-check" class="w-5 h-5"></i>
+        </div>
+        <p class="text-xs font-medium text-stone-400 mb-1">Kelulusan KKM 75</p>
+        <p class="text-3xl font-bold text-purple-600">{{ stats.pass_rate }}%</p>
+      </div>
+    </div>
+
+    <!-- Tab Buttons -->
+    <div x-data="{ activeTab: '{{ active_tab }}' }" class="space-y-6">
+      <div class="flex items-center gap-3 border-b border-stone-200 dark:border-stone-800 pb-3 overflow-x-auto">
+        <button
+          type="button"
+          @click="activeTab = 'rekap'"
+          :class="activeTab === 'rekap' ? 'bg-stone-900 text-white dark:bg-white dark:text-stone-900 shadow-md' : 'bg-white dark:bg-stone-900 text-stone-500 border border-stone-200 dark:border-stone-800 hover:bg-stone-50'"
+          class="flex items-center gap-2 px-5 py-2.5 rounded-2xl font-semibold text-xs tracking-wide transition-all cursor-pointer whitespace-nowrap"
+        >
+          <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+          <span>Rekap Nilai Siswa</span>
+        </button>
+
+        <button
+          type="button"
+          @click="activeTab = 'analisis'"
+          :class="activeTab === 'analisis' ? 'bg-stone-900 text-white dark:bg-white dark:text-stone-900 shadow-md' : 'bg-white dark:bg-stone-900 text-stone-500 border border-stone-200 dark:border-stone-800 hover:bg-stone-50'"
+          class="flex items-center gap-2 px-5 py-2.5 rounded-2xl font-semibold text-xs tracking-wide transition-all cursor-pointer whitespace-nowrap"
+        >
+          <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
+          <span>Analisis Butir Soal & Pengecoh</span>
+        </button>
+      </div>
+
+      <!-- TAB 1: REKAP NILAI SISWA -->
+      <div x-show="activeTab === 'rekap'" class="space-y-4">
+        <!-- Filter Toolbar -->
+        <form method="get" class="bg-white dark:bg-stone-900 p-4 sm:p-5 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+          <input type="hidden" name="tab" value="rekap" />
+          
+          <div class="relative flex-1 w-full">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-3 text-stone-400 pointer-events-none"></i>
+            <input
+              type="text"
+              name="q"
+              value="{{ search_query }}"
+              placeholder="Cari Nama Siswa atau NIS..."
+              class="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-2xl pl-10 pr-4 py-2.5 text-xs font-medium text-stone-900 dark:text-stone-100 outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+
+          <div class="w-full sm:w-64">
+            <select
+              name="class_name"
+              onchange="this.form.submit()"
+              class="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-2xl px-4 py-2.5 text-xs font-medium text-stone-900 dark:text-stone-100 outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+            >
+              <option value="Semua Kelas">Semua Kelas</option>
+              {% for c in available_classes %}
+                <option value="{{ c }}" {% if selected_class == c %}selected{% endif %}>{{ c }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </form>
+
+        <!-- Rekap Table -->
+        <div class="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-stone-50 dark:bg-stone-950/60 border-b border-stone-200/80 dark:border-stone-800 text-xs font-semibold text-stone-400">
+                  <th class="py-4 px-5 w-14">No</th>
+                  <th class="py-4 px-5 w-32">NIS</th>
+                  <th class="py-4 px-5">Nama Lengkap Siswa</th>
+                  <th class="py-4 px-5 w-32">Kelas</th>
+                  <th class="py-4 px-5 w-32 text-center">Status</th>
+                  <th class="py-4 px-5 w-24 text-center">Benar</th>
+                  <th class="py-4 px-5 w-24 text-center">Salah</th>
+                  <th class="py-4 px-5 w-32 text-right">Nilai Akhir</th>
+                  <th class="py-4 px-5 w-36 text-center">Status KKM</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-stone-100 dark:divide-stone-800/80">
+                {% for p in participants %}
+                  <tr class="hover:bg-stone-50/80 dark:hover:bg-stone-800/40 transition-colors">
+                    <td class="py-4 px-5 text-xs font-medium text-stone-400">{{ forloop.counter }}</td>
+                    <td class="py-4 px-5 text-xs font-mono font-medium text-stone-600 dark:text-stone-300">{{ p.nis }}</td>
+                    <td class="py-4 px-5">
+                      <p class="text-sm font-semibold text-stone-900 dark:text-white">{{ p.full_name }}</p>
+                    </td>
+                    <td class="py-4 px-5 text-xs font-medium text-stone-700 dark:text-stone-300">{{ p.class_name }}</td>
+                    <td class="py-4 px-5 text-center">
+                      <span class="px-3 py-1 rounded-xl text-xs font-medium {{ p.status_badge }}">
+                        {{ p.status_label }}
+                      </span>
+                    </td>
+                    <td class="py-4 px-5 text-center font-medium text-emerald-600 text-sm">
+                      {% if p.is_finished %}{{ p.correct_count }}{% else %}-{% endif %}
+                    </td>
+                    <td class="py-4 px-5 text-center font-medium text-red-500 text-sm">
+                      {% if p.is_finished %}{{ p.wrong_count }}{% else %}-{% endif %}
+                    </td>
+                    <td class="py-4 px-5 text-right font-bold text-xl text-stone-900 dark:text-white">
+                      {% if p.is_finished %}{{ p.score }}{% else %}-{% endif %}
+                    </td>
+                    <td class="py-4 px-5 text-center">
+                      {% if p.is_finished %}
+                        {% if p.is_passed %}
+                          <span class="px-3 py-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 rounded-xl font-semibold text-xs" data-status="TUNTAS">
+                            <!-- TUNTAS -->
+                            Tuntas
+                          </span>
+                        {% else %}
+                          <span class="px-3 py-1 bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400 rounded-xl font-semibold text-xs" data-status="BELUM TUNTAS">
+                            <!-- BELUM TUNTAS -->
+                            Belum Tuntas
+                          </span>
+                        {% endif %}
+                      {% else %}
+                        <span class="text-xs text-stone-400">-</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="9" class="py-12 text-center text-stone-400 italic">
+                      Tidak ada data siswa ditemukan untuk kriteria filter ini.
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: ANALISIS BUTIR SOAL & SEBARAN PENGECOH -->
+      <div x-show="activeTab === 'analisis'" class="space-y-4">
+        <div class="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-sm overflow-hidden">
+          <div class="p-5 border-b border-stone-100 dark:border-stone-800 flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-bold text-stone-900 dark:text-white">
+                Analisis Butir Soal, Sebaran Pilihan & Ketuntasan
+              </h3>
+              <p class="text-xs text-stone-400 font-medium mt-0.5">
+                Responden Ujian Selesai: <span class="font-semibold text-stone-800 dark:text-stone-200">{{ total_finished }} Siswa</span>
+              </p>
+            </div>
+            <a
+              href="{% url 'reports:distractor_analysis' exam.id %}"
+              class="text-xs font-semibold text-orange-600 hover:text-orange-700 flex items-center gap-1.5"
+            >
+              <span>Halaman Khusus</span>
+              <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+            </a>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse min-w-[850px]">
+              <thead>
+                <tr class="bg-stone-50 dark:bg-stone-950/60 border-b border-stone-200/80 dark:border-stone-800 text-xs font-semibold text-stone-400 text-center">
+                  <th class="py-4 px-5 text-left w-14">No</th>
+                  <th class="py-4 px-5 text-left">Pertanyaan & Sebaran Jawaban Siswa</th>
+                  <th class="py-4 px-4 w-24">Kunci</th>
+                  <th class="py-4 px-4 w-20">Benar</th>
+                  <th class="py-4 px-4 w-20">Salah</th>
+                  <th class="py-4 px-4 w-20">Kosong</th>
+                  <th class="py-4 px-5 w-32 text-center">Ketuntasan (%)</th>
+                  <th class="py-4 px-5 w-32 text-center">Tingkat Kesukaran</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-stone-100 dark:divide-stone-800/80">
+                {% for item in analysis %}
+                  <tr class="hover:bg-stone-50/80 dark:hover:bg-stone-800/40 transition-colors">
+                    <td class="py-4 px-5 text-sm font-semibold text-stone-400">{{ item.no }}</td>
+                    <td class="py-4 px-5">
+                      <p class="text-xs font-normal text-stone-800 dark:text-stone-200 mb-3 line-clamp-2 leading-relaxed">
+                        {{ item.question_text }}
+                      </p>
+                      <div class="flex items-center gap-2">
+                        <div class="flex flex-col items-center bg-stone-100 dark:bg-stone-800 px-3 py-1.5 rounded-xl border border-stone-200/60 dark:border-stone-700 min-w-[38px]">
+                          <span class="text-xs font-medium text-stone-400">A</span>
+                          <span class="text-xs font-semibold {% if item.distro.A > 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-stone-400{% endif %}">{{ item.distro.A }}</span>
+                        </div>
+                        <div class="flex flex-col items-center bg-stone-100 dark:bg-stone-800 px-3 py-1.5 rounded-xl border border-stone-200/60 dark:border-stone-700 min-w-[38px]">
+                          <span class="text-xs font-medium text-stone-400">B</span>
+                          <span class="text-xs font-semibold {% if item.distro.B > 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-stone-400{% endif %}">{{ item.distro.B }}</span>
+                        </div>
+                        <div class="flex flex-col items-center bg-stone-100 dark:bg-stone-800 px-3 py-1.5 rounded-xl border border-stone-200/60 dark:border-stone-700 min-w-[38px]">
+                          <span class="text-xs font-medium text-stone-400">C</span>
+                          <span class="text-xs font-semibold {% if item.distro.C > 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-stone-400{% endif %}">{{ item.distro.C }}</span>
+                        </div>
+                        <div class="flex flex-col items-center bg-stone-100 dark:bg-stone-800 px-3 py-1.5 rounded-xl border border-stone-200/60 dark:border-stone-700 min-w-[38px]">
+                          <span class="text-xs font-medium text-stone-400">D</span>
+                          <span class="text-xs font-semibold {% if item.distro.D > 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-stone-400{% endif %}">{{ item.distro.D }}</span>
+                        </div>
+                        <div class="flex flex-col items-center bg-stone-100 dark:bg-stone-800 px-3 py-1.5 rounded-xl border border-stone-200/60 dark:border-stone-700 min-w-[38px]">
+                          <span class="text-xs font-medium text-stone-400">E</span>
+                          <span class="text-xs font-semibold {% if item.distro.E > 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-stone-400{% endif %}">{{ item.distro.E }}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="py-4 px-4 text-center">
+                      <span class="px-3 py-1 bg-orange-100 text-orange-700 dark:bg-orange-950/50 dark:text-orange-400 rounded-xl font-bold text-xs">
+                        {{ item.correct_answer }}
+                      </span>
+                    </td>
+                    <td class="py-4 px-4 text-center font-semibold text-emerald-600 text-base">{{ item.correct }}</td>
+                    <td class="py-4 px-4 text-center font-semibold text-red-500 text-base">{{ item.wrong }}</td>
+                    <td class="py-4 px-4 text-center font-semibold text-stone-400 text-base">{{ item.blank }}</td>
+                    <td class="py-4 px-5 text-center font-bold text-lg {% if item.correct_percentage >= 75 %}text-emerald-600{% else %}text-orange-600{% endif %}">
+                      {{ item.correct_percentage }}%
+                    </td>
+                    <td class="py-4 px-5 text-center">
+                      <span class="px-3 py-1 rounded-xl text-xs font-medium {{ item.difficulty_badge }}">
+                        {{ item.difficulty_level }}
+                      </span>
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr>
+                    <td colspan="8" class="py-12 text-center text-stone-400 italic">
+                      Belum ada butir soal atau jawaban siswa untuk dianalisis.
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  {% else %}
+    <div class="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200/80 dark:border-stone-800 p-12 text-center">
+      <div class="w-16 h-16 bg-stone-100 dark:bg-stone-800 text-stone-400 rounded-full flex items-center justify-center mx-auto mb-4">
+        <i data-lucide="award" class="w-8 h-8"></i>
+      </div>
+      <h4 class="text-base font-bold text-stone-800 dark:text-stone-200 mb-1">Belum Ada Ujian Dipilih</h4>
+      <p class="text-xs text-stone-400">Silakan pilih paket ujian melalui menu dropdown di atas.</p>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

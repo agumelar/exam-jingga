@@ -1,0 +1,32 @@
+{% comment %}
+M3 Card Component
+Usage:
+  {% include 'components/m3/card.html' with variant='elevated' class='p-6' %}
+  Or as wrapper container.
+Parameters:
+  - variant: 'elevated' (default) | 'filled' | 'outlined'
+  - interactive: boolean (adds hover scale, ripple, pointer cursor)
+  - padding: custom padding class (e.g. 'p-6' or 'p-8')
+  - class: extra CSS classes
+  - id: optional element ID
+  - attrs: raw custom attributes
+{% endcomment %}
+
+{% with card_variant=variant|default:'elevated' %}
+<div 
+  class="rounded-3xl transition-all duration-200 text-left
+    {% if card_variant == 'elevated' %}bg-white dark:bg-stone-900 border border-stone-200/60 dark:border-stone-800 m3-elevation-1 hover:m3-elevation-2
+    {% elif card_variant == 'filled' %}bg-stone-100 dark:bg-stone-800/70 border-none
+    {% elif card_variant == 'outlined' %}bg-transparent border border-stone-300 dark:border-stone-700
+    {% else %}bg-white dark:bg-stone-900 border border-stone-200/60 dark:border-stone-800 m3-elevation-1{% endif %}
+    {% if interactive %}m3-state-layer cursor-pointer hover:border-orange-500/50 hover:shadow-md active:scale-[0.99]{% endif %}
+    {% if padding %}{{ padding }}{% endif %}
+    {{ class }}"
+  {% if id %}id="{{ id }}"{% endif %}
+  {% if attrs %}{{ attrs|safe }}{% endif %}
+>
+  {% if content %}
+    {{ content|safe }}
+  {% endif %}
+</div>
+{% endwith %}

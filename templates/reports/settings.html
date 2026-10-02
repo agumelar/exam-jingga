@@ -1,0 +1,413 @@
+{% extends 'layouts/app.html' %}
+{% load static %}
+
+{% block page_header %}
+<div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+  <div>
+    <h2 class="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 dark:text-white">
+      Pengaturan Dokumen & Lembaga
+    </h2>
+    <p class="text-orange-600 dark:text-orange-500 font-semibold text-xs mt-1">
+      Konfigurasi Identitas Lembaga, Pejabat TTD & Format Kop Surat
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto pb-20">
+
+  <form method="post" enctype="multipart/form-data" class="space-y-8">
+    {% csrf_token %}
+
+    <!-- 1. KOP SURAT (HEADER TEXT) -->
+    <div class="bg-white dark:bg-stone-900 p-6 sm:p-8 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div class="md:col-span-3 flex items-center gap-2.5 mb-1 text-orange-600">
+        <div class="h-1 w-6 bg-orange-600 rounded-full"></div>
+        <h3 class="text-xs font-bold text-orange-600">Teks Kop Surat (Header Dokumen)</h3>
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">Header Baris 1</label>
+        <input
+          type="text"
+          name="header_1"
+          value="{{ settings.header_1|default:'' }}"
+          placeholder="Cth: PEMERINTAH DAERAH PROVINSI..."
+          class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3.5 text-xs font-medium focus:ring-2 focus:ring-orange-500 outline-none transition"
+        />
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">Header Baris 2</label>
+        <input
+          type="text"
+          name="header_2"
+          value="{{ settings.header_2|default:'' }}"
+          placeholder="Cth: DINAS PENDIDIKAN"
+          class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3.5 text-xs font-medium focus:ring-2 focus:ring-orange-500 outline-none transition"
+        />
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">Header Baris 3</label>
+        <input
+          type="text"
+          name="header_3"
+          value="{{ settings.header_3|default:'' }}"
+          placeholder="Cth: CABANG DINAS PENDIDIKAN WILAYAH VI"
+          class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3.5 text-xs font-medium focus:ring-2 focus:ring-orange-500 outline-none transition"
+        />
+      </div>
+    </div>
+
+    <!-- 2. INFORMASI IDENTITAS SEKOLAH -->
+    <div class="bg-white dark:bg-stone-900 p-6 sm:p-8 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-sm grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div class="md:col-span-2 flex items-center gap-2.5 mb-1 text-orange-600">
+        <div class="h-1 w-6 bg-orange-600 rounded-full"></div>
+        <h3 class="text-xs font-bold text-orange-600">Identitas Dasar Lembaga</h3>
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">Nama Sekolah</label>
+        <input
+          type="text"
+          name="school_name"
+          value="{{ settings.school_name|default:'SMK NEGERI 1 RONGGA' }}"
+          class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3.5 text-xs font-medium focus:ring-2 focus:ring-orange-500 outline-none transition"
+        />
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">Daftar Jurusan</label>
+        <input
+          type="text"
+          name="school_majors_list"
+          value="{{ settings.school_majors_list|default:'' }}"
+          placeholder="Cth: RPL, TBSM, TKRO, ATPH"
+          class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3.5 text-xs font-medium focus:ring-2 focus:ring-orange-500 outline-none transition"
+        />
+      </div>
+
+      <div class="md:col-span-2 space-y-1.5">
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">Alamat Lengkap</label>
+        <textarea
+          name="school_address"
+          rows="2"
+          class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3.5 text-xs font-medium focus:ring-2 focus:ring-orange-500 outline-none transition"
+        >{{ settings.school_address|default:'' }}</textarea>
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">Telepon</label>
+        <input
+          type="text"
+          name="school_phone"
+          value="{{ settings.school_phone|default:'' }}"
+          class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3.5 text-xs font-medium focus:ring-2 focus:ring-orange-500 outline-none transition"
+        />
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">Kode Pos / Area</label>
+        <input
+          type="text"
+          name="school_postal_code"
+          value="{{ settings.school_postal_code|default:'' }}"
+          placeholder="Cth: Bandung Barat 40565"
+          class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3.5 text-xs font-medium focus:ring-2 focus:ring-orange-500 outline-none transition"
+        />
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">Website</label>
+        <input
+          type="text"
+          name="school_website"
+          value="{{ settings.school_website|default:'' }}"
+          class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3.5 text-xs font-medium focus:ring-2 focus:ring-orange-500 outline-none transition"
+        />
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">Email Resmi</label>
+        <input
+          type="email"
+          name="school_email"
+          value="{{ settings.school_email|default:'' }}"
+          class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3.5 text-xs font-medium focus:ring-2 focus:ring-orange-500 outline-none transition"
+        />
+      </div>
+    </div>
+
+    <!-- 3. DIGITAL ASSETS & LOGOS -->
+    <div class="space-y-3">
+      <div class="flex items-center gap-2.5 mb-1 text-orange-600">
+        <div class="h-1 w-6 bg-orange-600 rounded-full"></div>
+        <h3 class="text-xs font-bold text-orange-600">Aset Digital, Stempel & Tanda Tangan</h3>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Logo Pemda Kiri -->
+        <div class="bg-white dark:bg-stone-900 p-4 rounded-3xl border border-stone-200/80 dark:border-stone-800 space-y-3">
+          <label class="block text-xs font-medium text-stone-500 dark:text-stone-400">Logo Pemda (Kiri)</label>
+          <div class="flex items-center gap-3">
+            <div class="w-14 h-14 rounded-2xl bg-stone-100 dark:bg-stone-800 flex items-center justify-center overflow-hidden border border-dashed border-stone-300 dark:border-stone-700 shrink-0">
+              {% if settings.logo_left_url %}
+                <img src="{{ settings.logo_left_url }}" alt="Logo" class="w-full h-full object-contain" />
+              {% else %}
+                <i data-lucide="image" class="w-6 h-6 text-stone-400"></i>
+              {% endif %}
+            </div>
+            <div class="flex-1 space-y-1.5">
+              <label class="inline-flex items-center px-3 py-1.5 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 rounded-xl cursor-pointer text-xs font-semibold transition">
+                <i data-lucide="upload" class="w-3 h-3 mr-1.5"></i> Ganti File
+                <input type="file" name="file_logo_left" accept="image/*" class="hidden" />
+              </label>
+              <input type="text" name="logo_left_url" value="{{ settings.logo_left_url|default:'' }}" placeholder="URL Logo..." class="w-full text-xs font-mono p-1.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Logo Sekolah Kanan -->
+        <div class="bg-white dark:bg-stone-900 p-4 rounded-3xl border border-stone-200/80 dark:border-stone-800 space-y-3">
+          <label class="block text-xs font-medium text-stone-500 dark:text-stone-400">Logo Sekolah (Kanan)</label>
+          <div class="flex items-center gap-3">
+            <div class="w-14 h-14 rounded-2xl bg-stone-100 dark:bg-stone-800 flex items-center justify-center overflow-hidden border border-dashed border-stone-300 dark:border-stone-700 shrink-0">
+              {% if settings.logo_right_url %}
+                <img src="{{ settings.logo_right_url }}" alt="Logo" class="w-full h-full object-contain" />
+              {% else %}
+                <i data-lucide="image" class="w-6 h-6 text-stone-400"></i>
+              {% endif %}
+            </div>
+            <div class="flex-1 space-y-1.5">
+              <label class="inline-flex items-center px-3 py-1.5 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 rounded-xl cursor-pointer text-xs font-semibold transition">
+                <i data-lucide="upload" class="w-3 h-3 mr-1.5"></i> Ganti File
+                <input type="file" name="file_logo_right" accept="image/*" class="hidden" />
+              </label>
+              <input type="text" name="logo_right_url" value="{{ settings.logo_right_url|default:'' }}" placeholder="URL Logo..." class="w-full text-xs font-mono p-1.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Watermark -->
+        <div class="bg-white dark:bg-stone-900 p-4 rounded-3xl border border-stone-200/80 dark:border-stone-800 space-y-3">
+          <label class="block text-xs font-medium text-stone-500 dark:text-stone-400">Watermark Kartu</label>
+          <div class="flex items-center gap-3">
+            <div class="w-14 h-14 rounded-2xl bg-stone-100 dark:bg-stone-800 flex items-center justify-center overflow-hidden border border-dashed border-stone-300 dark:border-stone-700 shrink-0">
+              {% if settings.watermark_url %}
+                <img src="{{ settings.watermark_url }}" alt="Watermark" class="w-full h-full object-contain opacity-50" />
+              {% else %}
+                <i data-lucide="image" class="w-6 h-6 text-stone-400"></i>
+              {% endif %}
+            </div>
+            <div class="flex-1 space-y-1.5">
+              <label class="inline-flex items-center px-3 py-1.5 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 rounded-xl cursor-pointer text-xs font-semibold transition">
+                <i data-lucide="upload" class="w-3 h-3 mr-1.5"></i> Ganti File
+                <input type="file" name="file_watermark" accept="image/*" class="hidden" />
+              </label>
+              <input type="text" name="watermark_url" value="{{ settings.watermark_url|default:'' }}" placeholder="URL Watermark..." class="w-full text-xs font-mono p-1.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Cap Stempel -->
+        <div class="bg-white dark:bg-stone-900 p-4 rounded-3xl border border-stone-200/80 dark:border-stone-800 space-y-3">
+          <label class="block text-xs font-medium text-stone-500 dark:text-stone-400">Cap Stempel Sekolah</label>
+          <div class="flex items-center gap-3">
+            <div class="w-14 h-14 rounded-2xl bg-stone-100 dark:bg-stone-800 flex items-center justify-center overflow-hidden border border-dashed border-stone-300 dark:border-stone-700 shrink-0">
+              {% if settings.school_seal_url %}
+                <img src="{{ settings.school_seal_url }}" alt="Cap" class="w-full h-full object-contain" />
+              {% else %}
+                <i data-lucide="stamp" class="w-6 h-6 text-stone-400"></i>
+              {% endif %}
+            </div>
+            <div class="flex-1 space-y-1.5">
+              <label class="inline-flex items-center px-3 py-1.5 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 rounded-xl cursor-pointer text-xs font-semibold transition">
+                <i data-lucide="upload" class="w-3 h-3 mr-1.5"></i> Ganti File
+                <input type="file" name="file_seal" accept="image/*" class="hidden" />
+              </label>
+              <input type="text" name="school_seal_url" value="{{ settings.school_seal_url|default:'' }}" placeholder="URL Cap..." class="w-full text-xs font-mono p-1.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950" />
+            </div>
+          </div>
+        </div>
+
+        <!-- TTD Kepala Sekolah -->
+        <div class="bg-white dark:bg-stone-900 p-4 rounded-3xl border border-stone-200/80 dark:border-stone-800 space-y-3">
+          <label class="block text-xs font-medium text-stone-500 dark:text-stone-400">TTD Kepala Sekolah</label>
+          <div class="flex items-center gap-3">
+            <div class="w-14 h-14 rounded-2xl bg-stone-100 dark:bg-stone-800 flex items-center justify-center overflow-hidden border border-dashed border-stone-300 dark:border-stone-700 shrink-0">
+              {% if settings.headmaster_signature_url %}
+                <img src="{{ settings.headmaster_signature_url }}" alt="TTD" class="w-full h-full object-contain" />
+              {% else %}
+                <i data-lucide="pen-tool" class="w-6 h-6 text-stone-400"></i>
+              {% endif %}
+            </div>
+            <div class="flex-1 space-y-1.5">
+              <label class="inline-flex items-center px-3 py-1.5 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 rounded-xl cursor-pointer text-xs font-semibold transition">
+                <i data-lucide="upload" class="w-3 h-3 mr-1.5"></i> Ganti File
+                <input type="file" name="file_sig_headmaster" accept="image/*" class="hidden" />
+              </label>
+              <input type="text" name="headmaster_signature_url" value="{{ settings.headmaster_signature_url|default:'' }}" placeholder="URL TTD..." class="w-full text-xs font-mono p-1.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950" />
+            </div>
+          </div>
+        </div>
+
+        <!-- TTD Wakasek Kurikulum -->
+        <div class="bg-white dark:bg-stone-900 p-4 rounded-3xl border border-stone-200/80 dark:border-stone-800 space-y-3">
+          <label class="block text-xs font-medium text-stone-500 dark:text-stone-400">TTD Wakasek Kurikulum</label>
+          <div class="flex items-center gap-3">
+            <div class="w-14 h-14 rounded-2xl bg-stone-100 dark:bg-stone-800 flex items-center justify-center overflow-hidden border border-dashed border-stone-300 dark:border-stone-700 shrink-0">
+              {% if settings.curriculum_signature_url %}
+                <img src="{{ settings.curriculum_signature_url }}" alt="TTD" class="w-full h-full object-contain" />
+              {% else %}
+                <i data-lucide="pen-tool" class="w-6 h-6 text-stone-400"></i>
+              {% endif %}
+            </div>
+            <div class="flex-1 space-y-1.5">
+              <label class="inline-flex items-center px-3 py-1.5 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 rounded-xl cursor-pointer text-xs font-semibold transition">
+                <i data-lucide="upload" class="w-3 h-3 mr-1.5"></i> Ganti File
+                <input type="file" name="file_sig_curriculum" accept="image/*" class="hidden" />
+              </label>
+              <input type="text" name="curriculum_signature_url" value="{{ settings.curriculum_signature_url|default:'' }}" placeholder="URL TTD..." class="w-full text-xs font-mono p-1.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. PEJABAT TANDA TANGAN -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <!-- Kepala Sekolah -->
+      <div class="bg-white dark:bg-stone-900 p-6 sm:p-8 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-sm space-y-4">
+        <h3 class="text-xs font-bold text-orange-600 flex items-center gap-2">
+          <span class="w-2 h-2 bg-orange-600 rounded-full"></span>
+          <span>Kepala Sekolah</span>
+        </h3>
+        <div class="space-y-3">
+          <div class="space-y-1">
+            <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">Nama & Gelar</label>
+            <input
+              type="text"
+              name="headmaster_name"
+              value="{{ settings.headmaster_name|default:'' }}"
+              placeholder="Cth: Drs. H. Nama Lengkap, M.M."
+              class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-orange-500"
+            />
+          </div>
+          <div class="space-y-1">
+            <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">NIP Kepala Sekolah</label>
+            <input
+              type="text"
+              name="headmaster_nip"
+              value="{{ settings.headmaster_nip|default:'' }}"
+              placeholder="Cth: 197001011995011001"
+              class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-orange-500"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Wakasek Kurikulum -->
+      <div class="bg-white dark:bg-stone-900 p-6 sm:p-8 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-sm space-y-4">
+        <h3 class="text-xs font-bold text-orange-600 flex items-center gap-2">
+          <span class="w-2 h-2 bg-orange-600 rounded-full"></span>
+          <span>Wakasek Kurikulum</span>
+        </h3>
+        <div class="space-y-3">
+          <div class="space-y-1">
+            <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">Nama & Gelar</label>
+            <input
+              type="text"
+              name="curriculum_vicedir_name"
+              value="{{ settings.curriculum_vicedir_name|default:'' }}"
+              placeholder="Cth: Guru Wakasek, S.Pd., M.Kom."
+              class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-orange-500"
+            />
+          </div>
+          <div class="space-y-1">
+            <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">NIP Wakasek</label>
+            <input
+              type="text"
+              name="curriculum_vicedir_nip"
+              value="{{ settings.curriculum_vicedir_nip|default:'' }}"
+              placeholder="Cth: 198005052005012003"
+              class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-orange-500"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. TITIMANGSA & PELAKSANAAN UJIAN -->
+    <div class="bg-white dark:bg-stone-900 p-6 sm:p-8 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-sm grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">Kota (Titimangsa)</label>
+        <input
+          type="text"
+          name="exam_city"
+          value="{{ settings.exam_city|default:'Rongga' }}"
+          class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-orange-500"
+        />
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">Tanggal Titimangsa</label>
+        <input
+          type="text"
+          name="exam_date"
+          value="{{ settings.exam_date|default:'' }}"
+          placeholder="Cth: 10 Maret 2026"
+          class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-orange-500"
+        />
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">Tahun Ajaran</label>
+        <select
+          name="academic_year"
+          class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
+        >
+          <option value="2024/2025" {% if settings.academic_year == '2024/2025' %}selected{% endif %}>2024/2025</option>
+          <option value="2025/2026" {% if settings.academic_year == '2025/2026' %}selected{% endif %}>2025/2026</option>
+          <option value="2026/2027" {% if settings.academic_year == '2026/2027' %}selected{% endif %}>2026/2027</option>
+        </select>
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">Semester</label>
+        <select
+          name="semester"
+          class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
+        >
+          <option value="Ganjil" {% if settings.semester == 'Ganjil' %}selected{% endif %}>Ganjil</option>
+          <option value="Genap" {% if settings.semester == 'Genap' %}selected{% endif %}>Genap</option>
+        </select>
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1">Nama Asesmen/Ujian</label>
+        <input
+          type="text"
+          name="exam_name"
+          value="{{ settings.exam_name|default:'Penilaian Akhir Semester (PAS)' }}"
+          class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-orange-500"
+        />
+      </div>
+    </div>
+
+    <!-- FLOATING SUBMIT BUTTON -->
+    <div class="fixed bottom-6 right-6 z-40">
+      <button
+        type="submit"
+        class="px-8 py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-3xl font-semibold text-xs tracking-wide shadow-2xl shadow-orange-600/40 hover:scale-105 active:scale-95 transition-all flex items-center gap-3 cursor-pointer"
+      >
+        <i data-lucide="save" class="w-5 h-5"></i>
+        <span>Simpan Semua Pengaturan</span>
+      </button>
+    </div>
+
+  </form>
+
+</div>
+{% endblock %}

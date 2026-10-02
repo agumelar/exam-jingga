@@ -1,0 +1,192 @@
+{% load static %}
+{% comment %}
+Partial Table / Grid for Session Monitoring
+Refreshed periodically via HTMX polling (every 3s) or on filter change.
+{% endcomment %}
+
+<!-- Live Summary Stats Counter Row -->
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+  <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl border border-stone-200/70 dark:border-stone-800 shadow-sm flex items-center gap-3.5">
+    <div class="p-3 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 rounded-2xl">
+      <i data-lucide="users" class="w-5 h-5"></i>
+    </div>
+    <div>
+      <p class="text-xs font-medium text-stone-400">Total Siswa</p>
+      <p class="text-2xl font-bold text-stone-900 dark:text-white">{{ total_count }}</p>
+    </div>
+  </div>
+
+  <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl border border-stone-200/70 dark:border-stone-800 shadow-sm flex items-center gap-3.5">
+    <div class="p-3 bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 rounded-2xl">
+      <i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i>
+    </div>
+    <div>
+      <p class="text-xs font-medium text-blue-600 dark:text-blue-400">Mengerjakan</p>
+      <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ active_count }}</p>
+    </div>
+  </div>
+
+  <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl border border-stone-200/70 dark:border-stone-800 shadow-sm flex items-center gap-3.5">
+    <div class="p-3 bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-2xl">
+      <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+    </div>
+    <div>
+      <p class="text-xs font-medium text-red-600 dark:text-red-400">Terkunci</p>
+      <p class="text-2xl font-bold text-red-600 dark:text-red-400">{{ locked_count }}</p>
+    </div>
+  </div>
+
+  <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl border border-stone-200/70 dark:border-stone-800 shadow-sm flex items-center gap-3.5">
+    <div class="p-3 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-2xl">
+      <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+    </div>
+    <div>
+      <p class="text-xs font-medium text-emerald-600 dark:text-emerald-400">Selesai</p>
+      <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ finished_count }}</p>
+    </div>
+  </div>
+
+  <div class="bg-white dark:bg-stone-900 p-5 rounded-3xl border border-stone-200/70 dark:border-stone-800 shadow-sm flex items-center gap-3.5 col-span-2 sm:col-span-1">
+    <div class="p-3 bg-stone-100 dark:bg-stone-800 text-stone-500 rounded-2xl">
+      <i data-lucide="clock" class="w-5 h-5"></i>
+    </div>
+    <div>
+      <p class="text-xs font-medium text-stone-400">Belum Mulai</p>
+      <p class="text-2xl font-bold text-stone-500">{{ not_started_count }}</p>
+    </div>
+  </div>
+</div>
+
+<!-- Participant Cards Grid -->
+{% if participants %}
+  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+    {% for item in participants %}
+      <div class="bg-white dark:bg-stone-900 p-5 sm:p-6 rounded-3xl border-2 transition-all shadow-xs flex flex-col justify-between {% if item.status == 'locked' %}border-red-500/80 bg-red-50/10 dark:border-red-500/80 shadow-md shadow-red-500/10{% else %}border-stone-200/70 dark:border-stone-800 hover:border-orange-500/50{% endif %}">
+        
+        <div>
+          <!-- Top Card Meta -->
+          <div class="flex justify-between items-center mb-4 border-b border-stone-100 dark:border-stone-800/80 pb-3.5">
+            <span class="px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 {{ item.status_badge }}">
+              {% if item.status == 'active' %}
+                <i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i>
+              {% elif item.status == 'locked' %}
+                <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>
+              {% elif item.status == 'finished' %}
+                <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>
+              {% else %}
+                <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+              {% endif %}
+              {{ item.status_label }}
+            </span>
+            <span class="text-xs font-mono font-medium text-stone-400 bg-stone-100 dark:bg-stone-800 px-2.5 py-1 rounded-lg">
+              #{{ forloop.counter }}
+            </span>
+          </div>
+
+          <!-- Student Name & Info -->
+          <div class="space-y-3 mb-5">
+            <div>
+              <p class="text-xs font-medium text-stone-400 mb-0.5">Nama Peserta</p>
+              <h4 class="text-base font-bold text-stone-900 dark:text-white truncate">
+                {{ item.student.full_name }}
+              </h4>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <div class="bg-stone-50 dark:bg-stone-950 p-3 rounded-2xl border border-stone-100 dark:border-stone-800">
+                <p class="text-xs font-medium text-stone-400">NIS / Akun</p>
+                <p class="text-xs font-mono font-semibold text-orange-600 dark:text-orange-400 mt-0.5 truncate">{{ item.student.nis }}</p>
+              </div>
+              <div class="bg-stone-50 dark:bg-stone-950 p-3 rounded-2xl border border-stone-100 dark:border-stone-800">
+                <p class="text-xs font-medium text-stone-400">Kelas & Ruang</p>
+                <p class="text-xs font-medium text-stone-800 dark:text-stone-200 mt-0.5 truncate">
+                  {{ item.student.class_room.name }} • {{ item.room_name }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom Actions / Session Info -->
+        <div class="pt-3.5 border-t border-stone-100 dark:border-stone-800/80">
+          {% if item.session %}
+            {% if item.session.status == 'locked' %}
+              <div class="space-y-2">
+                <div class="flex items-center gap-1.5 text-red-600 dark:text-red-400 text-xs font-medium bg-red-50 dark:bg-red-950/30 p-2.5 rounded-xl">
+                  <i data-lucide="shield-alert" class="w-4 h-4 shrink-0"></i>
+                  <span>Terdeteksi {{ item.session.violation_count }}x Pelanggaran</span>
+                </div>
+                <button
+                  type="button"
+                  hx-post="{% url 'reports:session_unlock' item.session.id %}"
+                  hx-target="#monitoring-table-container"
+                  class="w-full py-2.5 px-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-semibold text-xs tracking-wide transition-all flex items-center justify-center gap-2 shadow-md shadow-orange-600/20 active:scale-95 cursor-pointer"
+                >
+                  <i data-lucide="unlock" class="w-4 h-4"></i>
+                  <span>Buka Kunci Sesi</span>
+                </button>
+              </div>
+
+            {% elif item.session.status == 'active' %}
+              <div class="space-y-2">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-stone-500 font-medium">Pelanggaran:</span>
+                  <span class="font-semibold text-stone-800 dark:text-stone-200">{{ item.session.violation_count }}x</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    hx-post="{% url 'reports:session_force_submit' item.session.id %}"
+                    hx-target="#monitoring-table-container"
+                    hx-confirm="Yakin ingin memaksa selesai sesi siswa ini?"
+                    class="py-2 px-3 bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 hover:bg-red-600 hover:text-white rounded-xl font-medium text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <i data-lucide="octagon-alert" class="w-3.5 h-3.5"></i>
+                    <span>Paksa Selesai</span>
+                  </button>
+                  <button
+                    type="button"
+                    hx-post="{% url 'reports:session_reset' item.session.id %}"
+                    hx-target="#monitoring-table-container"
+                    hx-confirm="Reset sesi akan menghapus jawaban dan mengizinkan siswa login ulang. Lanjutkan?"
+                    class="py-2 px-3 bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 rounded-xl font-medium text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                    <span>Reset Sesi</span>
+                  </button>
+                </div>
+              </div>
+
+            {% elif item.session.status == 'finished' %}
+              <div class="flex items-center justify-between bg-emerald-50 dark:bg-emerald-950/20 p-3 rounded-2xl border border-emerald-100 dark:border-emerald-900/30">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="award" class="w-4 h-4 text-emerald-600"></i>
+                  <span class="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Nilai Akhir</span>
+                </div>
+                <span class="text-xl font-bold text-emerald-600 leading-none">{{ item.session.score|floatformat:1 }}</span>
+              </div>
+            {% endif %}
+
+          {% else %}
+            <p class="text-xs font-normal text-stone-400 italic text-center py-2">
+              Siswa belum login / memulai ujian
+            </p>
+          {% endif %}
+        </div>
+
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200/80 dark:border-stone-800 p-12 text-center">
+    <div class="w-16 h-16 bg-stone-100 dark:bg-stone-800 text-stone-400 rounded-full flex items-center justify-center mx-auto mb-4">
+      <i data-lucide="users" class="w-8 h-8"></i>
+    </div>
+    <h4 class="text-base font-bold text-stone-800 dark:text-stone-200 mb-1">Tidak Ada Siswa Ditemukan</h4>
+    <p class="text-xs text-stone-400">Coba sesuaikan filter jadwal, kelas, ruangan, atau kata kunci pencarian Anda.</p>
+  </div>
+{% endif %}
+
+<script>
+  if (window.lucide) { window.lucide.createIcons(); }
+</script>

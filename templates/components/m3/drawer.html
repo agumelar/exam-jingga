@@ -1,0 +1,71 @@
+{% comment %}
+M3 Bottom Sheet Drawer Component (Powered by Alpine.js)
+Usage:
+  In parent template, define an Alpine variable or pass drawer_id:
+  <div x-data="{ openDrawer: false }">
+    <button @click="openDrawer = true">Buka Drawer</button>
+    {% include 'components/m3/drawer.html' with alpine_model='openDrawer' title='Daftar Nomor Soal' %}
+  </div>
+Parameters:
+  - alpine_model: Alpine.js boolean variable name (e.g. 'openDrawer' or 'isOpen')
+  - title: Drawer header title
+  - class: additional classes for the sheet surface
+{% endcomment %}
+
+<div 
+  x-show="{{ alpine_model|default:'openDrawer' }}"
+  x-cloak
+  class="fixed inset-0 z-50 flex flex-col justify-end"
+  role="dialog"
+  aria-modal="true"
+>
+  <!-- Scrim Backdrop -->
+  <div 
+    x-show="{{ alpine_model|default:'openDrawer' }}"
+    x-transition:enter="transition ease-out duration-300"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="transition ease-in duration-200"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    @click="{{ alpine_model|default:'openDrawer' }} = false"
+    class="fixed inset-0 bg-black/60 backdrop-blur-xs"
+  ></div>
+
+  <!-- Sheet Surface -->
+  <div 
+    x-show="{{ alpine_model|default:'openDrawer' }}"
+    x-transition:enter="transition ease-out duration-300"
+    x-transition:enter-start="translate-y-full"
+    x-transition:enter-end="translate-y-0"
+    x-transition:leave="transition ease-in duration-200"
+    x-transition:leave-start="translate-y-0"
+    x-transition:leave-end="translate-y-full"
+    class="relative z-10 w-full max-w-2xl mx-auto bg-white dark:bg-stone-900 rounded-t-[32px] p-6 text-left border-t border-stone-200 dark:border-stone-800 m3-elevation-4 max-h-[85vh] flex flex-col {{ class }}"
+  >
+    <!-- Drag Handle -->
+    <div class="flex justify-center -mt-2 mb-3">
+      <div class="w-12 h-1.5 rounded-full bg-stone-300 dark:bg-stone-700"></div>
+    </div>
+
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-4 border-b border-stone-100 dark:border-stone-800 mb-4">
+      <h3 class="text-base font-bold text-stone-900 dark:text-white tracking-tight">
+        {{ title }}
+      </h3>
+      <button 
+        type="button"
+        @click="{{ alpine_model|default:'openDrawer' }} = false"
+        class="p-2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 rounded-full hover:bg-stone-100 dark:hover:bg-stone-800 transition cursor-pointer"
+        aria-label="Tutup Drawer"
+      >
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <!-- Body Content Slot -->
+    <div class="flex-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-stone-300 dark:scrollbar-thumb-stone-700">
+      {% block drawer_content %}{{ content|safe }}{% endblock %}
+    </div>
+  </div>
+</div>

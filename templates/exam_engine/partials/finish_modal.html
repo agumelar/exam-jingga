@@ -1,0 +1,33 @@
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+  <div class="bg-white dark:bg-zinc-950 w-full max-w-md rounded-[3rem] p-8 sm:p-10 shadow-2xl relative border border-slate-100 dark:border-zinc-800 text-center animate-in zoom-in-95 duration-200">
+    <div class="inline-flex p-4 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 rounded-3xl mb-4 shadow-lg shadow-emerald-600/10">
+      <i data-lucide="check-circle-2" class="w-10 h-10"></i>
+    </div>
+    
+    <h3 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mb-2">
+      Ujian Berhasil Dikirim!
+    </h3>
+    <p class="text-xs font-medium text-slate-500 dark:text-zinc-400 mb-6">
+      Seluruh lembar jawaban Anda telah tersimpan dengan aman di server CBT.
+    </p>
+
+    <div class="p-6 bg-slate-50 dark:bg-zinc-900 rounded-3xl border border-slate-100 dark:border-zinc-800/80 mb-6">
+      <span class="text-xs font-semibold text-slate-400 block mb-1">Skor Akhir Ujian</span>
+      <span class="text-4xl font-bold text-emerald-500">{{ score }}</span>
+    </div>
+
+    <a
+      href="{% url 'exam_engine:student_dashboard' %}"
+      class="w-full inline-flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 text-white py-4 rounded-2xl font-semibold text-xs tracking-wide shadow-lg shadow-orange-600/25 transition-all cursor-pointer active:scale-95"
+    >
+      <span>Kembali ke Dashboard</span>
+      <i data-lucide="arrow-right" class="w-4 h-4"></i>
+    </a>
+  </div>
+</div>
+
+<script>
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+</script>

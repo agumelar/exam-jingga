@@ -1,0 +1,88 @@
+{% comment %}
+M3 Button Component
+Usage:
+  {% include 'components/m3/button.html' with text='Simpan' variant='filled' size='md' icon='save' type='submit' %}
+  {% include 'components/m3/button.html' with text='Kembali' variant='outlined' href='/dashboard' icon='chevron-left' %}
+Parameters:
+  - text: Button label
+  - variant: 'filled' (default) | 'tonal' | 'outlined' | 'text' | 'elevated' | 'fab'
+  - size: 'sm' | 'md' (default) | 'lg'
+  - icon: Lucide icon name (e.g. 'plus', 'save', 'arrow-right')
+  - icon_position: 'left' (default) | 'right'
+  - loading: boolean (shows spinner)
+  - disabled: boolean
+  - full_width: boolean
+  - href: if provided, renders <a> tag instead of <button>
+  - type: 'button' (default) | 'submit' | 'reset'
+  - class: extra CSS classes
+  - attrs: raw custom attributes (e.g. hx-post="/save" x-on:click="open = true")
+{% endcomment %}
+
+{% with btn_variant=variant|default:'filled' btn_size=size|default:'md' btn_type=type|default:'button' btn_icon_pos=icon_position|default:'left' %}
+{% if href %}
+<a 
+  href="{{ href }}"
+  class="inline-flex items-center justify-center font-semibold tracking-normal transition-all duration-200 m3-state-layer select-none cursor-pointer
+    {% if btn_size == 'sm' %}h-8 px-4 text-xs rounded-full gap-2
+    {% elif btn_size == 'lg' %}h-12 px-8 text-base rounded-full gap-3
+    {% elif btn_variant == 'fab' %}h-14 px-6 text-base rounded-2xl gap-3 shadow-lg
+    {% else %}h-10 px-6 text-sm rounded-full gap-2.5{% endif %}
+    {% if btn_variant == 'filled' %}bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white shadow-sm hover:shadow-md dark:bg-orange-600 dark:hover:bg-orange-500
+    {% elif btn_variant == 'tonal' %}bg-orange-100 hover:bg-orange-200 text-orange-950 dark:bg-orange-950/60 dark:hover:bg-orange-900/60 dark:text-orange-200
+    {% elif btn_variant == 'outlined' %}border border-stone-300 dark:border-stone-700 text-stone-800 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800/60
+    {% elif btn_variant == 'text' %}text-orange-600 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-950/30
+    {% elif btn_variant == 'elevated' %}bg-stone-50 dark:bg-stone-800 text-stone-800 dark:text-stone-100 m3-elevation-1 hover:m3-elevation-2 border border-stone-200/50 dark:border-stone-700/50
+    {% elif btn_variant == 'fab' %}bg-orange-600 text-white hover:bg-orange-500 shadow-lg hover:shadow-orange-600/30 dark:bg-orange-500
+    {% else %}bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white shadow-sm hover:shadow-md{% endif %}
+    {% if full_width %}w-full{% endif %}
+    {% if disabled %}opacity-50 pointer-events-none{% endif %}
+    {{ class }}"
+  {% if id %}id="{{ id }}"{% endif %}
+  {% if attrs %}{{ attrs|safe }}{% endif %}
+>
+  {% if icon and btn_icon_pos == 'left' %}
+    <i data-lucide="{{ icon }}" class="{% if btn_size == 'sm' %}w-4 h-4{% elif btn_size == 'lg' %}w-5 h-5{% else %}w-4.5 h-4.5{% endif %} shrink-0"></i>
+  {% endif %}
+  <span>{{ text }}</span>
+  {% if icon and btn_icon_pos == 'right' %}
+    <i data-lucide="{{ icon }}" class="{% if btn_size == 'sm' %}w-4 h-4{% elif btn_size == 'lg' %}w-5 h-5{% else %}w-4.5 h-4.5{% endif %} shrink-0"></i>
+  {% endif %}
+</a>
+{% else %}
+<button 
+  type="{{ btn_type }}"
+  {% if disabled or loading %}disabled{% endif %}
+  class="inline-flex items-center justify-center font-semibold tracking-normal transition-all duration-200 m3-state-layer disabled:opacity-50 disabled:pointer-events-none select-none cursor-pointer
+    {% if btn_size == 'sm' %}h-8 px-4 text-xs rounded-full gap-2
+    {% elif btn_size == 'lg' %}h-12 px-8 text-base rounded-full gap-3
+    {% elif btn_variant == 'fab' %}h-14 px-6 text-base rounded-2xl gap-3 shadow-lg
+    {% else %}h-10 px-6 text-sm rounded-full gap-2.5{% endif %}
+    {% if btn_variant == 'filled' %}bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white shadow-sm hover:shadow-md dark:bg-orange-600 dark:hover:bg-orange-500
+    {% elif btn_variant == 'tonal' %}bg-orange-100 hover:bg-orange-200 text-orange-950 dark:bg-orange-950/60 dark:hover:bg-orange-900/60 dark:text-orange-200
+    {% elif btn_variant == 'outlined' %}border border-stone-300 dark:border-stone-700 text-stone-800 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800/60
+    {% elif btn_variant == 'text' %}text-orange-600 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-950/30
+    {% elif btn_variant == 'elevated' %}bg-stone-50 dark:bg-stone-800 text-stone-800 dark:text-stone-100 m3-elevation-1 hover:m3-elevation-2 border border-stone-200/50 dark:border-stone-700/50
+    {% elif btn_variant == 'fab' %}bg-orange-600 text-white hover:bg-orange-500 shadow-lg hover:shadow-orange-600/30 dark:bg-orange-500
+    {% else %}bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white shadow-sm hover:shadow-md{% endif %}
+    {% if full_width %}w-full{% endif %}
+    {{ class }}"
+  {% if id %}id="{{ id }}"{% endif %}
+  {% if name %}name="{{ name }}"{% endif %}
+  {% if value %}value="{{ value }}"{% endif %}
+  {% if attrs %}{{ attrs|safe }}{% endif %}
+>
+  {% if loading %}
+    <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+  {% elif icon and btn_icon_pos == 'left' %}
+    <i data-lucide="{{ icon }}" class="{% if btn_size == 'sm' %}w-4 h-4{% elif btn_size == 'lg' %}w-5 h-5{% else %}w-4.5 h-4.5{% endif %} shrink-0"></i>
+  {% endif %}
+  <span>{{ text }}</span>
+  {% if not loading and icon and btn_icon_pos == 'right' %}
+    <i data-lucide="{{ icon }}" class="{% if btn_size == 'sm' %}w-4 h-4{% elif btn_size == 'lg' %}w-5 h-5{% else %}w-4.5 h-4.5{% endif %} shrink-0"></i>
+  {% endif %}
+</button>
+{% endif %}
+{% endwith %}

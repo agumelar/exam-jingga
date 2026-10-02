@@ -1,0 +1,160 @@
+{% extends 'layouts/app.html' %}
+{% load static %}
+
+{% block page_header %}
+<div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+  <div>
+    <h2 class="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 dark:text-white">
+      Session Monitoring
+    </h2>
+    <p class="text-orange-600 dark:text-orange-500 font-semibold text-xs mt-1">
+      Pusat Kendali Live Monitoring & Pengawasan Sesi Ujian CBT
+    </p>
+  </div>
+  
+  <div class="flex items-center gap-3">
+    <a
+      href="{% url 'reports:logistics' %}"
+      class="px-4 py-2.5 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 rounded-2xl font-semibold text-xs tracking-wide transition flex items-center gap-2"
+    >
+      <i data-lucide="layout-grid" class="w-4 h-4 text-orange-600"></i>
+      <span>Atur Logistik</span>
+    </a>
+    
+    <button
+      type="button"
+      hx-get="{% url 'reports:session_monitoring_table' %}"
+      hx-include="#filter-form"
+      hx-target="#monitoring-table-container"
+      class="px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-semibold text-xs tracking-wide transition-all shadow-md shadow-orange-600/20 active:scale-95 flex items-center gap-2 cursor-pointer"
+    >
+      <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+      <span>Refresh Data</span>
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Active Schedule Highlight Banner (if selected) -->
+  {% if selected_schedule %}
+    <div class="bg-white dark:bg-stone-900 p-6 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="flex items-center gap-4">
+        <div class="p-3.5 bg-orange-100 dark:bg-orange-950/40 text-orange-600 rounded-2xl">
+          <i data-lucide="calendar-check" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-0.5 rounded-md text-xs font-semibold bg-orange-100 dark:bg-orange-950/50 text-orange-700 dark:text-orange-400">
+              {{ selected_schedule.exam.exam_type }}
+            </span>
+            <h3 class="text-lg font-bold text-stone-900 dark:text-white">
+              {{ selected_schedule.exam.title }}
+            </h3>
+          </div>
+          <p class="text-xs font-normal text-stone-500 mt-1">
+            Mapel: <span class="font-semibold text-stone-800 dark:text-stone-200">{{ selected_schedule.exam.subject.name|default:'-' }}</span>
+            &bull; Tingkat: <span class="font-semibold text-stone-800 dark:text-stone-200">Kelas {{ selected_schedule.exam.level|default:'Semua' }}</span>
+            &bull; Durasi: <span class="font-semibold text-stone-800 dark:text-stone-200">{{ selected_schedule.exam.duration }} Menit</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div class="bg-stone-50 dark:bg-stone-950 px-4 py-2.5 rounded-2xl border border-stone-100 dark:border-stone-800 text-center">
+          <p class="text-xs font-medium text-stone-400">Token Ujian</p>
+          <p class="text-sm font-mono font-bold text-orange-600 tracking-wider mt-0.5">{{ selected_schedule.token }}</p>
+        </div>
+        <div class="bg-stone-50 dark:bg-stone-950 px-4 py-2.5 rounded-2xl border border-stone-100 dark:border-stone-800 text-center">
+          <p class="text-xs font-medium text-stone-400">Target Soal</p>
+          <p class="text-sm font-semibold text-stone-800 dark:text-stone-200 mt-0.5">{{ selected_schedule.exam.target_question_count }} Butir</p>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Filter Toolbar Form -->
+  <form
+    id="filter-form"
+    hx-get="{% url 'reports:session_monitoring_table' %}"
+    hx-target="#monitoring-table-container"
+    hx-trigger="change, submit, keyup from:#search-input delay:300ms"
+    class="bg-white dark:bg-stone-900 p-4 sm:p-5 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-sm grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3"
+  >
+    <!-- Schedule Selector -->
+    <div class="lg:col-span-2">
+      <label class="block text-xs font-medium text-stone-500 dark:text-stone-400 mb-1.5 ml-1">Pilih Jadwal Ujian</label>
+      <select
+        name="schedule_id"
+        class="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-2xl px-3.5 py-2.5 text-xs font-medium text-stone-900 dark:text-stone-100 outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
+      >
+        {% for sch in schedules %}
+          <option value="{{ sch.id }}" {% if sch.id|stringformat:"s" == selected_schedule_id %}selected{% endif %}>
+            [{{ sch.exam.exam_type }}] {{ sch.exam.title }} ({{ sch.class_room.name|default:'Semua Kelas' }})
+          </option>
+        {% empty %}
+          <option value="">Tidak ada jadwal aktif</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Room Filter -->
+    <div>
+      <label class="block text-xs font-medium text-stone-500 dark:text-stone-400 mb-1.5 ml-1">Filter Ruangan</label>
+      <select
+        name="room_name"
+        class="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-2xl px-3.5 py-2.5 text-xs font-medium text-stone-900 dark:text-stone-100 outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
+      >
+        <option value="all">Semua Ruangan</option>
+        {% for r in rooms %}
+          <option value="{{ r }}" {% if filter_room_name == r %}selected{% endif %}>{{ r }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Status Filter -->
+    <div>
+      <label class="block text-xs font-medium text-stone-500 dark:text-stone-400 mb-1.5 ml-1">Status Sesi</label>
+      <select
+        name="status"
+        class="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-2xl px-3.5 py-2.5 text-xs font-medium text-stone-900 dark:text-stone-100 outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
+      >
+        <option value="all" {% if filter_status == 'all' %}selected{% endif %}>Semua Status</option>
+        <option value="active" {% if filter_status == 'active' %}selected{% endif %}>Mengerjakan</option>
+        <option value="locked" {% if filter_status == 'locked' %}selected{% endif %}>Terkunci</option>
+        <option value="finished" {% if filter_status == 'finished' %}selected{% endif %}>Selesai</option>
+        <option value="not_started" {% if filter_status == 'not_started' %}selected{% endif %}>Belum Mulai</option>
+      </select>
+    </div>
+
+    <!-- Search Input -->
+    <div>
+      <label class="block text-xs font-medium text-stone-500 dark:text-stone-400 mb-1.5 ml-1">Cari Peserta</label>
+      <div class="relative">
+        <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-3 text-stone-400 pointer-events-none"></i>
+        <input
+          type="text"
+          id="search-input"
+          name="q"
+          value="{{ search_query }}"
+          placeholder="Cari Nama / NIS..."
+          class="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-2xl pl-10 pr-3.5 py-2.5 text-xs font-medium text-stone-900 dark:text-stone-100 outline-none focus:ring-2 focus:ring-orange-500"
+        />
+      </div>
+    </div>
+  </form>
+
+  <!-- Live Polling Container (every 3 seconds) -->
+  <div
+    id="monitoring-table-container"
+    hx-get="{% url 'reports:session_monitoring_table' %}"
+    hx-include="#filter-form"
+    hx-trigger="every 3s"
+  >
+    {% include 'reports/partials/monitoring_table.html' %}
+  </div>
+
+</div>
+{% endblock %}

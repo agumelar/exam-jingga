@@ -1,0 +1,395 @@
+{% extends 'layouts/app.html' %}
+{% load static %}
+
+{% block page_header %}
+<div class="print:hidden mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+  <div>
+    <h2 class="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 dark:text-white">
+      Daftar Hadir & Absensi Ujian
+    </h2>
+    <p class="text-orange-600 dark:text-orange-500 font-semibold text-xs mt-1">
+      Cetak Daftar Hadir Pengawas Ruang & Tempelan Pintu Ujian CBT
+    </p>
+  </div>
+
+  <div class="flex flex-wrap items-center gap-3">
+    <form method="get" class="flex flex-wrap items-center gap-2">
+      <select
+        name="room"
+        onchange="this.form.submit()"
+        class="bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-800 rounded-2xl px-3.5 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer shadow-xs"
+      >
+        <option value="all">Semua Ruangan</option>
+        {% for r in rooms %}
+          <option value="{{ r }}" {% if filter_room == r %}selected{% endif %}>{{ r }}</option>
+        {% endfor %}
+      </select>
+
+      <select
+        name="session"
+        onchange="this.form.submit()"
+        class="bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-800 rounded-2xl px-3.5 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer shadow-xs"
+      >
+        <option value="all">Semua Sesi</option>
+        {% for s in sessions %}
+          <option value="{{ s }}" {% if filter_session == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </form>
+
+    <!-- Tombol Cetak Tempelan Pintu -->
+    <a
+      href="?room={{ filter_room }}&session={{ filter_session }}&type=door&print=true"
+      onclick="window.print(); return false;"
+      class="px-5 py-2.5 bg-stone-800 hover:bg-stone-900 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 rounded-2xl font-semibold text-xs tracking-wide transition shadow-md active:scale-95 flex items-center gap-2 cursor-pointer"
+    >
+      <i data-lucide="door-open" class="w-4 h-4"></i>
+      <span>Tempelan Pintu</span>
+    </a>
+
+    <!-- Tombol Cetak Daftar Hadir Pengawas -->
+    <button
+      type="button"
+      onclick="window.print()"
+      class="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-semibold text-xs tracking-wide transition shadow-lg shadow-orange-600/20 active:scale-95 flex items-center gap-2 cursor-pointer"
+    >
+      <i data-lucide="printer" class="w-4 h-4"></i>
+      <span>Daftar Hadir</span>
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- SCREEN PREVIEW -->
+<div class="print:hidden space-y-6">
+  <div class="bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 rounded-3xl p-6 sm:p-8 shadow-xs">
+    <div class="flex items-center gap-4 mb-6">
+      <div class="p-3.5 bg-orange-100 dark:bg-orange-950/40 text-orange-600 rounded-2xl">
+        <i data-lucide="clipboard-list" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <h3 class="text-lg font-bold text-stone-900 dark:text-white">Preview Data Absensi Siswa</h3>
+        <p class="text-xs text-stone-500 font-normal mt-0.5">
+          Terdapat <span class="font-semibold text-stone-800 dark:text-stone-200">{{ groups|length }} Ruangan/Sesi</span> siap dicetak (Total {{ students_count }} siswa).
+        </p>
+      </div>
+    </div>
+
+    {% for group in groups %}
+      <div class="mb-6 last:mb-0 border border-stone-200 dark:border-stone-800 rounded-2xl overflow-hidden">
+        <div class="bg-stone-50 dark:bg-stone-950/70 p-4 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <span class="px-3 py-1 bg-orange-600 text-white rounded-xl text-xs font-medium">
+              {{ group.room_name }}
+            </span>
+            <span class="text-xs font-medium text-stone-700 dark:text-stone-300">
+              {{ group.session_name }}
+            </span>
+          </div>
+          <span class="text-xs font-medium text-stone-400">
+            {{ group.students|length }} Siswa
+          </span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="text-xs font-semibold text-stone-400 border-b border-stone-100 dark:border-stone-800">
+                <th class="py-3 px-4 w-12 text-center">No</th>
+                <th class="py-3 px-4 w-28">NIS</th>
+                <th class="py-3 px-4">Nama Lengkap</th>
+                <th class="py-3 px-4 w-32">Kelas</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-stone-100 dark:divide-stone-800">
+              {% for s in group.students|slice:":5" %}
+                <tr class="hover:bg-stone-50/50 dark:hover:bg-stone-800/30">
+                  <td class="py-3 px-4 text-xs font-medium text-stone-400 text-center">{{ forloop.counter }}</td>
+                  <td class="py-3 px-4 text-xs font-mono font-medium text-stone-600 dark:text-stone-300">{{ s.student.nis }}</td>
+                  <td class="py-3 px-4 text-xs font-semibold text-stone-900 dark:text-white">{{ s.student.full_name }}</td>
+                  <td class="py-3 px-4 text-xs font-medium text-stone-600 dark:text-stone-400">{{ s.student.class_room.name }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% if group.students|length > 5 %}
+            <p class="text-center text-xs text-stone-400 py-3 italic bg-stone-50/40 dark:bg-stone-950/40 border-t border-stone-100 dark:border-stone-800">
+              + {{ group.students|length|add:"-5" }} siswa lainnya akan tercetak otomatis pada lembar dokumen...
+            </p>
+          {% endif %}
+        </div>
+      </div>
+    {% empty %}
+      <div class="py-12 text-center text-stone-400 italic">
+        Tidak ada data logistik siswa untuk kriteria filter ini.
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- PRINT CONTAINER (ONLY VISIBLE ON PRINT) -->
+<div class="hidden print:block font-serif text-black">
+  {% for group in groups %}
+    <div class="print-page">
+      <!-- Kop Surat Resmi -->
+      <div class="print-header">
+        {% if settings.logo_left_url %}
+          <img src="{{ settings.logo_left_url }}" class="print-header-logo" alt="Logo" />
+        {% else %}
+          <div style="width: 22mm;"></div>
+        {% endif %}
+
+        <div class="print-header-text">
+          {% if settings.header_1 %}<h4>{{ settings.header_1 }}</h4>{% endif %}
+          {% if settings.header_2 %}<h4>{{ settings.header_2 }}</h4>{% endif %}
+          {% if settings.header_3 %}<h4>{{ settings.header_3 }}</h4>{% endif %}
+          <h3>{{ settings.school_name|default:'SMK NEGERI 1 RONGGA' }}</h3>
+          <p>Program Keahlian: {{ settings.school_majors_list|default:'-' }}</p>
+          <p class="info">{{ settings.school_address|default:'' }} Telp. {{ settings.school_phone|default:'' }}</p>
+          <p class="info">Website: {{ settings.school_website|default:'' }} &bull; Email: {{ settings.school_email|default:'' }}</p>
+          <p class="info">{{ settings.school_postal_code|default:'' }}</p>
+        </div>
+
+        {% if settings.logo_right_url %}
+          <img src="{{ settings.logo_right_url }}" class="print-header-logo" alt="Logo" />
+        {% else %}
+          <div style="width: 22mm;"></div>
+        {% endif %}
+      </div>
+
+      <!-- Title Area -->
+      <div class="print-title-area">
+        <h2>DAFTAR HADIR {{ settings.exam_name|default:'UJIAN' }}</h2>
+        <p>TAHUN AJARAN {{ settings.academic_year|default:'2025/2026' }}</p>
+      </div>
+
+      <!-- Meta Info Row -->
+      <div class="print-meta-info">
+        <table class="print-meta-table">
+          <tr>
+            <td style="width: 120px;">Mata Pelajaran</td>
+            <td>: ...........................................................</td>
+          </tr>
+          <tr>
+            <td>Hari / Tanggal</td>
+            <td>: ...........................................................</td>
+          </tr>
+        </table>
+        <table class="print-meta-table">
+          <tr>
+            <td style="width: 60px;">Ruang</td>
+            <td>: <b>{{ group.room_name }}</b></td>
+          </tr>
+          <tr>
+            <td>Sesi</td>
+            <td>: <b>{{ group.session_name }}</b></td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Main Attendance Table -->
+      <table class="print-table">
+        <thead>
+          <tr>
+            <th style="width: 6%;">No</th>
+            <th style="width: 20%;">NIS</th>
+            <th style="width: 38%;">Nama Lengkap Peserta</th>
+            <th colspan="2" style="width: 24%;">Tanda Tangan</th>
+            <th style="width: 12%;">Ket</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in group.students %}
+            <tr>
+              <td style="text-align: center;">{{ forloop.counter }}</td>
+              <td style="text-align: center;">{{ s.student.nis }}</td>
+              <td>&nbsp;<b>{{ s.student.full_name }}</b></td>
+              {% if forloop.counter|divisibleby:2 %}
+                <td style="width: 12%; border-right: none !important;"></td>
+                <td style="width: 12%; border-left: none !important;">&nbsp;{{ forloop.counter }}.</td>
+              {% else %}
+                <td style="width: 12%; border-right: none !important;">&nbsp;{{ forloop.counter }}.</td>
+                <td style="width: 12%; border-left: none !important;"></td>
+              {% endif %}
+              <td></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <!-- Footer & Signature Boxes -->
+      <div class="print-footer-signatures">
+        <div class="print-signature-box">
+          Mengetahui,<br>
+          Wakasek Bidang Kurikulum,
+          <div class="print-sig-space">
+            {% if settings.curriculum_signature_url %}
+              <img src="{{ settings.curriculum_signature_url }}" class="print-img-ttd" alt="TTD" />
+            {% endif %}
+          </div>
+          <b><u>{{ settings.curriculum_vicedir_name|default:'.......................' }}</u></b><br>
+          NIP. {{ settings.curriculum_vicedir_nip|default:'.......................' }}
+        </div>
+
+        <div class="print-signature-box">
+          {{ settings.exam_city|default:'Rongga' }}, .............................. 202..<br>
+          Pengawas Ruangan,
+          <div class="print-sig-space"></div>
+          <b><u>...................................................</u></b><br>
+          NIP. ..........................................
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+<style>
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 15mm;
+  }
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    font-family: 'Times New Roman', Times, serif !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  nav, aside, header, footer, .print\\:hidden {
+    display: none !important;
+  }
+  .lg\\:ml-64 {
+    margin-left: 0 !important;
+  }
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .print-page {
+    page-break-after: always !important;
+    break-after: page !important;
+    padding-bottom: 20px !important;
+  }
+  .print-page:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
+  .print-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    border-bottom: 3pt double #000 !important;
+    padding-bottom: 8px !important;
+    margin-bottom: 15px !important;
+  }
+  .print-header-logo {
+    width: 22mm !important;
+    height: 22mm !important;
+    object-fit: contain !important;
+  }
+  .print-header-text {
+    text-align: center !important;
+    flex: 1 !important;
+    padding: 0 10px !important;
+  }
+  .print-header-text h4 {
+    margin: 0 !important;
+    font-size: 11pt !important;
+    font-weight: bold !important;
+    text-transform: uppercase !important;
+    line-height: 1.2 !important;
+  }
+  .print-header-text h3 {
+    margin: 3px 0 !important;
+    font-size: 14pt !important;
+    font-weight: bold !important;
+    color: #000 !important;
+  }
+  .print-header-text p {
+    margin: 0 !important;
+    font-size: 8pt !important;
+    font-style: italic !important;
+    line-height: 1.3 !important;
+  }
+  .print-header-text .info {
+    font-style: normal !important;
+  }
+
+  .print-title-area {
+    text-align: center !important;
+    margin-bottom: 15px !important;
+  }
+  .print-title-area h2 {
+    margin: 0 !important;
+    font-size: 12pt !important;
+    text-decoration: underline !important;
+    text-transform: uppercase !important;
+  }
+  .print-title-area p {
+    margin: 4px 0 0 0 !important;
+    font-size: 11pt !important;
+    font-weight: bold !important;
+  }
+
+  .print-meta-info {
+    display: flex !important;
+    justify-content: space-between !important;
+    margin-bottom: 10px !important;
+    font-size: 11pt !important;
+    font-weight: bold !important;
+  }
+  .print-meta-table td {
+    padding: 2px 0 !important;
+    font-size: 11pt !important;
+    font-weight: bold !important;
+  }
+
+  .print-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-bottom: 25px !important;
+  }
+  .print-table th, .print-table td {
+    border: 1pt solid #000 !important;
+    padding: 7px 6px !important;
+    font-size: 10pt !important;
+    vertical-align: middle !important;
+  }
+  .print-table th {
+    background-color: #f0f0f0 !important;
+    text-align: center !important;
+    font-weight: bold !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+
+  .print-footer-signatures {
+    display: flex !important;
+    justify-content: space-between !important;
+    margin-top: 10px !important;
+    font-size: 11pt !important;
+  }
+  .print-signature-box {
+    width: 65mm !important;
+    text-align: center !important;
+    position: relative !important;
+  }
+  .print-sig-space {
+    height: 20mm !important;
+    position: relative !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    margin: 4px 0 !important;
+  }
+  .print-img-ttd {
+    max-height: 18mm !important;
+    object-fit: contain !important;
+    z-index: 2 !important;
+  }
+}
+</style>
+{% endblock %}

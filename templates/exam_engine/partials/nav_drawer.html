@@ -1,0 +1,129 @@
+<!-- Mobile Bottom Sheet Drawer (100% Fidelity ExamQuestionDrawer.jsx) -->
+<div 
+  x-show="isDrawerOpen"
+  x-cloak
+  class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex flex-col justify-end animate-in fade-in duration-200"
+  @click="isDrawerOpen = false"
+>
+  <div 
+    class="bg-white dark:bg-zinc-900 w-full max-w-2xl mx-auto rounded-t-[2.5rem] p-6 sm:p-8 shadow-2xl border-t border-slate-100 dark:border-zinc-800 max-h-[85vh] flex flex-col animate-in slide-in-from-bottom duration-300"
+    @click.stop
+  >
+    <!-- Drawer Handle & Header -->
+    <div class="w-12 h-1.5 bg-slate-300 dark:bg-zinc-700 rounded-full mx-auto mb-4"></div>
+    
+    <div class="flex items-center justify-between mb-5">
+      <div class="flex items-center gap-2.5">
+        <div class="p-2 bg-orange-100 dark:bg-orange-950/40 text-orange-600 rounded-xl">
+          <i data-lucide="layout-grid" class="w-4.5 h-4.5"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold tracking-tight text-slate-900 dark:text-white">
+            Daftar Nomor Soal
+          </h3>
+          <p id="drawer-answered-counter" class="text-xs font-medium text-slate-500 dark:text-zinc-400">
+            Terjawab: {{ answered_count }} dari {{ total_count }} ({{ progress_percent }}%)
+          </p>
+        </div>
+      </div>
+      <button
+        type="button"
+        @click="isDrawerOpen = false"
+        aria-label="Tutup Drawer"
+        class="p-2.5 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+      >
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="w-full bg-slate-100 dark:bg-zinc-800 h-2 rounded-full overflow-hidden mb-6">
+      <div 
+        id="drawer-progress-bar-fill"
+        class="bg-gradient-to-r from-orange-500 to-orange-600 h-full transition-all duration-500"
+        style="width: {{ progress_percent }}%;"
+      ></div>
+    </div>
+
+    <!-- Filter Chips (Semua, Terjawab, Ragu-ragu, Belum) -->
+    <div x-data="{ filterType: 'all' }" class="flex flex-col flex-1 min-h-0">
+      <div class="flex items-center gap-2 mb-4 overflow-x-auto pb-1 scrollbar-thin">
+        <button
+          type="button"
+          @click="filterType = 'all'"
+          :class="filterType === 'all' ? 'bg-orange-600 text-white shadow-xs' : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700'"
+          class="h-8 px-3.5 rounded-full text-xs font-semibold transition-all cursor-pointer shrink-0 select-none m3-state-layer"
+        >
+          Semua ({{ total_count }})
+        </button>
+        <button
+          type="button"
+          @click="filterType = 'answered'"
+          :class="filterType === 'answered' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-stone-100 dark:bg-stone-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'"
+          class="h-8 px-3.5 rounded-full text-xs font-semibold transition-all cursor-pointer shrink-0 select-none m3-state-layer flex items-center gap-1.5"
+        >
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span>Terjawab</span>
+        </button>
+        <button
+          type="button"
+          @click="filterType = 'doubt'"
+          :class="filterType === 'doubt' ? 'bg-amber-500 text-white shadow-xs' : 'bg-stone-100 dark:bg-stone-800 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40'"
+          class="h-8 px-3.5 rounded-full text-xs font-semibold transition-all cursor-pointer shrink-0 select-none m3-state-layer flex items-center gap-1.5"
+        >
+          <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+          <span>Ragu-Ragu</span>
+        </button>
+        <button
+          type="button"
+          @click="filterType = 'unanswered'"
+          :class="filterType === 'unanswered' ? 'bg-stone-700 text-white shadow-xs' : 'bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700'"
+          class="h-8 px-3.5 rounded-full text-xs font-semibold transition-all cursor-pointer shrink-0 select-none m3-state-layer flex items-center gap-1.5"
+        >
+          <span class="w-2 h-2 rounded-full bg-stone-300 dark:bg-stone-600"></span>
+          <span>Belum</span>
+        </button>
+      </div>
+
+      <!-- Question Numbers Grid (5-6 columns) -->
+      <div class="flex-1 overflow-y-auto pr-1 py-1 grid grid-cols-5 sm:grid-cols-6 gap-2.5 max-h-[45vh]">
+        {% for q in questions %}
+          <button
+            id="drawer-nav-btn-{{ q.order_num }}"
+            type="button"
+            x-show="filterType === 'all' || (filterType === 'answered' && {% if q.is_answered and not q.is_doubt %}true{% else %}false{% endif %}) || (filterType === 'doubt' && {% if q.is_doubt %}true{% else %}false{% endif %}) || (filterType === 'unanswered' && {% if not q.is_answered %}true{% else %}false{% endif %})"
+            hx-get="{% url 'exam_engine:question_swap' session.id q.order_num %}" 
+            hx-target="#question-viewport"
+            hx-swap="innerHTML"
+            @click="activeOrder = {{ q.order_num }}; isDrawerOpen = false"
+            :class="activeOrder === {{ q.order_num }} ? 'ring-3 ring-orange-600 ring-offset-2 dark:ring-offset-zinc-900 scale-105 shadow-xl z-10' : ''"
+            class="h-12 rounded-2xl text-xs font-bold transition-all flex flex-col items-center justify-center relative cursor-pointer active:scale-95 m3-state-layer
+              {% if q.is_doubt %}
+                bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20
+              {% elif q.is_answered %}
+                bg-emerald-500 text-white shadow-md shadow-emerald-500/20
+              {% else %}
+                bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400
+              {% endif %}"
+          >
+            <span>{{ q.order_num }}</span>
+            {% if q.is_answered %}
+              <span class="text-[8px] opacity-80 uppercase leading-none font-bold">
+                {{ q.chosen_answer }}
+              </span>
+            {% endif %}
+          </button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Footer Button -->
+    <button
+      type="button"
+      @click="isDrawerOpen = false"
+      class="mt-6 w-full py-4 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-semibold text-xs tracking-wide transition-all shadow-lg shadow-orange-600/20 cursor-pointer"
+    >
+      <span>Tutup & Lanjut Mengerjakan</span>
+    </button>
+  </div>
+</div>

@@ -1,0 +1,29 @@
+{% comment %}
+M3 Badge Component
+Usage:
+  {% include 'components/m3/badge.html' with text='Aktif' variant='success' size='sm' %}
+Parameters:
+  - text: badge text
+  - variant: 'default' | 'primary' | 'success' | 'warning' | 'error'
+  - size: 'sm' | 'md' (default)
+  - icon: optional Lucide icon name
+  - class: extra CSS classes
+{% endcomment %}
+
+{% with b_variant=variant|default:'default' b_size=size|default:'md' %}
+<span class="inline-flex items-center justify-center font-medium rounded-full select-none
+  {% if b_size == 'sm' %}px-2.5 py-0.5 text-xs gap-1
+  {% else %}px-3 py-1 text-xs gap-1.5{% endif %}
+  {% if b_variant == 'primary' %}bg-orange-100 dark:bg-orange-950/60 text-orange-900 dark:text-orange-200 border border-orange-300 dark:border-orange-800
+  {% elif b_variant == 'success' %}bg-emerald-100 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800
+  {% elif b_variant == 'warning' %}bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800
+  {% elif b_variant == 'error' %}bg-rose-100 dark:bg-rose-950/60 text-rose-900 dark:text-rose-200 border border-rose-300 dark:border-rose-800
+  {% else %}bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-300 border border-stone-200 dark:border-stone-700{% endif %}
+  {{ class }}"
+>
+  {% if icon %}
+    <i data-lucide="{{ icon }}" class="{% if b_size == 'sm' %}w-3 h-3{% else %}w-3.5 h-3.5{% endif %}"></i>
+  {% endif %}
+  <span>{{ text }}</span>
+</span>
+{% endwith %}

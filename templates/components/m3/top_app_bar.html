@@ -1,0 +1,88 @@
+{% load static %}
+{% comment %}
+M3 Top App Bar Component
+Usage:
+  {% include 'components/m3/top_app_bar.html' with title='Dashboard' subtitle='Ringkasan Data & Aktivitas Ujian' %}
+Parameters:
+  - title: page title
+  - subtitle: page subtitle / breadcrumb description
+  - show_menu_toggle: boolean
+{% endcomment %}
+
+<header 
+  class="w-full h-16 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md border-b border-stone-200/80 dark:border-stone-800/80 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 transition-all text-left m3-elevation-1"
+>
+  <!-- Leading Area: Mobile Trigger + Title / Subtitle -->
+  <div class="flex items-center gap-3 min-w-0">
+    <!-- Mobile Trigger Button -->
+    <button 
+      type="button"
+      @click="sidebarOpen = !sidebarOpen"
+      class="lg:hidden p-2 rounded-full text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition cursor-pointer"
+      aria-label="Buka Sidebar Mobile"
+    >
+      <i data-lucide="menu" class="w-5 h-5"></i>
+    </button>
+
+    <!-- Desktop Expand Sidebar Button (Shown when sidebar is collapsed) -->
+    <button 
+      type="button"
+      x-show="sidebarCollapsed"
+      @click="toggleCollapse()"
+      class="hidden lg:flex items-center justify-center p-2 rounded-full text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 hover:bg-stone-200/80 dark:hover:bg-stone-700 transition cursor-pointer"
+      title="Tampilkan Menu (Expand)"
+      aria-label="Tampilkan Sidebar"
+      style="display: none;"
+    >
+      <i data-lucide="panel-left-open" class="w-4.5 h-4.5"></i>
+    </button>
+
+    <div class="min-w-0">
+      <h1 class="text-base sm:text-lg font-bold text-stone-900 dark:text-white tracking-tight truncate">
+        {% block top_title %}{{ title|default:'Exam Jingga' }}{% endblock %}
+      </h1>
+      {% if subtitle %}
+        <p class="text-xs font-medium text-stone-500 dark:text-stone-400 truncate">
+          {{ subtitle }}
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Trailing Actions: Role Badge, Theme Toggle, User Profile Chip -->
+  <div class="flex items-center gap-2.5 shrink-0">
+    
+    <!-- User Role Badge -->
+    {% if user.is_authenticated %}
+      <span class="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+        {% if user.role == 'ADMIN' or user.is_superuser %}bg-orange-100 dark:bg-orange-950/60 text-orange-900 dark:text-orange-200 border border-orange-300 dark:border-orange-800
+        {% elif user.role == 'KURIKULUM' %}bg-sky-100 dark:bg-sky-950/60 text-sky-900 dark:text-sky-200 border border-sky-300 dark:border-sky-800
+        {% elif user.role == 'GURU' %}bg-emerald-100 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800
+        {% else %}bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-300 border border-stone-200 dark:border-stone-700{% endif %}"
+      >
+        {{ user.get_role_display|default:user.role|default:'User' }}
+      </span>
+
+      <!-- User Profile Chip -->
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-stone-100 dark:bg-stone-800 border border-stone-200/80 dark:border-stone-700/80">
+        <div class="w-6 h-6 rounded-full bg-orange-600 text-white font-bold text-[10px] flex items-center justify-center uppercase shadow-xs">
+          {{ user.first_name|default:user.username|slice:':1'|default:'U' }}
+        </div>
+        <span class="text-xs font-medium text-stone-800 dark:text-stone-200 max-w-[120px] truncate hidden md:inline">
+          {{ user.get_full_name|default:user.username }}
+        </span>
+      </div>
+    {% endif %}
+
+    <!-- Theme Toggle FAB Button -->
+    <button 
+      type="button"
+      onclick="window.toggleTheme()"
+      aria-label="Ganti Tema"
+      class="p-2.5 rounded-full bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-orange-400 border border-stone-200 dark:border-stone-700 transition cursor-pointer"
+    >
+      <i data-lucide="sun" class="w-4 h-4 dark:hidden"></i>
+      <i data-lucide="moon" class="w-4 h-4 hidden dark:inline"></i>
+    </button>
+  </div>
+</header>

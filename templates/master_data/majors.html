@@ -1,0 +1,104 @@
+{% extends 'layouts/app.html' %}
+{% load static %}
+
+{% block page_header %}
+<div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+  <div class="flex items-center gap-3">
+    <div class="p-2.5 bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 rounded-2xl shrink-0">
+      <i data-lucide="graduation-cap" class="w-6 h-6"></i>
+    </div>
+    <div>
+      <h1 class="text-xl sm:text-2xl font-bold text-stone-900 dark:text-white tracking-tight">
+        Data Konsentrasi Keahlian / Jurusan
+      </h1>
+      <p class="text-xs font-medium text-stone-500 dark:text-stone-400">
+        Total Terdaftar: {{ majors_count }} Jurusan
+      </p>
+    </div>
+  </div>
+
+  <div>
+    <button 
+      type="button"
+      hx-post="{% url 'master_data:sync' %}"
+      hx-vals='{"type": "majors"}'
+      hx-target="#sync-container"
+      hx-indicator="#sync-loading"
+      class="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-full bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white text-xs font-semibold tracking-wide shadow-md shadow-orange-600/20 transition cursor-pointer select-none"
+    >
+      <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+      <span>Tarik Data Jurusan</span>
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block app_content %}
+<div class="space-y-6">
+
+  <!-- Sync Status & Loading Indicator Container -->
+  <div id="sync-container"></div>
+  <div id="sync-loading" class="htmx-indicator">
+    <div class="rounded-3xl p-4 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-900/50 text-orange-700 dark:text-orange-300 flex items-center justify-center gap-3 animate-pulse">
+      <svg class="animate-spin h-5 w-5 text-orange-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <span class="text-xs font-medium">Menghubungkan ke server data.smkn1rongga.sch.id & menyinkronkan Jurusan...</span>
+    </div>
+  </div>
+
+  <!-- M3 Master Data Truth Banner -->
+  <div class="rounded-3xl bg-orange-50/80 dark:bg-orange-950/30 border border-orange-200/80 dark:border-orange-900/40 p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+    <div class="flex items-center gap-3.5">
+      <div class="p-2.5 bg-orange-600 text-white rounded-2xl shrink-0 shadow-md shadow-orange-600/20">
+        <i data-lucide="shield-check" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <h4 class="text-xs font-semibold text-stone-900 dark:text-white flex items-center gap-2">
+          <span>Single Source of Truth: data.smkn1rongga.sch.id</span>
+          <span class="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-xs font-medium border border-emerald-300 dark:border-emerald-800">
+            Synced Replica
+          </span>
+        </h4>
+        <p class="text-xs text-stone-600 dark:text-stone-400 mt-0.5 font-normal">
+          Daftar Program & Konsentrasi Keahlian resmi SMKN 1 Rongga disinkronkan otomatis dari Master Data Sekolah.
+        </p>
+      </div>
+    </div>
+    <a 
+      href="https://data.smkn1rongga.sch.id" 
+      target="_blank" 
+      rel="noopener noreferrer"
+      class="shrink-0 text-xs font-semibold text-orange-600 dark:text-orange-400 hover:text-orange-700 bg-white dark:bg-stone-800 px-4 py-2 rounded-full border border-orange-200 dark:border-stone-700 shadow-xs flex items-center gap-1.5 transition"
+    >
+      <i data-lucide="database" class="w-3.5 h-3.5"></i>
+      <span>Kelola di Pusat</span>
+    </a>
+  </div>
+
+  <!-- M3 Majors Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {% for m in majors %}
+      <div class="rounded-3xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 p-6 hover:border-orange-500/50 transition-all flex items-center justify-between m3-elevation-1">
+        <div>
+          <span class="px-2.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-300 text-xs font-medium block w-fit mb-2">
+            Kode: {{ m.code }}
+          </span>
+          <h3 class="text-xl font-bold text-stone-900 dark:text-white tracking-tight">
+            {{ m.name }}
+          </h3>
+        </div>
+        <div class="p-3.5 bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 rounded-2xl shrink-0">
+          <i data-lucide="graduation-cap" class="w-7 h-7"></i>
+        </div>
+      </div>
+    {% empty %}
+      <div class="col-span-full p-12 text-center text-stone-400 font-normal italic bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800">
+        Belum ada data jurusan tersimpan. Silakan klik tombol "Tarik Data Jurusan".
+      </div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

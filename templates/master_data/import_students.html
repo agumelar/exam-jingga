@@ -1,0 +1,440 @@
+{% extends 'layouts/app.html' %}
+{% load static %}
+
+{% block page_header %}
+<header class="mb-6">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="p-2.5 bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 rounded-2xl shrink-0">
+        <i data-lucide="upload" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-bold text-stone-900 dark:text-white tracking-tight">
+          Import Siswa
+        </h1>
+        <p class="text-xs font-medium text-stone-500 dark:text-stone-400 mt-0.5">
+          Unggah berkas Excel (.xlsx) untuk impor data siswa massal &bull; <span class="text-orange-600 dark:text-orange-400 font-semibold">Password otomatis: jingga + NIS</span>
+        </p>
+      </div>
+    </div>
+    
+    <div class="flex items-center gap-2.5 w-full sm:w-auto">
+      <a 
+        href="{% url 'import_siswa_template' %}"
+        class="inline-flex items-center gap-2 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 px-4 py-2.5 rounded-2xl text-orange-600 dark:text-orange-400 font-semibold hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-all shadow-xs text-xs"
+      >
+        <i data-lucide="file-down" class="w-4 h-4"></i>
+        <span>Unduh Template Excel</span>
+      </a>
+
+      <a 
+        href="/data-siswa/"
+        class="inline-flex items-center gap-2 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 px-4 py-2.5 rounded-2xl font-semibold hover:bg-stone-200 dark:hover:bg-stone-700 transition-all text-xs"
+      >
+        <i data-lucide="users" class="w-4 h-4"></i>
+        <span>Data Siswa</span>
+      </a>
+    </div>
+  </div>
+</header>
+{% endblock %}
+
+{% block app_content %}
+<!-- SweetAlert2 & SheetJS CDN -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+{% if messages %}
+  <div class="mb-6 space-y-2">
+    {% for message in messages %}
+      <div class="p-4 rounded-2xl text-xs font-bold flex items-center justify-between {% if message.tags == 'error' %}bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-900/60{% elif message.tags == 'warning' %}bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-900/60{% else %}bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/60{% endif %}">
+        <div class="flex items-center gap-2">
+          <i data-lucide="{% if message.tags == 'error' %}alert-circle{% elif message.tags == 'warning' %}alert-triangle{% else %}check-circle-2{% endif %}" class="w-4 h-4"></i>
+          <span>{{ message }}</span>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<div x-data="importStudentsData()" class="space-y-8">
+
+  <!-- FORM UTAMA -->
+  <form id="import-form" method="POST" action="{% url 'import_siswa' %}" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="/data-siswa/">
+
+    <!-- Upload Dropzone Card -->
+    <div 
+      @dragover.prevent="isDragging = true"
+      @dragleave.prevent="isDragging = false"
+      @drop.prevent="handleDrop($event)"
+      :class="isDragging ? 'border-orange-500 bg-orange-50/50 dark:bg-orange-950/20 scale-[1.005]' : 'border-stone-300 dark:border-stone-800 bg-white dark:bg-stone-900'"
+      class="p-10 rounded-3xl border-2 border-dashed text-center transition-all duration-200 shadow-xs"
+    >
+      <input 
+        type="file" 
+        id="up-excel" 
+        name="excel_file" 
+        hidden 
+        @change="handleFileSelect($event)" 
+        accept=".xlsx, .xls"
+      />
+      
+      <label for="up-excel" class="cursor-pointer flex flex-col items-center select-none">
+        <div class="w-16 h-16 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 flex items-center justify-center mb-4 shadow-inner">
+          <i data-lucide="upload-cloud" class="w-8 h-8"></i>
+        </div>
+        
+        <p class="text-base sm:text-lg font-bold text-stone-800 dark:text-stone-100 mb-1">
+          <span class="text-orange-600 dark:text-orange-400 underline decoration-orange-300 underline-offset-4">Klik untuk memilih berkas</span> atau seret berkas Excel ke sini
+        </p>
+        <p class="text-xs text-stone-500 dark:text-stone-400 mb-3">
+          Format berkas yang didukung: <span class="font-semibold text-stone-700 dark:text-stone-300">.xlsx / .xls</span> &bull; Kolom wajib: <span class="font-mono font-bold text-orange-600">nis</span>, <span class="font-mono font-bold text-orange-600">nama</span>, <span class="font-mono font-bold text-orange-600">nama_kelas</span>
+        </p>
+        
+        <div x-show="fileName" x-cloak class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-orange-100 dark:bg-orange-950/80 text-orange-700 dark:text-orange-300 text-xs font-bold border border-orange-200 dark:border-orange-900/60">
+          <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+          <span x-text="fileName"></span>
+        </div>
+      </label>
+    </div>
+  </form>
+
+  <!-- Live Preview Card (Muncul saat berkas dipilih) -->
+  <div 
+    x-show="previewData.length > 0" 
+    x-cloak 
+    class="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200/80 dark:border-stone-800/80 shadow-lg overflow-hidden transition-all duration-300"
+  >
+    <!-- Header Preview Bar -->
+    <div class="p-5 sm:px-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-stone-200 dark:border-stone-800 bg-stone-50/75 dark:bg-stone-800/40">
+      <div class="flex items-center gap-3">
+        <div class="p-2 bg-orange-600 text-white rounded-xl shadow-xs">
+          <i data-lucide="users" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-sm sm:text-base font-bold text-stone-900 dark:text-white flex items-center gap-2">
+            <span>Preview Data Siswa</span>
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-black bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300">
+              <span x-text="previewData.length"></span> Baris
+            </span>
+          </h3>
+          <p class="text-xs text-stone-500 dark:text-stone-400">
+            <span class="text-emerald-600 dark:text-emerald-400 font-bold" x-text="validCount"></span> Siap Diimpor &bull; 
+            <span class="text-amber-600 dark:text-amber-400 font-bold" x-text="invalidCount"></span> Kelas Tidak Cocok
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2.5 w-full sm:w-auto">
+        <button 
+          type="button" 
+          @click="resetPreview()"
+          class="flex-1 sm:flex-none px-4 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs font-bold transition select-none cursor-pointer"
+        >
+          Reset Berkas
+        </button>
+
+        <button 
+          type="button" 
+          @click="confirmSubmit()" 
+          :disabled="isProcessing"
+          class="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white px-6 py-2.5 rounded-xl text-xs font-black tracking-wider uppercase shadow-md shadow-orange-600/20 active:scale-95 transition-all select-none cursor-pointer disabled:opacity-50"
+        >
+          <template x-if="!isProcessing">
+            <span class="flex items-center gap-2">
+              <i data-lucide="check" class="w-4 h-4"></i>
+              <span>Proses Import Data</span>
+            </span>
+          </template>
+          <template x-if="isProcessing">
+            <span class="flex items-center gap-2">
+              <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>Memproses...</span>
+            </span>
+          </template>
+        </button>
+      </div>
+    </div>
+
+    <!-- Table Body -->
+    <div class="max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-stone-300 dark:scrollbar-thumb-stone-700">
+      <table class="w-full text-left border-collapse">
+        <thead class="bg-stone-100 dark:bg-stone-800/70 text-[11px] font-bold uppercase tracking-wider text-stone-600 dark:text-stone-300 sticky top-0 z-10">
+          <tr>
+            <th class="px-5 py-3.5 w-12 text-center">No</th>
+            <th class="px-5 py-3.5">NIS</th>
+            <th class="px-5 py-3.5">Nama Lengkap</th>
+            <th class="px-5 py-3.5">Kelas di Excel</th>
+            <th class="px-5 py-3.5 text-center">Pencocokan Rombel</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-stone-100 dark:divide-stone-800 text-xs">
+          <template x-for="(row, idx) in previewData" :key="idx">
+            <tr 
+              :class="row.isValidClass ? 'hover:bg-orange-50/40 dark:hover:bg-orange-950/20' : 'bg-amber-50/40 dark:bg-amber-950/20 hover:bg-amber-100/40'"
+              class="transition-colors"
+            >
+              <td class="px-5 py-3 text-center text-stone-400 font-mono text-[11px]" x-text="idx + 1"></td>
+              <td class="px-5 py-3 font-mono font-bold text-orange-600 dark:text-orange-400" x-text="row.nis"></td>
+              <td class="px-5 py-3 font-semibold text-stone-900 dark:text-stone-100 uppercase" x-text="row.nama"></td>
+              <td class="px-5 py-3 font-medium text-stone-700 dark:text-stone-300" x-text="row.rawKelas"></td>
+              <td class="px-5 py-3 text-center">
+                <template x-if="row.isValidClass">
+                  <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                    <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>
+                    <span x-text="row.matchedClassName"></span>
+                  </span>
+                </template>
+                <template x-if="!row.isValidClass">
+                  <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                    <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>
+                    <span>Kelas Tidak Ditemukan</span>
+                  </span>
+                </template>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Reference Classes Card -->
+  <div class="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200/80 dark:border-stone-800/80 p-6 sm:p-8 shadow-xs">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="p-2 bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 rounded-xl">
+        <i data-lucide="school" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h3 class="text-base font-bold text-stone-900 dark:text-white">
+          Referensi Kelas &amp; Rombel Terdaftar ({{ classes_count }} Kelas)
+        </h3>
+        <p class="text-xs text-stone-500 dark:text-stone-400">
+          Pastikan nama kelas di kolom <span class="font-mono text-orange-600 font-bold">nama_kelas</span> berkas Excel sesuai dengan salah satu nama kelas di bawah ini:
+        </p>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap gap-2 pt-2">
+      {% for c in classes %}
+        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700/60">
+          <span class="w-2 h-2 rounded-full {% if c.level == 10 %}bg-blue-500{% elif c.level == 11 %}bg-purple-500{% else %}bg-emerald-500{% endif %}"></span>
+          <span>{{ c.name }}</span>
+          {% if c.major %}<span class="text-[10px] text-stone-400">({{ c.major.code }})</span>{% endif %}
+        </span>
+      {% empty %}
+        <p class="text-xs text-stone-400 italic">Belum ada kelas rombel terdaftar. Silakan sinkronkan data master terlebih dahulu.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+
+<script id="registered-classes-data" type="application/json">
+  {{ classes_json|default:'[]'|safe }}
+</script>
+
+<script>
+function importStudentsData() {
+  let classes = [];
+  try {
+    const rawClasses = document.getElementById('registered-classes-data');
+    if (rawClasses && rawClasses.textContent) {
+      classes = JSON.parse(rawClasses.textContent);
+    }
+  } catch (e) {
+    console.error('Failed to parse registered classes JSON:', e);
+  }
+
+  return {
+    isDragging: false,
+    fileName: '',
+    previewData: [],
+    invalidCount: 0,
+    validCount: 0,
+    isProcessing: false,
+    registeredClasses: classes,
+
+    normalizeClassName: function(name) {
+      if (!name) return '';
+      let n = name.trim().toUpperCase();
+      if (n.startsWith('10 ')) n = 'X ' + n.slice(3);
+      if (n.startsWith('11 ')) n = 'XI ' + n.slice(3);
+      if (n.startsWith('12 ')) n = 'XII ' + n.slice(3);
+      return n;
+    },
+
+    findClass: function(rawName) {
+      if (!rawName) return null;
+      const clean = String(rawName).trim().toUpperCase();
+      const norm = this.normalizeClassName(clean);
+      const self = this;
+      return this.registeredClasses.find(function(c) {
+        const cClean = c.name.trim().toUpperCase();
+        const cNorm = self.normalizeClassName(cClean);
+        return cClean === clean || cNorm === norm;
+      });
+    },
+
+    handleFileSelect: function(event) {
+      const file = event.target.files ? event.target.files[0] : null;
+      if (!file) return;
+      this.processFile(file);
+    },
+
+    handleDrop: function(event) {
+      this.isDragging = false;
+      const file = event.dataTransfer.files ? event.dataTransfer.files[0] : null;
+      if (!file) return;
+
+      const fileInput = document.getElementById('up-excel');
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      fileInput.files = dataTransfer.files;
+
+      this.processFile(file);
+    },
+
+    processFile: function(file) {
+      const self = this;
+      self.fileName = file.name;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+
+          if (!jsonData || jsonData.length === 0) {
+            Swal.fire('Berkas Kosong', 'Berkas Excel tidak memiliki data baris siswa.', 'warning');
+            self.resetPreview();
+            return;
+          }
+
+          let invalid = 0;
+          let valid = 0;
+          const parsed = [];
+
+          jsonData.forEach(function(row, idx) {
+            const nis = String(row.nis || row.NIS || row.nisn || row['nomor induk'] || '').trim();
+            const nama = String(row.nama || row.NAMA || row['nama lengkap'] || row.full_name || '').trim();
+            const rawKelas = String(row.nama_kelas || row.kelas || row.KELAS || row.rombel || '').trim();
+
+            if (!nis && !nama) return;
+
+            const matchedClass = self.findClass(rawKelas);
+            const isValidClass = Boolean(matchedClass);
+
+            if (isValidClass) {
+              valid++;
+            } else {
+              invalid++;
+            }
+
+            parsed.push({
+              index: idx + 2,
+              nis: nis,
+              nama: nama,
+              rawKelas: rawKelas,
+              matchedClassName: matchedClass ? matchedClass.name : null,
+              isValidClass: isValidClass
+            });
+          });
+
+          self.previewData = parsed;
+          self.validCount = valid;
+          self.invalidCount = invalid;
+
+          if (self.invalidCount > 0) {
+            const sampleErrors = self.previewData
+              .filter(function(p) { return !p.isValidClass; })
+              .slice(0, 5)
+              .map(function(p) { return 'Baris ' + p.index + ': ' + (p.nama || 'Tanpa Nama') + ' (Kelas \'' + p.rawKelas + '\' tidak ditemukan)'; })
+              .join('<br/>');
+
+            Swal.fire({
+              title: 'Catatan Kelas Tidak Cocok',
+              html: '<div class="text-left text-xs text-stone-600 dark:text-stone-300">' +
+                      '<p class="mb-2 font-bold text-amber-600">' + self.invalidCount + ' baris memiliki kelas yang belum terdaftar di sistem:</p>' +
+                      '<div class="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl max-h-40 overflow-y-auto mb-2">' + sampleErrors + '</div>' +
+                      '<p>Baris dengan kelas yang tidak cocok akan dilewati atau gagal dicocokkan saat impor.</p>' +
+                    '</div>',
+              icon: 'warning',
+              confirmButtonColor: '#ea580c',
+              confirmButtonText: 'Saya Mengerti'
+            });
+          }
+        } catch (err) {
+          console.error(err);
+          Swal.fire('Error Baca File', 'Gagal membaca isi berkas Excel: ' + err.message, 'error');
+          self.resetPreview();
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    },
+
+    resetPreview: function() {
+      this.fileName = '';
+      this.previewData = [];
+      this.invalidCount = 0;
+      this.validCount = 0;
+      const fileInput = document.getElementById('up-excel');
+      if (fileInput) fileInput.value = '';
+    },
+
+    confirmSubmit: function() {
+      const self = this;
+      if (this.previewData.length === 0) {
+        Swal.fire('Pilih Berkas', 'Silakan pilih atau seret berkas Excel terlebih dahulu.', 'warning');
+        return;
+      }
+
+      let warningHtml = '';
+      if (this.invalidCount > 0) {
+        warningHtml = '<div class="text-xs text-amber-600 font-semibold mb-3">' +
+          'Perhatian: Ada ' + this.invalidCount + ' siswa dengan kelas yang tidak ditemukan dan akan dilewati!' +
+        '</div>';
+      }
+
+      Swal.fire({
+        title: 'Konfirmasi Impor Siswa',
+        html: '<div class="text-left text-xs text-stone-600 dark:text-stone-300">' +
+          '<p class="mb-2">Anda akan mengimpor <b>' + this.validCount + ' siswa valid</b> ke dalam database CBT.</p>' +
+          warningHtml +
+          '<p class="text-stone-500 italic">Akun login siswa akan dibuat otomatis dengan password default: <b>jingga + NIS</b>.</p>' +
+        '</div>',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#ea580c',
+        cancelButtonColor: '#78716c',
+        confirmButtonText: 'Ya, Proses Impor!',
+        cancelButtonText: 'Batal',
+        reverseButtons: true,
+        customClass: {
+          popup: 'rounded-3xl dark:bg-stone-900 dark:text-white',
+          confirmButton: 'rounded-xl font-bold px-5 py-2.5 text-xs uppercase',
+          cancelButton: 'rounded-xl font-bold px-5 py-2.5 text-xs uppercase'
+        }
+      }).then(function(result) {
+        if (result.isConfirmed) {
+          self.isProcessing = true;
+          document.getElementById('import-form').submit();
+        }
+      });
+    }
+  };
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+});
+</script>
+{% endblock %}

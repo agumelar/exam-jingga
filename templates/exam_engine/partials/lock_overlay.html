@@ -1,0 +1,29 @@
+<!-- Red Screen Lock Overlay (100% Fidelity ExamInterface.jsx Anti-Cheat Lock) -->
+<div 
+  id="lock-screen-overlay"
+  hx-get="{% url 'exam_engine:check_status' session.id %}"
+  hx-trigger="every 3s"
+  hx-target="#lock-container"
+  hx-swap="innerHTML"
+  class="h-screen w-screen bg-red-600 flex flex-col items-center justify-center text-white p-6 fixed inset-0 z-50 text-center font-sans select-none"
+>
+  <div class="mb-4 animate-bounce p-4 bg-white/10 rounded-full">
+    <i data-lucide="alert-triangle" class="w-16 h-16 sm:w-20 sm:h-20 text-white"></i>
+  </div>
+  <h1 class="text-3xl sm:text-4xl font-bold mb-2 tracking-tight">
+    Ujian Terkunci!
+  </h1>
+  <p class="max-w-md font-medium text-xs sm:text-sm opacity-90 leading-relaxed">
+    Sistem mendeteksi perpindahan aplikasi / tab melebihi batas toleransi anti-cheat. Silakan laporkan kepada pengawas ruangan Anda untuk membuka kunci.
+  </p>
+  <div class="mt-6 px-6 py-3.5 bg-black/30 backdrop-blur-sm rounded-2xl flex items-center gap-3 border border-white/20 text-xs font-semibold shadow-xl">
+    <i data-lucide="refresh-cw" class="w-4 h-4 animate-spin"></i>
+    <span>Menunggu Pembukaan Kunci oleh Pengawas...</span>
+  </div>
+</div>
+
+<script>
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+</script>

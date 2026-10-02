@@ -23,4 +23,15 @@ DB.md
 *.njsproj
 *.sln
 *.sw?
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.sqlite3
+db.sqlite3
+.pytest_cache/
+staticfiles/
+media/
+
 .env

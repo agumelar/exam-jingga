@@ -1,0 +1,176 @@
+{% extends 'layouts/app.html' %}
+{% load static %}
+
+{% block page_header %}
+<div class="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+  <div class="flex items-center gap-3">
+    <div class="p-2.5 bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 rounded-2xl shrink-0">
+      <i data-lucide="user-check" class="w-6 h-6"></i>
+    </div>
+    <div>
+      <h1 class="text-xl sm:text-2xl font-bold text-stone-900 dark:text-white tracking-tight">
+        Data Guru & Pembuat Soal
+      </h1>
+      <p class="text-xs font-medium text-stone-500 dark:text-stone-400">
+        Total Terdaftar: {{ teachers_count }} Guru / GTK
+      </p>
+    </div>
+  </div>
+
+  <div class="flex items-center gap-2.5 w-full sm:w-auto">
+    <a 
+      href="{% url 'master_data:teachers_export' %}"
+      class="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 h-10 px-4 rounded-full border border-stone-300 dark:border-stone-700 text-stone-800 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800/60 text-xs font-semibold tracking-wide transition select-none cursor-pointer"
+    >
+      <i data-lucide="download" class="w-4 h-4"></i>
+      <span>Export Excel</span>
+    </a>
+
+    <button 
+      type="button"
+      hx-post="{% url 'master_data:sync' %}"
+      hx-vals='{"type": "teachers"}'
+      hx-target="#sync-container"
+      hx-indicator="#sync-loading"
+      class="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 h-10 px-5 rounded-full bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white text-xs font-semibold tracking-wide shadow-md shadow-orange-600/20 transition cursor-pointer select-none"
+    >
+      <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+      <span>Tarik Data Guru</span>
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block app_content %}
+<div class="space-y-6">
+
+  <!-- Sync Status & Loading Indicator Container -->
+  <div id="sync-container"></div>
+  <div id="sync-loading" class="htmx-indicator">
+    <div class="rounded-3xl p-4 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-900/50 text-orange-700 dark:text-orange-300 flex items-center justify-center gap-3 animate-pulse">
+      <svg class="animate-spin h-5 w-5 text-orange-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+      <span class="text-xs font-medium">Menyinkronkan akun Guru & PTK dari Keycloak SSO...</span>
+    </div>
+  </div>
+
+  <!-- M3 Master Data Truth Banner -->
+  <div class="rounded-3xl bg-orange-50/80 dark:bg-orange-950/30 border border-orange-200/80 dark:border-orange-900/40 p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+    <div class="flex items-center gap-3.5">
+      <div class="p-2.5 bg-orange-600 text-white rounded-2xl shrink-0 shadow-md shadow-orange-600/20">
+        <i data-lucide="shield-check" class="w-6 h-6"></i>
+      </div>
+      <div>
+        <h4 class="text-xs font-semibold text-stone-900 dark:text-white flex items-center gap-2">
+          <span>Single Source of Truth: data.smkn1rongga.sch.id</span>
+          <span class="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-xs font-medium border border-emerald-300 dark:border-emerald-800">
+            Synced Replica
+          </span>
+        </h4>
+        <p class="text-xs text-stone-600 dark:text-stone-400 mt-0.5 font-normal">
+          Seluruh akun PTK terhubung ke Keycloak SSO. Data NIP, Nama, dan Hak Akses otomatis terbarui saat sinkronisasi.
+        </p>
+      </div>
+    </div>
+    <a 
+      href="https://data.smkn1rongga.sch.id" 
+      target="_blank" 
+      rel="noopener noreferrer"
+      class="shrink-0 text-xs font-semibold text-orange-600 dark:text-orange-400 hover:text-orange-700 bg-white dark:bg-stone-800 px-4 py-2 rounded-full border border-orange-200 dark:border-stone-700 shadow-xs flex items-center gap-1.5 transition"
+    >
+      <i data-lucide="database" class="w-3.5 h-3.5"></i>
+      <span>Kelola di Pusat</span>
+    </a>
+  </div>
+
+  <!-- Search & Filter Card -->
+  <form method="get" class="rounded-3xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 p-4 flex flex-col md:flex-row gap-3 items-center justify-between m3-elevation-1">
+    <div class="relative w-full md:w-96">
+      <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-stone-400">
+        <i data-lucide="search" class="w-4 h-4"></i>
+      </div>
+      <input 
+        type="text" 
+        name="q" 
+        value="{{ search_query }}"
+        placeholder="Cari Nama Guru, NIP, atau Email..." 
+        class="w-full pl-10 pr-4 py-2.5 bg-stone-100 dark:bg-stone-800 rounded-full text-xs font-medium text-stone-900 dark:text-white border-0 outline-none focus:ring-2 focus:ring-orange-500 transition-all placeholder:text-stone-400"
+      />
+    </div>
+
+    <div class="flex items-center gap-2.5 w-full md:w-auto">
+      <select 
+        name="role" 
+        onchange="this.form.submit()"
+        class="py-2.5 px-4 bg-stone-100 dark:bg-stone-800 rounded-full text-xs font-medium text-stone-900 dark:text-white border-0 outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
+      >
+        <option value="">Semua Peran</option>
+        <option value="admin" {% if selected_role == 'admin' %}selected{% endif %}>Admin</option>
+        <option value="kurikulum" {% if selected_role == 'kurikulum' %}selected{% endif %}>Kurikulum</option>
+        <option value="guru" {% if selected_role == 'guru' %}selected{% endif %}>Guru</option>
+      </select>
+
+      {% if search_query or selected_role %}
+        <a 
+          href="{% url 'master_data:teachers' %}"
+          class="p-2.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 text-xs font-medium rounded-full"
+          title="Reset Filter"
+        >
+          <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+        </a>
+      {% endif %}
+    </div>
+  </form>
+
+  <!-- Teachers Table Surface -->
+  <div class="rounded-3xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 overflow-hidden m3-elevation-1">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="border-b border-stone-200/80 dark:border-stone-800 text-xs font-semibold text-stone-500 dark:text-stone-400 bg-stone-100/60 dark:bg-stone-900/60">
+            <th class="p-4 pl-6">No</th>
+            <th class="p-4">Nama Lengkap</th>
+            <th class="p-4">NIP</th>
+            <th class="p-4">Email SSO</th>
+            <th class="p-4 pr-6 text-center">Peran</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-stone-100 dark:divide-stone-800 text-xs font-medium text-stone-800 dark:text-stone-300">
+          {% for t in teachers %}
+            <tr class="hover:bg-stone-50/80 dark:hover:bg-stone-800/50 transition-colors">
+              <td class="p-4 pl-6 text-stone-400 font-mono text-xs">{{ forloop.counter }}</td>
+              <td class="p-4 font-semibold text-stone-900 dark:text-white">{{ t.full_name }}</td>
+              <td class="p-4 font-mono text-xs text-stone-500 dark:text-stone-400">{{ t.nip|default:'-' }}</td>
+              <td class="p-4 font-mono text-xs text-stone-500 dark:text-stone-400">{{ t.email|default:'-' }}</td>
+              <td class="p-4 pr-6 text-center">
+                {% if t.role_level == 'admin' %}
+                  <span class="px-2.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-900 dark:text-orange-200 text-xs font-medium border border-orange-300 dark:border-orange-800">
+                    Admin
+                  </span>
+                {% elif t.role_level == 'kurikulum' %}
+                  <span class="px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 text-xs font-medium border border-amber-300 dark:border-amber-800">
+                    Kurikulum
+                  </span>
+                {% else %}
+                  <span class="px-2.5 py-0.5 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-300 text-xs font-medium border border-stone-200 dark:border-stone-700">
+                    Guru
+                  </span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colSpan="5" class="p-12 text-center text-stone-400 italic">
+                Tidak ada data guru ditemukan.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

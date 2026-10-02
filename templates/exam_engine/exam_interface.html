@@ -1,0 +1,448 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ exam_title|default:'Lembar Kerja Ujian' }} - EXAM JINGGA{% endblock %}
+
+{% block layout %}
+<div 
+  x-data="examInterface({
+    sessionId: '{{ session.id }}',
+    initialTimeLeft: {{ remaining_seconds|default:3600 }},
+    isInitiallyLocked: {% if is_locked %}true{% else %}false{% endif %},
+    initialViolationCount: {{ violation_count|default:0 }},
+    totalCount: {{ total_count|default:1 }}
+  })"
+  x-init="init()"
+  translate="no"
+  class="notranslate min-h-screen bg-slate-50 dark:bg-zinc-950 flex flex-col font-sans text-left transition-colors pb-28 lg:pb-10 select-none"
+  oncontextmenu="return false;"
+  ondragstart="return false;"
+>
+
+  <!-- Top Sticky Header -->
+  <header class="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-slate-100 dark:border-zinc-800 px-4 sm:px-6 py-3 sticky top-0 z-30 shadow-xs">
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+      <!-- Title & Subject Info -->
+      <div class="text-left min-w-0">
+        <h1 class="text-orange-600 font-bold text-xs sm:text-sm tracking-tight leading-none truncate">
+          EXAM JINGGA LIVE
+        </h1>
+        <p class="text-xs font-medium text-slate-500 dark:text-zinc-400 mt-0.5 truncate max-w-[160px] sm:max-w-md">
+          {{ exam_title }} &bull; {{ session.student.full_name }}
+        </p>
+      </div>
+
+      <!-- Actions, Font Sizer, and Live Countdown Timer -->
+      <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+        
+        <!-- Font Size Sizer (A- / A / A+) -->
+        <div class="hidden sm:flex items-center bg-slate-100 dark:bg-zinc-800 rounded-xl p-0.5 border border-slate-200 dark:border-zinc-700 text-xs font-semibold">
+          <button 
+            type="button"
+            @click="fontSize = 'small'" 
+            :class="fontSize === 'small' ? 'bg-white dark:bg-zinc-900 text-orange-600 shadow-xs' : 'text-slate-500 dark:text-zinc-400'"
+            class="px-2 py-1 rounded-lg transition-all cursor-pointer"
+            title="Ukuran Teks Kecil"
+          >A-</button>
+          <button 
+            type="button"
+            @click="fontSize = 'normal'" 
+            :class="fontSize === 'normal' ? 'bg-white dark:bg-zinc-900 text-orange-600 shadow-xs' : 'text-slate-500 dark:text-zinc-400'"
+            class="px-2 py-1 rounded-lg transition-all cursor-pointer"
+            title="Ukuran Teks Normal"
+          >A</button>
+          <button 
+            type="button"
+            @click="fontSize = 'large'" 
+            :class="fontSize === 'large' ? 'bg-white dark:bg-zinc-900 text-orange-600 shadow-xs' : 'text-slate-500 dark:text-zinc-400'"
+            class="px-2 py-1 rounded-lg transition-all cursor-pointer"
+            title="Ukuran Teks Besar"
+          >A+</button>
+        </div>
+
+        <!-- Mobile Drawer Trigger Pill -->
+        <button
+          type="button"
+          @click="isDrawerOpen = true"
+          class="lg:hidden flex items-center gap-1.5 bg-orange-50 dark:bg-orange-950/40 text-orange-600 border border-orange-200/80 dark:border-orange-900/40 px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer"
+        >
+          <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+          <span x-text="activeOrder + '/{{ total_count }}'"></span>
+        </button>
+
+        <!-- Live Countdown Timer Badge (M3 Floating Pill) -->
+        <div 
+          :class="timeLeft < 300 
+            ? 'bg-red-500 text-white animate-pulse shadow-md shadow-red-500/30' 
+            : 'bg-orange-50 dark:bg-orange-950/50 text-orange-700 dark:text-orange-300 border border-orange-200/80 dark:border-orange-900/50'"
+          class="px-4 py-2 rounded-full font-bold font-mono text-xs sm:text-sm transition-all flex items-center gap-1.5 select-none"
+        >
+          <i data-lucide="clock" class="w-4 h-4 text-orange-600 dark:text-orange-400"></i>
+          <span x-text="formattedTime"></span>
+        </div>
+
+        <!-- Selesai Header Button (M3 Outlined/Tonal Pill) -->
+        <button
+          type="button"
+          @click="showFinishModal = true"
+          class="hidden sm:inline-flex items-center gap-1.5 bg-red-50 dark:bg-red-950/30 text-red-600 hover:bg-red-600 hover:text-white px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer select-none border border-red-200 dark:border-red-900/40"
+        >
+          <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+          <span>Selesai</span>
+        </button>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Exam Content Area -->
+  <div class="flex-1 flex flex-col lg:flex-row max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 gap-6 sm:gap-8">
+    
+    <!-- Left Column: Active Question Viewport -->
+    <main class="flex-1 space-y-6">
+      <div id="question-viewport">
+        {% include 'exam_engine/partials/question_card.html' %}
+      </div>
+    </main>
+
+    <!-- Desktop Sidebar: Navigation Grid -->
+    <aside class="hidden lg:block w-80 shrink-0">
+      <div class="bg-white dark:bg-zinc-900 p-6 rounded-[2.5rem] border border-slate-100 dark:border-zinc-800 shadow-xs sticky top-24">
+        
+        <!-- Header & Counter -->
+        <div class="flex items-center justify-between mb-5">
+          <h3 class="font-semibold text-xs text-slate-600 dark:text-zinc-400 flex items-center gap-2">
+            <i data-lucide="layout-grid" class="w-3.5 h-3.5 text-orange-600"></i>
+            <span>Nomor Soal</span>
+          </h3>
+          <span id="answered-counter" class="text-xs font-bold text-orange-600">
+            {{ answered_count }}/{{ total_count }}
+          </span>
+        </div>
+
+        <!-- Numbers Grid (5 columns) -->
+        <div class="grid grid-cols-5 gap-2 max-h-[320px] overflow-y-auto pr-1">
+          {% for q in questions %}
+            <button 
+              id="nav-btn-{{ q.order_num }}" 
+              type="button"
+              hx-get="{% url 'exam_engine:question_swap' session.id q.order_num %}" 
+              hx-target="#question-viewport"
+              hx-swap="innerHTML"
+              @click="activeOrder = {{ q.order_num }}"
+              :class="activeOrder === {{ q.order_num }} ? 'ring-2 ring-orange-600 ring-offset-2 dark:ring-offset-zinc-950 scale-105 shadow-md z-10' : ''"
+              class="h-11 rounded-xl text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center
+                {% if q.is_doubt %}
+                  bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20
+                {% elif q.is_answered %}
+                  bg-emerald-500 text-white shadow-md shadow-emerald-500/20
+                {% else %}
+                  bg-slate-50 dark:bg-zinc-800/80 text-slate-500 dark:text-zinc-400
+                {% endif %}"
+            >
+              <span>{{ q.order_num }}</span>
+              {% if q.is_answered %}
+                <span class="text-[8px] leading-none uppercase font-bold">{{ q.chosen_answer }}</span>
+              {% endif %}
+            </button>
+          {% endfor %}
+        </div>
+        
+        <!-- Progress Bar & Legend -->
+        <div class="mt-6 pt-5 border-t border-slate-100 dark:border-zinc-800 space-y-3">
+          <div class="w-full bg-slate-100 dark:bg-zinc-800 h-2 rounded-full overflow-hidden">
+            <div 
+              id="progress-bar-fill"
+              class="bg-gradient-to-r from-orange-500 to-orange-600 h-full transition-all duration-500" 
+              style="width: {{ progress_percent }}%;"
+            ></div>
+          </div>
+          <div class="flex justify-between pt-1 text-xs font-medium text-slate-500 dark:text-zinc-400">
+            <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 bg-emerald-500 rounded-sm"></div><span>Terjawab</span></div>
+            <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 bg-amber-400 rounded-sm"></div><span>Ragu</span></div>
+            <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 bg-slate-100 dark:bg-zinc-800 rounded-sm"></div><span>Kosong</span></div>
+          </div>
+        </div>
+
+        <!-- Finish Submission Button in Sidebar -->
+        <button
+          type="button"
+          @click="showFinishModal = true"
+          class="mt-6 w-full py-3.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-semibold text-xs hover:bg-orange-600 hover:text-white transition-all shadow-md cursor-pointer"
+        >
+          Kirim Jawaban
+        </button>
+      </div>
+    </aside>
+  </div>
+
+  <!-- 📱 THUMB-ZONE STICKY BOTTOM ACTION BAR (Mobile Ergonomics) -->
+  <nav 
+    aria-label="Navigasi Ujian Jempol"
+    class="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-zinc-800 px-3 py-2.5 shadow-2xl"
+  >
+    <div class="max-w-md mx-auto flex items-center justify-between gap-2">
+      
+      <!-- Tombol Sebelumnya -->
+      <button
+        type="button"
+        :disabled="activeOrder <= 1"
+        @click="goToPrevQuestion()"
+        class="flex-1 py-3 px-2.5 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-200 rounded-2xl font-semibold text-xs flex items-center justify-center gap-1 disabled:opacity-30 active:scale-95 transition-all cursor-pointer m3-state-layer border border-stone-200 dark:border-stone-700"
+      >
+        <i data-lucide="chevron-left" class="w-4 h-4"></i>
+        <span>Prev</span>
+      </button>
+
+      <!-- Tombol Ragu-ragu (M3 Tonal Toggle) -->
+      <button
+        type="button"
+        @click="toggleDoubt()"
+        class="py-3 px-3.5 bg-amber-100 hover:bg-amber-200 text-amber-950 dark:bg-amber-950/60 dark:text-amber-200 rounded-2xl font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer m3-state-layer border border-amber-300 dark:border-amber-800/80 shrink-0"
+        title="Tandai Ragu-Ragu"
+      >
+        <i data-lucide="help-circle" class="w-4 h-4 text-amber-600 dark:text-amber-400"></i>
+        <span>Ragu</span>
+      </button>
+
+      <!-- Tombol Drawer Trigger -->
+      <button
+        type="button"
+        @click="isDrawerOpen = true"
+        class="py-3 px-3.5 bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 rounded-2xl font-semibold text-xs flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer m3-state-layer border border-orange-200 dark:border-orange-900/60 shrink-0"
+        title="Daftar Nomor Soal"
+      >
+        <i data-lucide="layout-grid" class="w-4 h-4 text-orange-600 dark:text-orange-400"></i>
+        <span x-text="activeOrder"></span>
+      </button>
+
+      <!-- Tombol Selanjutnya / Selesai (FAB Style) -->
+      <template x-if="activeOrder >= totalCount">
+        <button
+          type="button"
+          @click="showFinishModal = true"
+          class="flex-1 py-3 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-semibold text-xs flex items-center justify-center gap-1 shadow-md shadow-emerald-600/25 active:scale-95 transition-all cursor-pointer m3-state-layer"
+        >
+          <i data-lucide="send" class="w-3.5 h-3.5"></i>
+          <span>Kirim</span>
+        </button>
+      </template>
+
+      <template x-if="activeOrder < totalCount">
+        <button
+          type="button"
+          @click="goToNextQuestion()"
+          class="flex-1 py-3 px-3 bg-orange-600 hover:bg-orange-500 text-white rounded-2xl font-semibold text-xs flex items-center justify-center gap-1 shadow-md shadow-orange-600/25 active:scale-95 transition-all cursor-pointer m3-state-layer"
+        >
+          <span>Next</span>
+          <i data-lucide="chevron-right" class="w-4 h-4"></i>
+        </button>
+      </template>
+
+    </div>
+  </nav>
+
+  <!-- Mobile Bottom Sheet Navigation Drawer -->
+  {% include 'exam_engine/partials/nav_drawer.html' %}
+
+  <!-- Tap-to-Zoom Lightbox Modal -->
+  <div 
+    x-show="lightboxImg"
+    x-cloak
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200"
+    @click="lightboxImg = null"
+  >
+    <div class="relative max-w-4xl w-full max-h-[90vh] flex flex-col items-center justify-center" @click.stop>
+      <button 
+        type="button"
+        @click="lightboxImg = null"
+        aria-label="Tutup Lightbox"
+        class="absolute -top-12 right-0 p-2 text-white/80 hover:text-white rounded-full bg-white/10 hover:bg-white/20 transition cursor-pointer"
+      >
+        <i data-lucide="x" class="w-6 h-6"></i>
+      </button>
+      <img :src="lightboxImg" class="max-h-[80vh] w-auto rounded-2xl shadow-2xl object-contain border border-white/10" alt="Zoomed Gambar">
+    </div>
+  </div>
+
+  <!-- Finish Confirmation Modal -->
+  <div 
+    x-show="showFinishModal"
+    x-cloak
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+    @click="showFinishModal = false"
+  >
+    <div 
+      class="bg-white dark:bg-zinc-950 w-full max-w-md rounded-[3rem] p-8 sm:p-10 shadow-2xl relative border border-slate-100 dark:border-zinc-800 text-center animate-in zoom-in-95 duration-200"
+      @click.stop
+    >
+      <div class="inline-flex p-4 bg-orange-100 dark:bg-orange-950/40 text-orange-600 rounded-3xl mb-4 shadow-lg shadow-orange-600/10">
+        <i data-lucide="alert-triangle" class="w-9 h-9"></i>
+      </div>
+      
+      <h3 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white mb-2">
+        Selesaikan Ujian?
+      </h3>
+      <p class="text-xs font-normal text-slate-500 dark:text-zinc-400 mb-6 leading-relaxed">
+        Pastikan Anda telah memeriksa kembali seluruh jawaban sebelum mengirim lembar ujian ke server. Tindakan ini tidak dapat dibatalkan.
+      </p>
+
+      <form 
+        id="finish-exam-form"
+        action="{% url 'exam_engine:finish_exam' session.id %}" 
+        method="POST"
+        class="space-y-3"
+      >
+        {% csrf_token %}
+        <button
+          type="submit"
+          class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-semibold text-xs tracking-wide shadow-lg shadow-emerald-600/25 transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-2"
+        >
+          <i data-lucide="send" class="w-4 h-4"></i>
+          <span>Ya, Selesaikan & Kirim Jawaban</span>
+        </button>
+        <button
+          type="button"
+          @click="showFinishModal = false"
+          class="w-full py-3.5 bg-slate-100 dark:bg-zinc-900 hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 rounded-2xl font-semibold text-xs tracking-wide transition-all cursor-pointer"
+        >
+          Batal, Periksa Dulu
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Anti-Cheat Red Screen Lock Container (Triggered automatically upon 2+ violations) -->
+  <div id="lock-container">
+    {% if is_locked %}
+      {% include 'exam_engine/partials/lock_overlay.html' %}
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Anti-Cheat Protective Layer (Keyboard shortcuts prevention)
+  document.addEventListener('keydown', function(e) {
+    if (
+      e.key === 'F12' ||
+      (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) ||
+      (e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.key === 's' || e.key === 'S'))
+    ) {
+      e.preventDefault();
+      return false;
+    }
+  });
+
+  function examInterface(config) {
+    return {
+      sessionId: config.sessionId,
+      timeLeft: config.initialTimeLeft,
+      isLocked: config.isInitiallyLocked,
+      violationCount: config.initialViolationCount,
+      totalCount: config.totalCount,
+      activeOrder: 1,
+      fontSize: 'normal',
+      isDrawerOpen: false,
+      lightboxImg: null,
+      showFinishModal: false,
+      activeAnswers: {},
+      lastCheatTime: 0,
+      timerInterval: null,
+
+      get formattedTime() {
+        const s = Math.max(0, this.timeLeft);
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        const pad = (n) => String(n).padStart(2, '0');
+        if (h > 0) {
+          return `${h}:${pad(m)}:${pad(sec)}`;
+        }
+        return `${pad(m)}:${pad(sec)}`;
+      },
+
+      init() {
+        this.initTimer();
+        this.initAntiCheat();
+      },
+
+      initTimer() {
+        if (this.isLocked || this.timeLeft <= 0) return;
+        this.timerInterval = setInterval(() => {
+          if (this.timeLeft > 0) {
+            this.timeLeft--;
+          } else {
+            clearInterval(this.timerInterval);
+            this.autoSubmitExam();
+          }
+        }, 1000);
+      },
+
+      initAntiCheat() {
+        const reportViolation = () => {
+          if (this.isLocked) return;
+          const now = Date.now();
+          if (now - this.lastCheatTime > 3000) {
+            this.lastCheatTime = now;
+            htmx.ajax('POST', `/exam/session/${this.sessionId}/violation/`, {
+              target: '#lock-container',
+              swap: 'innerHTML'
+            });
+          }
+        };
+
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden) {
+            reportViolation();
+          }
+        });
+      },
+
+      autoSubmitExam() {
+        const form = document.getElementById('finish-exam-form');
+        if (form) {
+          form.submit();
+        }
+      },
+
+      goToPrevQuestion() {
+        if (this.activeOrder > 1) {
+          const targetOrder = this.activeOrder - 1;
+          htmx.ajax('GET', `/exam/session/${this.sessionId}/question/${targetOrder}/`, {
+            target: '#question-viewport',
+            swap: 'innerHTML'
+          });
+          this.activeOrder = targetOrder;
+        }
+      },
+
+      goToNextQuestion() {
+        if (this.activeOrder < this.totalCount) {
+          const targetOrder = this.activeOrder + 1;
+          htmx.ajax('GET', `/exam/session/${this.sessionId}/question/${targetOrder}/`, {
+            target: '#question-viewport',
+            swap: 'innerHTML'
+          });
+          this.activeOrder = targetOrder;
+        }
+      },
+
+      toggleDoubt() {
+        const doubtBtn = document.querySelector('#question-card-inner form button');
+        if (doubtBtn) {
+          doubtBtn.click();
+        }
+      }
+    };
+  }
+
+  document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  });
+</script>
+{% endblock %}

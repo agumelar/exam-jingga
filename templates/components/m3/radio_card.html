@@ -1,0 +1,79 @@
+{% comment %}
+M3 Radio Card Component (Pilihan Ganda CBT Option Card)
+Usage:
+  {% include 'components/m3/radio_card.html' with option_key='A' option_text='Ibu kota Indonesia adalah Nusantara' selected=True %}
+Parameters:
+  - option_key: 'A' | 'B' | 'C' | 'D' | 'E'
+  - option_text: text or HTML content
+  - selected: boolean
+  - doubtful: boolean (Ragu-ragu)
+  - disabled: boolean
+  - name: radio input name
+  - value: radio input value
+  - id: input element ID
+  - attrs: raw custom attributes (HTMX, Alpine, etc.)
+  - class: extra CSS classes
+{% endcomment %}
+
+<label 
+  class="group relative flex items-start gap-4 p-4 lg:p-5 rounded-3xl cursor-pointer select-none transition-all duration-200 text-left
+    {% if disabled %}opacity-50 pointer-events-none{% else %}m3-state-layer{% endif %}
+    {% if selected %}
+      {% if doubtful %}bg-amber-100 dark:bg-amber-950/40 border-2 border-amber-500 shadow-sm
+      {% else %}bg-orange-50 dark:bg-orange-950/40 border-2 border-orange-600 dark:border-orange-500 shadow-md shadow-orange-500/10{% endif %}
+    {% else %}
+      bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700 m3-elevation-1 hover:m3-elevation-2
+    {% endif %}
+    {{ class }}"
+  {% if attrs %}{{ attrs|safe }}{% endif %}
+>
+  {% if name %}
+    <input 
+      type="radio" 
+      name="{{ name }}" 
+      value="{{ value|default:option_key }}"
+      {% if id %}id="{{ id }}"{% endif %}
+      {% if selected %}checked{% endif %}
+      {% if disabled %}disabled{% endif %}
+      class="sr-only"
+    />
+  {% endif %}
+
+  <!-- Option Key Avatar (A, B, C, D, E) -->
+  <div class="shrink-0 w-11 h-11 rounded-2xl font-bold text-sm flex items-center justify-center transition-all duration-200
+    {% if selected %}
+      {% if doubtful %}bg-amber-500 text-white shadow-md
+      {% else %}bg-orange-600 dark:bg-orange-500 text-white shadow-md shadow-orange-500/20{% endif %}
+    {% else %}
+      bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 group-hover:bg-stone-200 dark:group-hover:bg-stone-700
+    {% endif %}"
+  >
+    {% if selected and not doubtful %}
+      <i data-lucide="check" class="w-5 h-5 stroke-[3]"></i>
+    {% else %}
+      <span>{{ option_key }}</span>
+    {% endif %}
+  </div>
+
+  <!-- Option Content Text -->
+  <div class="flex-1 pt-1.5 min-w-0">
+    <div class="text-sm lg:text-base leading-relaxed break-words
+      {% if selected %}text-stone-900 dark:text-white font-medium
+      {% else %}text-stone-800 dark:text-stone-200 font-normal{% endif %}"
+    >
+      {{ option_text|safe }}
+    </div>
+  </div>
+
+  <!-- Subtle Selection Ring Indicator -->
+  {% if selected %}
+    <div class="absolute right-4 top-4 hidden sm:block">
+      <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+        {% if doubtful %}bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200
+        {% else %}bg-orange-200 dark:bg-orange-900/60 text-orange-900 dark:text-orange-200{% endif %}"
+      >
+        {% if doubtful %}Ragu-ragu{% else %}Dipilih{% endif %}
+      </span>
+    </div>
+  {% endif %}
+</label>

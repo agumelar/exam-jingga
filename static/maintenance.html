@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="id" class="h-full bg-stone-50 dark:bg-stone-950 font-sans">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pemeliharaan Sistem &bull; Exam Jingga CBT SMKN 1 Rongga</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #ea580c;
+      --primary-container: #ffedd5;
+      --on-primary-container: #7c2d12;
+      --surface: #fafaf9;
+      --surface-container: #f5f5f4;
+      --surface-container-high: #e7e5e4;
+      --on-surface: #1c1917;
+      --on-surface-variant: #57534e;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #fb923c;
+        --primary-container: #431407;
+        --on-primary-container: #ffedd5;
+        --surface: #0c0a09;
+        --surface-container: #1c1917;
+        --surface-container-high: #292524;
+        --on-surface: #f5f5f4;
+        --on-surface-variant: #a8a29e;
+      }
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--surface);
+      color: var(--on-surface);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      position: relative;
+      overflow-x: hidden;
+    }
+    .ambient-glow {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(234, 88, 12, 0.12) 0%, rgba(234, 88, 12, 0) 70%);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .m3-card {
+      position: relative;
+      z-index: 10;
+      background: var(--surface-container);
+      border: 1px solid rgba(234, 88, 12, 0.2);
+      border-radius: 2.5rem;
+      padding: 3rem 2.5rem;
+      max-width: 580px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.08);
+      backdrop-filter: blur(12px);
+    }
+    .logo-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 84px;
+      height: 84px;
+      border-radius: 2rem;
+      background: #ffffff;
+      box-shadow: 0 10px 25px -5px rgba(234, 88, 12, 0.25);
+      margin-bottom: 1.5rem;
+      padding: 10px;
+    }
+    .logo-badge img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--primary-container);
+      color: var(--on-primary-container);
+      padding: 0.4rem 1rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.025em;
+      margin-bottom: 1.5rem;
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--primary);
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: .4; transform: scale(1.3); }
+    }
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      line-height: 1.25;
+      margin-bottom: 0.75rem;
+      color: var(--on-surface);
+    }
+    h1 span {
+      color: var(--primary);
+    }
+    p {
+      color: var(--on-surface-variant);
+      font-size: 0.925rem;
+      line-height: 1.6;
+      margin-bottom: 2rem;
+    }
+    .features-box {
+      background: var(--surface);
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      border-radius: 1.5rem;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+      text-align: left;
+    }
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.825rem;
+      font-weight: 600;
+      color: var(--on-surface);
+      margin-bottom: 0.75rem;
+    }
+    .feature-item:last-child {
+      margin-bottom: 0;
+    }
+    .feature-icon {
+      width: 20px;
+      height: 20px;
+      color: var(--primary);
+      flex-shrink: 0;
+    }
+    .footer-text {
+      font-size: 0.75rem;
+      color: var(--on-surface-variant);
+      margin-top: 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+    }
+    .footer-text a {
+      color: var(--on-surface-variant);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .footer-text a:hover {
+      color: var(--primary);
+    }
+    .dev-bypass-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: transparent;
+      color: var(--primary);
+      border: 1px solid rgba(234, 88, 12, 0.3);
+      padding: 0.6rem 1.25rem;
+      border-radius: 9999px;
+      font-size: 0.775rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+      margin-top: 0.5rem;
+    }
+    .dev-bypass-btn:hover {
+      background: var(--primary-container);
+      color: var(--on-primary-container);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="ambient-glow"></div>
+
+  <main class="m3-card">
+    <div class="logo-badge">
+      <img src="/static/img/logo_sekolah.png" alt="Logo SMKN 1 Rongga" onerror="this.style.display='none'">
+    </div>
+
+    <div class="status-chip">
+      <div class="pulse-dot"></div>
+      <span>PEMELIHARAAN SISTEM CBT</span>
+    </div>
+
+    <h1>Exam <span>Jingga</span></h1>
+    <p>
+      Sistem Asesmen & CBT SMK Negeri 1 Rongga sedang dalam tahap pemeliharaan dan peningkatan arsitektur sistem (DATH Modern Monolith) untuk meningkatkan kecepatan, keandalan, dan kenyamanan ujian peserta didik.
+    </p>
+
+    <div class="features-box">
+      <div class="feature-item">
+        <svg class="feature-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        <span>Peningkatan Kecepatan Simpan Jawaban (Zero Latency)</span>
+      </div>
+      <div class="feature-item">
+        <svg class="feature-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+        <span>Integrasi Single Sign-On (SSO) Terpusat</span>
+      </div>
+      <div class="feature-item">
+        <svg class="feature-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+        </svg>
+        <span>Desain Baru Material Design 3 (M3) Lebih Responsif</span>
+      </div>
+    </div>
+
+    <div>
+      <a href="/?preview=1" class="dev-bypass-btn">
+        <svg style="width:14px;height:14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        </svg>
+        <span>Akses Masuk CBT (Developer Preview)</span>
+      </a>
+    </div>
+
+    <div class="footer-text">
+      <span>&copy; 2026 SMK Negeri 1 Rongga</span>
+      <span>&bull;</span>
+      <a href="https://smkn1rongga.sch.id" target="_blank" rel="noopener">Website Resmi</a>
+    </div>
+  </main>
+
+</body>
+</html>

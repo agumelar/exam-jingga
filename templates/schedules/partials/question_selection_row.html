@@ -1,0 +1,75 @@
+{% load static %}
+{% comment %}
+Single Question Selection Card partial for SelectQuestions.jsx matching
+{% endcomment %}
+
+<div 
+  id="question-row-{{ q.id }}"
+  hx-post="{% url 'schedules:toggle_question' exam_id=exam.id question_id=q.id %}"
+  hx-target="#question-row-{{ q.id }}"
+  hx-swap="outerHTML"
+  hx-vals='{"idx": "{{ idx }}"}'
+  class="p-6 sm:p-8 rounded-[3rem] border-2 transition-all cursor-pointer flex gap-6 sm:gap-8 items-start relative group select-none {% if is_selected %}border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20 shadow-sm{% else %}border-stone-200/80 dark:border-stone-800 bg-white dark:bg-stone-900 hover:border-orange-300 dark:hover:border-stone-700 shadow-xs{% endif %}"
+>
+  <!-- Check Circle Indicator -->
+  <div class="mt-1 shrink-0">
+    {% if is_selected %}
+      <i data-lucide="check-circle-2" class="w-8 h-8 text-emerald-500"></i>
+    {% else %}
+      <i data-lucide="circle" class="w-8 h-8 text-stone-300 dark:text-stone-700 group-hover:text-orange-400 transition-colors"></i>
+    {% endif %}
+  </div>
+
+  <!-- Content -->
+  <div class="flex-1 text-left">
+    <div class="flex items-center justify-between gap-2 mb-2">
+      <span class="text-xs font-medium text-stone-400 dark:text-stone-500 block">
+        Soal #{{ idx }} &bull; {% if q.created_by %}{{ q.created_by.full_name }}{% else %}Bank Soal{% endif %}
+      </span>
+      {% if is_selected %}
+        <span class="bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 px-3 py-0.5 rounded-full text-xs font-medium">
+          Terpilih
+        </span>
+      {% endif %}
+    </div>
+
+    <!-- Question Text -->
+    <p class="font-semibold text-stone-900 dark:text-white leading-relaxed text-base">
+      {{ q.question_text }}
+    </p>
+
+    <!-- Question Image if available -->
+    {% if q.image_url %}
+      <div class="mt-4">
+        <img 
+          src="{{ q.image_url }}" 
+          alt="Gambar Soal" 
+          loading="lazy"
+          onerror="this.parentElement.style.display='none'"
+          class="max-h-48 rounded-2xl border border-stone-200 dark:border-stone-800 shadow-xs object-contain"
+        />
+      </div>
+    {% endif %}
+
+    <!-- Options Preview Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-6 opacity-75 group-hover:opacity-100 transition-opacity">
+      {% for opt in q.get_options %}
+        {% if opt.text or opt.image_url %}
+          <div class="text-xs font-medium p-3.5 rounded-xl border {% if opt.is_correct %}border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30{% else %}border-stone-100 dark:border-stone-800 text-stone-500 dark:text-stone-400 bg-stone-50/50 dark:bg-stone-800/30{% endif %}">
+            <div class="flex flex-col gap-1.5">
+              <span><strong class="mr-1">{{ opt.key }}:</strong> {{ opt.text }}</span>
+              {% if opt.image_url %}
+                <img src="{{ opt.image_url }}" loading="lazy" onerror="this.style.display='none'" alt="Opsi {{ opt.key }}" class="h-20 w-20 object-cover rounded-lg border border-stone-200 dark:border-stone-700 mt-1" />
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- Out of band counter update -->
+{% if collab_info %}
+  {% include 'schedules/partials/question_counter_badge.html' with collab_info=collab_info exam=exam %}
+{% endif %}

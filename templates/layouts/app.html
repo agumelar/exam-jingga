@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block layout %}
+<div 
+  x-data="{ 
+    sidebarOpen: false, 
+    sidebarCollapsed: localStorage.getItem('sidebar_collapsed') === 'true',
+    toggleCollapse() {
+      this.sidebarCollapsed = !this.sidebarCollapsed;
+      localStorage.setItem('sidebar_collapsed', this.sidebarCollapsed);
+      this.$nextTick(() => {
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+          window.lucide.createIcons();
+        }
+      });
+    }
+  }"
+  class="min-h-screen bg-stone-50 dark:bg-[#131314] flex flex-row text-stone-900 dark:text-stone-100 font-sans antialiased relative"
+>
+  <!-- Responsive M3 Navigation Drawer Sidebar Component -->
+  {% include 'components/m3/sidebar.html' %}
+
+  <!-- Main Content Area (Fluid flex-1 alongside the sticky sidebar) -->
+  <div class="flex-1 flex flex-col min-w-0 min-h-screen">
+    <!-- M3 Top App Bar -->
+    {% include 'components/m3/top_app_bar.html' with title=page_title|default:'Exam Jingga' subtitle=page_subtitle|default:'' %}
+
+    <!-- Page Content Container -->
+    <main class="flex-1 p-4 sm:p-6 lg:p-8">
+      <div class="max-w-7xl mx-auto w-full">
+        
+        <!-- Header Banner / Breadcrumb Slot (Optional) -->
+        {% block page_header %}
+          {% if heading or subheading %}
+            <div class="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                {% if heading %}
+                  <h2 class="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 dark:text-white">
+                    {{ heading }}
+                  </h2>
+                {% endif %}
+                {% if subheading %}
+                  <p class="text-orange-600 dark:text-orange-500 font-medium text-xs mt-1">
+                    {{ subheading }}
+                  </p>
+                {% endif %}
+              </div>
+              <div class="flex items-center gap-3">
+                {% block page_actions %}{% endblock %}
+              </div>
+            </div>
+          {% endif %}
+        {% endblock %}
+
+        <!-- Main Body Slot -->
+        {% block app_content %}
+          {% block content %}{% endblock %}
+        {% endblock %}
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="py-4 px-6 border-t border-stone-200/80 dark:border-stone-800/80 text-center text-xs text-stone-400 dark:text-stone-600 font-medium">
+      &copy; {% now "Y" %} SMKN 1 Rongga &bull; CBT Exam Jingga
+    </footer>
+  </div>
+</div>
+{% endblock %}

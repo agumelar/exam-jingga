@@ -1,0 +1,701 @@
+{% load static %}
+
+<!-- M3 QUESTION FORM MODAL (CREATE / EDIT) -->
+<script id="modal-teachers-data" type="application/json">{{ teachers_json|safe }}</script>
+<script>
+if (typeof window.questionModalData !== 'function') {
+  window.questionModalData = function(initial) {
+    var teachers = window.BANK_SOAL_TEACHERS || [];
+    if (!teachers || teachers.length === 0) {
+      try {
+        var modalRaw = document.getElementById('modal-teachers-data');
+        if (modalRaw && modalRaw.textContent) {
+          teachers = JSON.parse(modalRaw.textContent);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return {
+      showModal: true,
+      isSubmitting: false,
+      correctAnswer: (initial && initial.correctAnswer) || 'A',
+      selectAnswer: function(ans) {
+        this.correctAnswer = ans;
+      },
+      previewQuestionImg: (initial && initial.previewQuestionImg) || '',
+      previewA: (initial && initial.previewA) || '',
+      previewB: (initial && initial.previewB) || '',
+      previewC: (initial && initial.previewC) || '',
+      previewD: (initial && initial.previewD) || '',
+      previewE: (initial && initial.previewE) || '',
+      modalSubject: (initial && initial.modalSubject) || '',
+      modalTeacher: (initial && initial.modalTeacher) || '',
+      allTeachers: teachers,
+
+      clearImage: function(field) {
+        if (field === 'question') {
+          this.previewQuestionImg = '';
+          if (this.$refs.clearQuestionImg) this.$refs.clearQuestionImg.value = '1';
+          if (this.$refs.inputQuestionImg) this.$refs.inputQuestionImg.value = '';
+        }
+        if (field === 'a') {
+          this.previewA = '';
+          if (this.$refs.clearImgA) this.$refs.clearImgA.value = '1';
+          if (this.$refs.inputImgA) this.$refs.inputImgA.value = '';
+        }
+        if (field === 'b') {
+          this.previewB = '';
+          if (this.$refs.clearImgB) this.$refs.clearImgB.value = '1';
+          if (this.$refs.inputImgB) this.$refs.inputImgB.value = '';
+        }
+        if (field === 'c') {
+          this.previewC = '';
+          if (this.$refs.clearImgC) this.$refs.clearImgC.value = '1';
+          if (this.$refs.inputImgC) this.$refs.inputImgC.value = '';
+        }
+        if (field === 'd') {
+          this.previewD = '';
+          if (this.$refs.clearImgD) this.$refs.clearImgD.value = '1';
+          if (this.$refs.inputImgD) this.$refs.inputImgD.value = '';
+        }
+        if (field === 'e') {
+          this.previewE = '';
+          if (this.$refs.clearImgE) this.$refs.clearImgE.value = '1';
+          if (this.$refs.inputImgE) this.$refs.inputImgE.value = '';
+        }
+      },
+
+      previewFile: function(event, field) {
+        var file = event.target.files[0];
+        if (!file) return;
+        var self = this;
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          if (field === 'question') self.previewQuestionImg = e.target.result;
+          if (field === 'a') self.previewA = e.target.result;
+          if (field === 'b') self.previewB = e.target.result;
+          if (field === 'c') self.previewC = e.target.result;
+          if (field === 'd') self.previewD = e.target.result;
+          if (field === 'e') self.previewE = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      },
+
+      initModal: function() {
+        if (this.modalSubject) {
+          this.updateModalTeacherOptions();
+        }
+      },
+
+      updateModalTeacherOptions: function() {
+        var sel = document.getElementById('modal-teacher-select');
+        if (!sel) return;
+        var prevVal = this.modalTeacher;
+        var subjId = this.modalSubject;
+
+        var filtered = this.allTeachers;
+        if (subjId) {
+          filtered = this.allTeachers.filter(function(t) {
+            return t.subject_ids && t.subject_ids.indexOf(subjId) !== -1;
+          });
+        }
+
+        sel.innerHTML = '';
+        var def = document.createElement('option');
+        def.value = '';
+        def.textContent = subjId ? '-- Pilih Guru Pengampu Mapel Ini --' : '-- Pilih Guru Pembuat --';
+        sel.appendChild(def);
+
+        var found = false;
+        filtered.forEach(function(t) {
+          var opt = document.createElement('option');
+          opt.value = t.id;
+          opt.textContent = t.name;
+          if (t.id === prevVal) {
+            opt.selected = true;
+            found = true;
+          }
+          sel.appendChild(opt);
+        });
+
+        if (prevVal && !found) {
+          this.modalTeacher = '';
+          sel.value = '';
+        }
+      }
+    };
+  };
+}
+</script>
+
+<div 
+  x-data="questionModalData({
+    correctAnswer: '{% if question.correct_answer %}{{ question.correct_answer }}{% else %}A{% endif %}',
+    previewQuestionImg: '{% if question.image_url %}{{ question.image_url }}{% endif %}',
+    previewA: '{% if question.image_a_url %}{{ question.image_a_url }}{% endif %}',
+    previewB: '{% if question.image_b_url %}{{ question.image_b_url }}{% endif %}',
+    previewC: '{% if question.image_c_url %}{{ question.image_c_url }}{% endif %}',
+    previewD: '{% if question.image_d_url %}{{ question.image_d_url }}{% endif %}',
+    previewE: '{% if question.image_e_url %}{{ question.image_e_url }}{% endif %}',
+    modalSubject: '{% if question.subject_id %}{{ question.subject_id }}{% else %}{{ preselected_subject|default:'' }}{% endif %}',
+    modalTeacher: '{% if question.created_by_id %}{{ question.created_by_id }}{% else %}{{ preselected_teacher|default:'' }}{% endif %}'
+  })"
+  x-init="initModal()"
+  x-show="showModal"
+  x-cloak
+  @htmx:after-request="showModal = false"
+  class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+  role="dialog"
+  aria-modal="true"
+>
+  <!-- Scrim Backdrop Overlay -->
+  <div 
+    x-show="showModal"
+    x-transition:enter="transition ease-out duration-300"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="transition ease-in duration-200"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    @click="showModal = false"
+    class="fixed inset-0 bg-black/70 backdrop-blur-xs"
+  ></div>
+
+  <!-- Modal Dialog Window -->
+  <div 
+    x-show="showModal"
+    x-transition:enter="transition ease-out duration-300"
+    x-transition:enter-start="opacity-0 scale-95 translate-y-4"
+    x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+    x-transition:leave="transition ease-in duration-200"
+    x-transition:leave-start="opacity-100 scale-100 translate-y-0"
+    x-transition:leave-end="opacity-0 scale-95 translate-y-4"
+    class="relative z-10 w-full max-w-4xl bg-white dark:bg-stone-900 rounded-[2.5rem] sm:rounded-[3rem] p-6 sm:p-10 text-left border border-stone-200 dark:border-stone-800 shadow-2xl my-8 max-h-[90vh] overflow-y-auto scrollbar-thin scrollbar-thumb-stone-300 dark:scrollbar-thumb-stone-700"
+  >
+    <!-- Modal Close Top Button -->
+    <button 
+      type="button"
+      @click="showModal = false"
+      class="absolute top-6 right-6 sm:top-8 sm:right-8 p-2.5 text-stone-400 hover:text-red-500 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-full transition cursor-pointer"
+      aria-label="Tutup Modal"
+    >
+      <i data-lucide="x" class="w-6 h-6"></i>
+    </button>
+
+    <!-- Modal Title -->
+    <div class="mb-8 border-l-8 border-orange-600 pl-4">
+      <h3 class="text-2xl sm:text-3xl font-bold text-stone-900 dark:text-white tracking-tight">
+        {% if is_edit %}Update Butir Soal{% else %}Tambah Butir Soal Baru{% endif %}
+      </h3>
+      <p class="text-xs font-normal text-stone-500 dark:text-stone-400 mt-1">
+        {% if is_edit %}Edit konten pertanyaan, gambar, dan pilihan jawaban{% else %}Lengkapi data butir soal dan kunci jawaban untuk bank soal{% endif %}
+      </p>
+    </div>
+
+    <!-- Question Form -->
+    <form 
+      method="post" 
+      action="{% if is_edit %}{% url 'questions:edit' pk=question.id %}{% else %}{% url 'questions:create' %}{% endif %}"
+      hx-post="{% if is_edit %}{% url 'questions:edit' pk=question.id %}{% else %}{% url 'questions:create' %}{% endif %}"
+      hx-target="#question-list-container"
+      hx-swap="outerHTML"
+      hx-encoding="multipart/form-data"
+      enctype="multipart/form-data"
+      @submit="isSubmitting = true"
+      class="space-y-8"
+    >
+      {% csrf_token %}
+      <input type="hidden" name="is_htmx" value="1">
+
+      <!-- Hidden Clear Flags for Image Deletions -->
+      <input type="hidden" name="clear_question_image" x-ref="clearQuestionImg" value="0">
+      <input type="hidden" name="clear_image_a" x-ref="clearImgA" value="0">
+      <input type="hidden" name="clear_image_b" x-ref="clearImgB" value="0">
+      <input type="hidden" name="clear_image_c" x-ref="clearImgC" value="0">
+      <input type="hidden" name="clear_image_d" x-ref="clearImgD" value="0">
+      <input type="hidden" name="clear_image_e" x-ref="clearImgE" value="0">
+
+      <!-- SECTION 1: METADATA SELECTION (JENJANG, MAPEL, GURU) -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-stone-50/70 dark:bg-stone-800/40 p-5 rounded-[2rem] border border-stone-200/70 dark:border-stone-800">
+        
+        <!-- Jenjang Kelas -->
+        <div>
+          <label class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-2 block">
+            <i data-lucide="layers" class="w-3.5 h-3.5 inline mr-1 text-orange-600"></i> Jenjang Kelas
+          </label>
+          <select 
+            name="level" 
+            required
+            class="w-full bg-white dark:bg-stone-900 p-3.5 rounded-2xl text-xs font-medium text-stone-900 dark:text-white border border-stone-200 dark:border-stone-700 outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer shadow-xs"
+          >
+            <option value="">-- Pilih Jenjang --</option>
+            {% for l in levels %}
+              <option value="{{ l }}" {% if preselected_level == l|stringformat:"s" or question.level == l %}selected{% endif %}>
+                Kelas {{ l }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Mata Pelajaran -->
+        <div>
+          <label class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-2 block">
+            <i data-lucide="book-open" class="w-3.5 h-3.5 inline mr-1 text-orange-600"></i> Mata Pelajaran
+          </label>
+          <select 
+            id="modal-subject-select"
+            name="subject" 
+            x-model="modalSubject"
+            @change="updateModalTeacherOptions()"
+            required
+            class="w-full bg-white dark:bg-stone-900 p-3.5 rounded-2xl text-xs font-medium text-stone-900 dark:text-white border border-stone-200 dark:border-stone-700 outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer shadow-xs"
+          >
+            <option value="">-- Pilih Mata Pelajaran --</option>
+            {% for s in subjects %}
+              <option value="{{ s.id }}" {% if preselected_subject == s.id|stringformat:"s" or question.subject_id == s.id %}selected{% endif %}>
+                {{ s.name }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Guru Pembuat (Admin Select / Teacher Readonly) -->
+        <div>
+          <label class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-2 block">
+            <i data-lucide="user" class="w-3.5 h-3.5 inline mr-1 text-orange-600"></i> Guru Pembuat
+          </label>
+          {% if is_staff_admin %}
+            <select 
+              id="modal-teacher-select"
+              name="created_by" 
+              x-model="modalTeacher"
+              class="w-full bg-white dark:bg-stone-900 p-3.5 rounded-2xl text-xs font-medium text-stone-900 dark:text-white border border-stone-200 dark:border-stone-700 outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer shadow-xs"
+            >
+              <option value="">-- Pilih Guru Pembuat --</option>
+              {% for t in teachers %}
+                <option value="{{ t.id }}" {% if preselected_teacher == t.id|stringformat:"s" or question.created_by_id == t.id %}selected{% endif %}>
+                  {{ t.full_name }}
+                </option>
+              {% endfor %}
+            </select>
+          {% else %}
+            <div class="p-3.5 bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-700 text-xs font-medium text-stone-700 dark:text-stone-300 truncate shadow-xs">
+              {{ current_teacher.full_name|default:user.get_full_name }}
+            </div>
+            {% if current_teacher %}
+              <input type="hidden" name="created_by" value="{{ current_teacher.id }}">
+            {% endif %}
+          {% endif %}
+        </div>
+
+      </div>
+
+      <!-- SECTION 2: QUESTION TEXT & QUESTION IMAGE -->
+      <div class="space-y-4">
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-2">
+          Konten Butir Pertanyaan
+        </label>
+        <textarea 
+          name="question_text" 
+          required 
+          rows="4" 
+          placeholder="Tulis butir pertanyaan soal di sini..."
+          class="w-full bg-stone-50 dark:bg-stone-800/80 p-6 rounded-[2rem] text-stone-900 dark:text-white border border-stone-200/80 dark:border-stone-700 font-medium text-base outline-none focus:ring-2 focus:ring-orange-500 shadow-inner"
+        >{{ question.question_text|default:'' }}</textarea>
+
+        <!-- Question Image Upload & Live Preview -->
+        <div class="flex flex-wrap items-center gap-4 pt-1">
+          <label class="cursor-pointer bg-stone-100 dark:bg-stone-800 hover:bg-orange-600 hover:text-white px-5 py-3 rounded-2xl text-xs font-medium flex items-center gap-2 transition-all dark:text-white shadow-xs border border-stone-200 dark:border-stone-700">
+            <i data-lucide="image" class="w-4 h-4"></i>
+            <span>Unggah Gambar Soal</span>
+            <input 
+              type="file" 
+              name="question_image" 
+              x-ref="inputQuestionImg" 
+              accept="image/*" 
+              class="hidden" 
+              @change="previewFile($event, 'question')"
+            />
+          </label>
+
+          <!-- Live Preview Box -->
+          <template x-if="previewQuestionImg">
+            <div class="relative inline-block">
+              <img :src="previewQuestionImg" class="h-16 rounded-xl border-2 border-orange-500 object-cover shadow-md" alt="Preview Gambar Soal" />
+              <button 
+                type="button" 
+                @click="clearImage('question')" 
+                class="absolute -top-2.5 -right-2.5 bg-red-500 text-white rounded-full p-1 shadow-lg hover:bg-red-600 transition cursor-pointer"
+                title="Hapus Gambar"
+              >
+                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- SECTION 3: OPTIONS A - E AND OPTION IMAGES -->
+      <div>
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-2 mb-3 block">
+          Pilihan Jawaban (A, B, C, D, E)
+        </label>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          
+          <!-- OPSI A -->
+          <div 
+            class="p-5 rounded-[2rem] space-y-3.5 transition-all duration-200"
+            :class="correctAnswer === 'A' 
+              ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-2 border-emerald-500 shadow-md shadow-emerald-500/15 ring-2 ring-emerald-500/20' 
+              : 'bg-stone-50 dark:bg-stone-800/40 border border-stone-200/80 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700'"
+          >
+            <!-- Card Header: Radio input, Letter Avatar, Clickable Status Pill, Image Upload -->
+            <div class="flex items-center justify-between gap-3 pb-2 border-b border-stone-200/60 dark:border-stone-700/60">
+              <label for="radio-ans-a" class="flex items-center gap-2.5 cursor-pointer select-none group">
+                <input 
+                  type="radio" 
+                  id="radio-ans-a"
+                  name="correct_answer" 
+                  value="A" 
+                  x-model="correctAnswer"
+                  class="w-5 h-5 text-emerald-600 accent-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                />
+                <span 
+                  class="w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shrink-0 shadow-xs transition-all"
+                  :class="correctAnswer === 'A' ? 'bg-emerald-600 text-white ring-2 ring-emerald-400/50 scale-105' : 'bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300 group-hover:bg-orange-500 group-hover:text-white'"
+                >
+                  A
+                </span>
+                <span 
+                  x-show="correctAnswer === 'A'" 
+                  x-cloak 
+                  class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-600 text-white shadow-xs"
+                >
+                  <svg class="w-3.5 h-3.5 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                  <span>KUNCI JAWABAN</span>
+                </span>
+                <span 
+                  x-show="correctAnswer !== 'A'" 
+                  class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold text-stone-500 dark:text-stone-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300 group-hover:bg-emerald-100/60 dark:group-hover:bg-emerald-950/60 border border-stone-200 dark:border-stone-700 transition"
+                >
+                  <span>Jadikan Kunci</span>
+                </span>
+              </label>
+
+              <label class="cursor-pointer p-2 text-stone-400 hover:text-orange-600 dark:hover:text-orange-400 transition rounded-xl hover:bg-stone-100 dark:hover:bg-stone-800 shrink-0" title="Unggah Gambar Opsi A">
+                <i data-lucide="image" class="w-4.5 h-4.5"></i>
+                <input type="file" name="image_a" x-ref="inputImgA" accept="image/*" class="hidden" @change="previewFile($event, 'a')" />
+              </label>
+            </div>
+
+            <div>
+              <input 
+                type="text" 
+                name="option_a" 
+                value="{{ question.option_a|default:'' }}"
+                placeholder="Tulis pilihan jawaban A..."
+                class="w-full bg-white dark:bg-stone-900 px-4 py-3 rounded-2xl text-stone-900 dark:text-white border border-stone-200/80 dark:border-stone-700 font-medium text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition shadow-2xs"
+              />
+            </div>
+
+            <template x-if="previewA">
+              <div class="relative w-max ml-1 pt-1">
+                <img :src="previewA" class="h-14 rounded-lg border border-orange-500 object-cover shadow-xs" />
+                <button type="button" @click="clearImage('a')" class="absolute -top-1 -right-2 bg-red-500 text-white rounded-full p-0.5 shadow-md hover:bg-red-600 transition cursor-pointer">
+                  <i data-lucide="x" class="w-3 h-3"></i>
+                </button>
+              </div>
+            </template>
+          </div>
+
+          <!-- OPSI B -->
+          <div 
+            class="p-5 rounded-[2rem] space-y-3.5 transition-all duration-200"
+            :class="correctAnswer === 'B' 
+              ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-2 border-emerald-500 shadow-md shadow-emerald-500/15 ring-2 ring-emerald-500/20' 
+              : 'bg-stone-50 dark:bg-stone-800/40 border border-stone-200/80 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700'"
+          >
+            <!-- Card Header: Radio input, Letter Avatar, Clickable Status Pill, Image Upload -->
+            <div class="flex items-center justify-between gap-3 pb-2 border-b border-stone-200/60 dark:border-stone-700/60">
+              <label for="radio-ans-b" class="flex items-center gap-2.5 cursor-pointer select-none group">
+                <input 
+                  type="radio" 
+                  id="radio-ans-b"
+                  name="correct_answer" 
+                  value="B" 
+                  x-model="correctAnswer"
+                  class="w-5 h-5 text-emerald-600 accent-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                />
+                <span 
+                  class="w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shrink-0 shadow-xs transition-all"
+                  :class="correctAnswer === 'B' ? 'bg-emerald-600 text-white ring-2 ring-emerald-400/50 scale-105' : 'bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300 group-hover:bg-orange-500 group-hover:text-white'"
+                >
+                  B
+                </span>
+                <span 
+                  x-show="correctAnswer === 'B'" 
+                  x-cloak 
+                  class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-600 text-white shadow-xs"
+                >
+                  <svg class="w-3.5 h-3.5 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                  <span>KUNCI JAWABAN</span>
+                </span>
+                <span 
+                  x-show="correctAnswer !== 'B'" 
+                  class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold text-stone-500 dark:text-stone-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300 group-hover:bg-emerald-100/60 dark:group-hover:bg-emerald-950/60 border border-stone-200 dark:border-stone-700 transition"
+                >
+                  <span>Jadikan Kunci</span>
+                </span>
+              </label>
+
+              <label class="cursor-pointer p-2 text-stone-400 hover:text-orange-600 dark:hover:text-orange-400 transition rounded-xl hover:bg-stone-100 dark:hover:bg-stone-800 shrink-0" title="Unggah Gambar Opsi B">
+                <i data-lucide="image" class="w-4.5 h-4.5"></i>
+                <input type="file" name="image_b" x-ref="inputImgB" accept="image/*" class="hidden" @change="previewFile($event, 'b')" />
+              </label>
+            </div>
+
+            <div>
+              <input 
+                type="text" 
+                name="option_b" 
+                value="{{ question.option_b|default:'' }}"
+                placeholder="Pilihan B..."
+                class="w-full bg-white dark:bg-stone-900 px-4 py-3 rounded-2xl text-stone-900 dark:text-white border border-stone-200/80 dark:border-stone-700 font-medium text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition shadow-2xs"
+              />
+            </div>
+
+            <template x-if="previewB">
+              <div class="relative w-max ml-1 pt-1">
+                <img :src="previewB" class="h-14 rounded-lg border border-orange-500 object-cover shadow-xs" />
+                <button type="button" @click="clearImage('b')" class="absolute -top-1 -right-2 bg-red-500 text-white rounded-full p-0.5 shadow-md hover:bg-red-600 transition cursor-pointer">
+                  <i data-lucide="x" class="w-3 h-3"></i>
+                </button>
+              </div>
+            </template>
+          </div>
+
+          <!-- OPSI C -->
+          <div 
+            class="p-5 rounded-[2rem] space-y-3.5 transition-all duration-200"
+            :class="correctAnswer === 'C' 
+              ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-2 border-emerald-500 shadow-md shadow-emerald-500/15 ring-2 ring-emerald-500/20' 
+              : 'bg-stone-50 dark:bg-stone-800/40 border border-stone-200/80 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700'"
+          >
+            <!-- Card Header: Radio input, Letter Avatar, Clickable Status Pill, Image Upload -->
+            <div class="flex items-center justify-between gap-3 pb-2 border-b border-stone-200/60 dark:border-stone-700/60">
+              <label for="radio-ans-c" class="flex items-center gap-2.5 cursor-pointer select-none group">
+                <input 
+                  type="radio" 
+                  id="radio-ans-c"
+                  name="correct_answer" 
+                  value="C" 
+                  x-model="correctAnswer"
+                  class="w-5 h-5 text-emerald-600 accent-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                />
+                <span 
+                  class="w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shrink-0 shadow-xs transition-all"
+                  :class="correctAnswer === 'C' ? 'bg-emerald-600 text-white ring-2 ring-emerald-400/50 scale-105' : 'bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300 group-hover:bg-orange-500 group-hover:text-white'"
+                >
+                  C
+                </span>
+                <span 
+                  x-show="correctAnswer === 'C'" 
+                  x-cloak 
+                  class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-600 text-white shadow-xs"
+                >
+                  <svg class="w-3.5 h-3.5 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                  <span>KUNCI JAWABAN</span>
+                </span>
+                <span 
+                  x-show="correctAnswer !== 'C'" 
+                  class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold text-stone-500 dark:text-stone-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300 group-hover:bg-emerald-100/60 dark:group-hover:bg-emerald-950/60 border border-stone-200 dark:border-stone-700 transition"
+                >
+                  <span>Jadikan Kunci</span>
+                </span>
+              </label>
+
+              <label class="cursor-pointer p-2 text-stone-400 hover:text-orange-600 dark:hover:text-orange-400 transition rounded-xl hover:bg-stone-100 dark:hover:bg-stone-800 shrink-0" title="Unggah Gambar Opsi C">
+                <i data-lucide="image" class="w-4.5 h-4.5"></i>
+                <input type="file" name="image_c" x-ref="inputImgC" accept="image/*" class="hidden" @change="previewFile($event, 'c')" />
+              </label>
+            </div>
+
+            <div>
+              <input 
+                type="text" 
+                name="option_c" 
+                value="{{ question.option_c|default:'' }}"
+                placeholder="Pilihan C..."
+                class="w-full bg-white dark:bg-stone-900 px-4 py-3 rounded-2xl text-stone-900 dark:text-white border border-stone-200/80 dark:border-stone-700 font-medium text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition shadow-2xs"
+              />
+            </div>
+
+            <template x-if="previewC">
+              <div class="relative w-max ml-1 pt-1">
+                <img :src="previewC" class="h-14 rounded-lg border border-orange-500 object-cover shadow-xs" />
+                <button type="button" @click="clearImage('c')" class="absolute -top-1 -right-2 bg-red-500 text-white rounded-full p-0.5 shadow-md hover:bg-red-600 transition cursor-pointer">
+                  <i data-lucide="x" class="w-3 h-3"></i>
+                </button>
+              </div>
+            </template>
+          </div>
+
+          <!-- OPSI D -->
+          <div 
+            class="p-5 rounded-[2rem] space-y-3.5 transition-all duration-200"
+            :class="correctAnswer === 'D' 
+              ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-2 border-emerald-500 shadow-md shadow-emerald-500/15 ring-2 ring-emerald-500/20' 
+              : 'bg-stone-50 dark:bg-stone-800/40 border border-stone-200/80 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700'"
+          >
+            <!-- Card Header: Radio input, Letter Avatar, Clickable Status Pill, Image Upload -->
+            <div class="flex items-center justify-between gap-3 pb-2 border-b border-stone-200/60 dark:border-stone-700/60">
+              <label for="radio-ans-d" class="flex items-center gap-2.5 cursor-pointer select-none group">
+                <input 
+                  type="radio" 
+                  id="radio-ans-d"
+                  name="correct_answer" 
+                  value="D" 
+                  x-model="correctAnswer"
+                  class="w-5 h-5 text-emerald-600 accent-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                />
+                <span 
+                  class="w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shrink-0 shadow-xs transition-all"
+                  :class="correctAnswer === 'D' ? 'bg-emerald-600 text-white ring-2 ring-emerald-400/50 scale-105' : 'bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300 group-hover:bg-orange-500 group-hover:text-white'"
+                >
+                  D
+                </span>
+                <span 
+                  x-show="correctAnswer === 'D'" 
+                  x-cloak 
+                  class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-600 text-white shadow-xs"
+                >
+                  <svg class="w-3.5 h-3.5 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                  <span>KUNCI JAWABAN</span>
+                </span>
+                <span 
+                  x-show="correctAnswer !== 'D'" 
+                  class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold text-stone-500 dark:text-stone-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300 group-hover:bg-emerald-100/60 dark:group-hover:bg-emerald-950/60 border border-stone-200 dark:border-stone-700 transition"
+                >
+                  <span>Jadikan Kunci</span>
+                </span>
+              </label>
+
+              <label class="cursor-pointer p-2 text-stone-400 hover:text-orange-600 dark:hover:text-orange-400 transition rounded-xl hover:bg-stone-100 dark:hover:bg-stone-800 shrink-0" title="Unggah Gambar Opsi D">
+                <i data-lucide="image" class="w-4.5 h-4.5"></i>
+                <input type="file" name="image_d" x-ref="inputImgD" accept="image/*" class="hidden" @change="previewFile($event, 'd')" />
+              </label>
+            </div>
+
+            <div>
+              <input 
+                type="text" 
+                name="option_d" 
+                value="{{ question.option_d|default:'' }}"
+                placeholder="Pilihan D..."
+                class="w-full bg-white dark:bg-stone-900 px-4 py-3 rounded-2xl text-stone-900 dark:text-white border border-stone-200/80 dark:border-stone-700 font-medium text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition shadow-2xs"
+              />
+            </div>
+
+            <template x-if="previewD">
+              <div class="relative w-max ml-1 pt-1">
+                <img :src="previewD" class="h-14 rounded-lg border border-orange-500 object-cover shadow-xs" />
+                <button type="button" @click="clearImage('d')" class="absolute -top-1 -right-2 bg-red-500 text-white rounded-full p-0.5 shadow-md hover:bg-red-600 transition cursor-pointer">
+                  <i data-lucide="x" class="w-3 h-3"></i>
+                </button>
+              </div>
+            </template>
+          </div>
+
+          <!-- OPSI E (Spans full on md) -->
+          <div 
+            class="md:col-span-2 p-5 rounded-[2rem] space-y-3.5 transition-all duration-200"
+            :class="correctAnswer === 'E' 
+              ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-2 border-emerald-500 shadow-md shadow-emerald-500/15 ring-2 ring-emerald-500/20' 
+              : 'bg-stone-50 dark:bg-stone-800/40 border border-stone-200/80 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700'"
+          >
+            <!-- Card Header: Radio input, Letter Avatar, Clickable Status Pill, Image Upload -->
+            <div class="flex items-center justify-between gap-3 pb-2 border-b border-stone-200/60 dark:border-stone-700/60">
+              <label for="radio-ans-e" class="flex items-center gap-2.5 cursor-pointer select-none group">
+                <input 
+                  type="radio" 
+                  id="radio-ans-e"
+                  name="correct_answer" 
+                  value="E" 
+                  x-model="correctAnswer"
+                  class="w-5 h-5 text-emerald-600 accent-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                />
+                <span 
+                  class="w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shrink-0 shadow-xs transition-all"
+                  :class="correctAnswer === 'E' ? 'bg-emerald-600 text-white ring-2 ring-emerald-400/50 scale-105' : 'bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300 group-hover:bg-orange-500 group-hover:text-white'"
+                >
+                  E
+                </span>
+                <span 
+                  x-show="correctAnswer === 'E'" 
+                  x-cloak 
+                  class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-600 text-white shadow-xs"
+                >
+                  <svg class="w-3.5 h-3.5 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                  <span>KUNCI JAWABAN</span>
+                </span>
+                <span 
+                  x-show="correctAnswer !== 'E'" 
+                  class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-semibold text-stone-500 dark:text-stone-400 group-hover:text-emerald-700 dark:group-hover:text-emerald-300 group-hover:bg-emerald-100/60 dark:group-hover:bg-emerald-950/60 border border-stone-200 dark:border-stone-700 transition"
+                >
+                  <span>Jadikan Kunci</span>
+                </span>
+              </label>
+
+              <label class="cursor-pointer p-2 text-stone-400 hover:text-orange-600 dark:hover:text-orange-400 transition rounded-xl hover:bg-stone-100 dark:hover:bg-stone-800 shrink-0" title="Unggah Gambar Opsi E">
+                <i data-lucide="image" class="w-4.5 h-4.5"></i>
+                <input type="file" name="image_e" x-ref="inputImgE" accept="image/*" class="hidden" @change="previewFile($event, 'e')" />
+              </label>
+            </div>
+
+            <div>
+              <input 
+                type="text" 
+                name="option_e" 
+                value="{{ question.option_e|default:'' }}"
+                placeholder="Pilihan E..."
+                class="w-full bg-white dark:bg-stone-900 px-4 py-3 rounded-2xl text-stone-900 dark:text-white border border-stone-200/80 dark:border-stone-700 font-medium text-sm outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition shadow-2xs"
+              />
+            </div>
+
+            <template x-if="previewE">
+              <div class="relative w-max ml-1 pt-1">
+                <img :src="previewE" class="h-14 rounded-lg border border-orange-500 object-cover shadow-xs" />
+                <button type="button" @click="clearImage('e')" class="absolute -top-1 -right-2 bg-red-500 text-white rounded-full p-0.5 shadow-md hover:bg-red-600 transition cursor-pointer">
+                  <i data-lucide="x" class="w-3 h-3"></i>
+                </button>
+              </div>
+            </template>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- SECTION 4: ACTION SUBMIT BUTTONS -->
+      <div class="flex items-center gap-3 pt-4 border-t border-stone-200 dark:border-stone-800">
+        <button 
+          type="button"
+          @click="showModal = false"
+          class="flex-1 py-4.5 rounded-2xl bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700 font-semibold text-xs transition active:scale-95 cursor-pointer"
+        >
+          Batal
+        </button>
+        <button 
+          type="submit" 
+          :disabled="isSubmitting"
+          class="flex-[2] py-4.5 rounded-2xl bg-stone-900 hover:bg-black dark:bg-white dark:text-black dark:hover:bg-stone-200 text-white font-semibold text-xs tracking-wide shadow-xl transition active:scale-95 disabled:opacity-50 cursor-pointer"
+        >
+          <span x-show="!isSubmitting">{% if is_edit %}Simpan Perubahan{% else %}Simpan ke Bank Soal{% endif %}</span>
+          <span x-show="isSubmitting">Menyimpan...</span>
+        </button>
+      </div>
+
+    </form>
+  </div>
+</div>

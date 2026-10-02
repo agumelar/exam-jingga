@@ -1,0 +1,79 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="id" class="h-full notranslate" translate="no">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="google" content="notranslate">
+  <meta name="description" content="Exam Jingga - Sistem Computer Based Test (CBT) SMKN 1 Rongga">
+  
+  <title>{% block title %}EXAM JINGGA - CBT SMKN 1 Rongga{% endblock %}</title>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="{% static 'img/logo_sekolah.png' %}">
+
+  <!-- Compiled M3 Tailwind CSS -->
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+
+  <!-- Immediate Theme Initialization to Prevent Flash of Unstyled Content (FOUC) -->
+  <script>
+    (function() {
+      const savedTheme = localStorage.getItem('theme');
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    })();
+  </script>
+
+  {% block head %}{% endblock %}
+</head>
+<body 
+  class="h-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 antialiased font-sans selection:bg-orange-500 selection:text-white transition-colors duration-150"
+  hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+>
+  <!-- Main Content Layout Anchor -->
+  {% block layout %}
+    {% block content %}{% endblock %}
+  {% endblock %}
+
+  <!-- Core Offline-First Vendor Scripts -->
+  <script src="{% static 'vendor/htmx.min.js' %}"></script>
+  <script src="{% static 'vendor/alpine.min.js' %}" defer></script>
+  <script src="{% static 'vendor/lucide.min.js' %}"></script>
+
+  <!-- Lucide & Theme Synchronization Scripts -->
+  <script>
+    // Initialize Lucide Icons on initial DOM load and after every HTMX content swap
+    function initIcons() {
+      if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', initIcons);
+    document.body.addEventListener('htmx:afterSwap', initIcons);
+
+    // Global Theme Toggle and Helper Functions
+    window.toggleTheme = function() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      const newTheme = isDark ? 'dark' : 'light';
+      localStorage.setItem('theme', newTheme);
+      window.dispatchEvent(new CustomEvent('exam-jingga-theme-change', { 
+        detail: { theme: newTheme, isDark: isDark } 
+      }));
+      // Re-trigger icon updates in case theme-swapped icons need refresh
+      setTimeout(initIcons, 50);
+      return isDark;
+    };
+
+    window.isDarkMode = function() {
+      return document.documentElement.classList.contains('dark');
+    };
+  </script>
+
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

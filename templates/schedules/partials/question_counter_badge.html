@@ -1,0 +1,38 @@
+{% load static %}
+{% comment %}
+Question counter and quota badge summary (Used for Out-of-band updates in SelectQuestions)
+{% endcomment %}
+
+<div id="question-counter-container" hx-swap-oob="true" class="bg-white dark:bg-stone-900 px-4 py-3.5 sm:px-8 sm:py-5 rounded-2xl sm:rounded-[2.5rem] shadow-xs border border-orange-500/20 flex flex-wrap items-center justify-between sm:justify-start gap-4 sm:gap-6 md:gap-8 w-full lg:w-auto">
+  
+  <!-- Kuota Anda (Collab only) -->
+  {% if collab_info.is_collab %}
+    <div class="text-left border-r border-stone-100 dark:border-stone-800 pr-4 sm:pr-6 md:pr-8">
+      <p class="text-[11px] sm:text-xs font-medium text-stone-400 mb-0.5 sm:mb-1">Kuota Anda</p>
+      <p class="text-xl sm:text-2xl font-bold {% if collab_info.my_count >= collab_info.quota %}text-emerald-500{% else %}text-blue-600 dark:text-blue-400{% endif %}">
+        {{ collab_info.my_count }} <span class="text-stone-300 dark:text-stone-600 text-xs sm:text-sm">/ {{ collab_info.quota }}</span>
+      </p>
+    </div>
+  {% endif %}
+
+  <!-- Total Soal Terkumpul -->
+  <div class="text-left sm:border-r border-stone-100 dark:border-stone-800 sm:pr-6 md:pr-8">
+    <p class="text-[11px] sm:text-xs font-medium text-stone-400 mb-0.5 sm:mb-1">Total Terpilih</p>
+    <p class="text-2xl sm:text-3xl font-bold {% if collab_info.is_full %}text-emerald-500{% else %}text-orange-600 dark:text-orange-500{% endif %}">
+      {{ collab_info.total_selected }} <span class="text-stone-300 dark:text-stone-600 text-xs sm:text-sm">/ {{ collab_info.target_count }}</span>
+    </p>
+  </div>
+
+  <!-- Save Button Form -->
+  <form method="post" action="{% url 'schedules:save_questions' exam_id=exam.id %}" class="w-full sm:w-auto">
+    {% csrf_token %}
+    <button 
+      type="submit" 
+      class="w-full sm:w-auto bg-stone-900 dark:bg-white dark:text-black text-white px-6 sm:px-8 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl font-semibold text-xs tracking-wide hover:scale-105 active:scale-95 transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer select-none"
+    >
+      <i data-lucide="save" class="w-4 h-4 sm:w-4.5 sm:h-4.5"></i>
+      <span>{% if collab_info.is_collab %}Simpan Tugas Saya{% else %}Simpan & Kunci{% endif %}</span>
+    </button>
+  </form>
+
+</div>

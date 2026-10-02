@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}500 - Kesalahan Server • EXAM JINGGA{% endblock %}
+
+{% block layout %}
+<div class="min-h-screen bg-stone-50 dark:bg-stone-950 flex flex-col justify-center items-center p-4 sm:p-6 font-sans relative select-none">
+  
+  <!-- M3 Theme Toggle FAB (Top Right) -->
+  <button 
+    type="button"
+    onclick="window.toggleTheme()" 
+    aria-label="Ganti Tema"
+    class="absolute top-6 right-6 p-3 rounded-full bg-white dark:bg-stone-900 shadow-md text-stone-600 dark:text-orange-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors border border-stone-200 dark:border-stone-800 z-20 cursor-pointer"
+  >
+    <i data-lucide="sun" class="w-5 h-5 dark:hidden"></i>
+    <i data-lucide="moon" class="w-5 h-5 hidden dark:inline"></i>
+  </button>
+
+  <div class="w-full max-w-md text-center">
+    <div class="bg-white dark:bg-stone-900 p-8 sm:p-10 rounded-3xl relative z-10 border border-stone-200 dark:border-stone-800 m3-elevation-3">
+      
+      <!-- Tonal Icon Badge (Red/Orange Amber) -->
+      <div class="w-20 h-20 mx-auto rounded-3xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-6 shadow-xs border border-amber-200/60 dark:border-amber-800/60">
+        <i data-lucide="alert-triangle" class="w-10 h-10"></i>
+      </div>
+
+      <!-- Large 500 Headline -->
+      <h1 class="text-4xl sm:text-5xl font-black text-stone-900 dark:text-white tracking-tight mb-2">
+        500
+      </h1>
+      
+      <h2 class="text-lg font-bold text-stone-800 dark:text-stone-200 mb-2">
+        Terjadi Kesalahan Server
+      </h2>
+
+      <p class="text-xs sm:text-sm text-stone-500 dark:text-stone-400 leading-relaxed mb-8">
+        Sistem sedang mengalami kendala teknis tak terduga. Silakan coba muat ulang halaman atau hubungi Proktor / Tim IT Sekolah.
+      </p>
+
+      <!-- Action Buttons -->
+      <div class="space-y-3">
+        <button 
+          type="button"
+          onclick="window.location.reload()"
+          class="w-full py-3.5 px-6 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-md shadow-orange-600/20 transition-all active:scale-95 cursor-pointer"
+        >
+          <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+          <span>Muat Ulang Halaman</span>
+        </button>
+
+        <a 
+          href="/"
+          class="w-full py-3.5 px-6 rounded-2xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 font-medium text-xs flex items-center justify-center gap-2 transition cursor-pointer"
+        >
+          <i data-lucide="home" class="w-4 h-4"></i>
+          <span>Kembali ke Beranda</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <footer class="mt-8 text-center text-xs text-stone-400 dark:text-stone-600 font-medium">
+    &copy; {% now "Y" %} SMKN 1 Rongga &bull; CBT Exam Jingga
+  </footer>
+</div>
+{% endblock %}

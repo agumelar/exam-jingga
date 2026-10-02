@@ -1,0 +1,356 @@
+{% load static %}
+{% comment %}
+Canonical Google Material Design 3 (M3) Navigation Drawer Component
+Strictly follows official M3 specifications (m3.material.io):
+- In-flow sticky flex navigation on Desktop (zero overlap with main content)
+- Standard 288px width (w-72) with smooth collapse to w-0
+- Slide-in modal drawer with backdrop scrim on Mobile (< 1024px)
+- M3 Pill Shape active indicator (h-12 rounded-full)
+- Tonal color roles (orange-100/950 container, warm stone surfaces)
+{% endcomment %}
+
+<!-- Navigation Drawer Aside Container -->
+<aside 
+  class="shrink-0 transition-all duration-300 ease-in-out select-none font-sans z-40 max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:w-72 max-lg:z-50 max-lg:rounded-e-[28px] max-lg:shadow-2xl lg:sticky lg:top-0 lg:h-screen lg:self-start bg-stone-50/95 dark:bg-stone-900/95 text-stone-800 dark:text-stone-200 border-stone-200/80 dark:border-stone-800/80 backdrop-blur-md flex flex-col overflow-hidden"
+  :class="[
+    /* Mobile slide in/out */
+    sidebarOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full',
+    /* Desktop width collapse */
+    sidebarCollapsed ? 'lg:w-0 lg:opacity-0 lg:border-r-0' : 'lg:w-72 lg:opacity-100 lg:border-r'
+  ]"
+>
+  <!-- Fixed Width Inner Content Wrapper (Prevents squishing during width transition) -->
+  <div class="w-72 h-full flex flex-col min-h-0">
+    
+    <!-- 1. M3 Drawer Header (School Brand & Collapse Toggle) -->
+    <div class="px-5 pt-6 pb-4 flex items-center justify-between border-b border-stone-200/60 dark:border-stone-800/60 shrink-0">
+      <a href="{% url 'core:dashboard' %}" class="flex items-center gap-3 group text-left">
+        <div class="w-10 h-10 rounded-2xl bg-orange-600 text-white shadow-sm shadow-orange-600/20 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+          <i data-lucide="sparkles" class="w-5 h-5"></i>
+        </div>
+        <div class="min-w-0">
+          <h1 class="text-base font-bold text-stone-900 dark:text-white tracking-tight leading-tight truncate">
+            Exam <span class="text-orange-600 dark:text-orange-500">Jingga</span>
+          </h1>
+          <p class="text-xs font-medium text-stone-500 dark:text-stone-400 truncate">
+            SMKN 1 Rongga &bull; CBT
+          </p>
+        </div>
+      </a>
+
+      <!-- Desktop Collapse Button -->
+      <button 
+        type="button"
+        @click="toggleCollapse()"
+        class="hidden lg:flex items-center justify-center p-2 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 rounded-full hover:bg-stone-200/60 dark:hover:bg-stone-800 transition cursor-pointer"
+        title="Sembunyikan Menu"
+        aria-label="Sembunyikan Sidebar"
+      >
+        <i data-lucide="panel-left-close" class="w-5 h-5"></i>
+      </button>
+
+      <!-- Mobile Close Button -->
+      <button 
+        type="button"
+        @click="sidebarOpen = false"
+        class="lg:hidden p-2 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 rounded-full hover:bg-stone-200/60 dark:hover:bg-stone-800 transition cursor-pointer"
+        title="Tutup Menu"
+      >
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    <!-- 2. M3 Scrollable Navigation Destinations -->
+    <nav class="flex-1 overflow-y-auto px-3 py-3 space-y-1 scrollbar-thin scrollbar-thumb-stone-300 dark:scrollbar-thumb-stone-700">
+      
+      <!-- DASHBOARD -->
+      <a 
+        href="{% url 'core:dashboard' %}"
+        class="flex items-center justify-between h-12 px-4 rounded-full text-sm font-medium transition-all duration-200 {% if active_menu == 'dashboard' or request.resolver_match.url_name == 'dashboard' %}bg-orange-100 text-orange-950 dark:bg-orange-950/80 dark:text-orange-200 font-semibold shadow-xs{% else %}text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60{% endif %}"
+        @click="sidebarOpen = false"
+      >
+        <div class="flex items-center gap-3.5">
+          <i data-lucide="layout-dashboard" class="w-5 h-5 shrink-0 {% if active_menu == 'dashboard' or request.resolver_match.url_name == 'dashboard' %}text-orange-600 dark:text-orange-400{% endif %}"></i>
+          <span>Dashboard</span>
+        </div>
+      </a>
+
+      <!-- SECTION: AKADEMIK -->
+      {% if not user.is_student and user.role != 'siswa' %}
+        <hr class="border-t border-stone-200/80 dark:border-stone-800/80 my-2 mx-3">
+        
+        <div class="px-4 py-1 text-xs font-semibold tracking-wider text-stone-500 dark:text-stone-400 uppercase">
+          Akademik
+        </div>
+
+        <!-- Bank Soal -->
+        <a 
+          href="/bank-soal/"
+          class="flex items-center justify-between h-12 px-4 rounded-full text-sm font-medium transition-all duration-200 {% if active_menu == 'bank_soal' %}bg-orange-100 text-orange-950 dark:bg-orange-950/80 dark:text-orange-200 font-semibold shadow-xs{% else %}text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60{% endif %}"
+          @click="sidebarOpen = false"
+        >
+          <div class="flex items-center gap-3.5">
+            <i data-lucide="file-text" class="w-5 h-5 shrink-0 {% if active_menu == 'bank_soal' %}text-orange-600 dark:text-orange-400{% endif %}"></i>
+            <span>Bank Soal</span>
+          </div>
+        </a>
+
+        <!-- Jadwal Ujian -->
+        <a 
+          href="/jadwal-ujian/"
+          class="flex items-center justify-between h-12 px-4 rounded-full text-sm font-medium transition-all duration-200 {% if active_menu == 'jadwal' %}bg-orange-100 text-orange-950 dark:bg-orange-950/80 dark:text-orange-200 font-semibold shadow-xs{% else %}text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60{% endif %}"
+          @click="sidebarOpen = false"
+        >
+          <div class="flex items-center gap-3.5">
+            <i data-lucide="calendar-days" class="w-5 h-5 shrink-0 {% if active_menu == 'jadwal' %}text-orange-600 dark:text-orange-400{% endif %}"></i>
+            <span>Jadwal Ujian</span>
+          </div>
+        </a>
+      {% endif %}
+
+      <!-- SECTION: MASTER DATA (ADMIN & KURIKULUM) -->
+      {% if user.is_admin or user.role == 'admin' or user.role == 'kurikulum' or user.is_superuser %}
+        <hr class="border-t border-stone-200/80 dark:border-stone-800/80 my-2 mx-3">
+
+        <div class="px-4 py-1 text-xs font-semibold tracking-wider text-stone-500 dark:text-stone-400 uppercase">
+          Master Data
+        </div>
+
+        <!-- Data Siswa -->
+        <a 
+          href="/data-siswa/"
+          class="flex items-center justify-between h-12 px-4 rounded-full text-sm font-medium transition-all duration-200 {% if active_menu == 'siswa' %}bg-orange-100 text-orange-950 dark:bg-orange-950/80 dark:text-orange-200 font-semibold shadow-xs{% else %}text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60{% endif %}"
+          @click="sidebarOpen = false"
+        >
+          <div class="flex items-center gap-3.5">
+            <i data-lucide="users" class="w-5 h-5 shrink-0 {% if active_menu == 'siswa' %}text-orange-600 dark:text-orange-400{% endif %}"></i>
+            <span>Data Siswa</span>
+          </div>
+        </a>
+
+        <!-- Import Siswa -->
+        <a 
+          href="/import-siswa/"
+          class="flex items-center justify-between h-12 px-4 rounded-full text-sm font-medium transition-all duration-200 {% if active_menu == 'import_siswa' or request.resolver_match.url_name == 'import_siswa' %}bg-orange-100 text-orange-950 dark:bg-orange-950/80 dark:text-orange-200 font-semibold shadow-xs{% else %}text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60{% endif %}"
+          @click="sidebarOpen = false"
+        >
+          <div class="flex items-center gap-3.5">
+            <i data-lucide="upload" class="w-5 h-5 shrink-0 {% if active_menu == 'import_siswa' or request.resolver_match.url_name == 'import_siswa' %}text-orange-600 dark:text-orange-400{% endif %}"></i>
+            <span>Import Siswa (Excel)</span>
+          </div>
+        </a>
+
+        <!-- Guru & GTK -->
+        <a 
+          href="/master-guru/"
+          class="flex items-center justify-between h-12 px-4 rounded-full text-sm font-medium transition-all duration-200 {% if active_menu == 'guru' %}bg-orange-100 text-orange-950 dark:bg-orange-950/80 dark:text-orange-200 font-semibold shadow-xs{% else %}text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60{% endif %}"
+          @click="sidebarOpen = false"
+        >
+          <div class="flex items-center gap-3.5">
+            <i data-lucide="user-check" class="w-5 h-5 shrink-0 {% if active_menu == 'guru' %}text-orange-600 dark:text-orange-400{% endif %}"></i>
+            <span>Guru &amp; Tenaga Pendidik</span>
+          </div>
+        </a>
+
+        <!-- Kelas Rombel -->
+        <a 
+          href="/master-kelas/"
+          class="flex items-center justify-between h-12 px-4 rounded-full text-sm font-medium transition-all duration-200 {% if active_menu == 'kelas' %}bg-orange-100 text-orange-950 dark:bg-orange-950/80 dark:text-orange-200 font-semibold shadow-xs{% else %}text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60{% endif %}"
+          @click="sidebarOpen = false"
+        >
+          <div class="flex items-center gap-3.5">
+            <i data-lucide="school" class="w-5 h-5 shrink-0 {% if active_menu == 'kelas' %}text-orange-600 dark:text-orange-400{% endif %}"></i>
+            <span>Kelas Rombel</span>
+          </div>
+        </a>
+
+        <!-- Konsentrasi Keahlian -->
+        <a 
+          href="/master-jurusan/"
+          class="flex items-center justify-between h-12 px-4 rounded-full text-sm font-medium transition-all duration-200 {% if active_menu == 'jurusan' %}bg-orange-100 text-orange-950 dark:bg-orange-950/80 dark:text-orange-200 font-semibold shadow-xs{% else %}text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60{% endif %}"
+          @click="sidebarOpen = false"
+        >
+          <div class="flex items-center gap-3.5">
+            <i data-lucide="graduation-cap" class="w-5 h-5 shrink-0 {% if active_menu == 'jurusan' %}text-orange-600 dark:text-orange-400{% endif %}"></i>
+            <span>Konsentrasi Keahlian</span>
+          </div>
+        </a>
+
+        <!-- Mata Pelajaran -->
+        <a 
+          href="/master-mapel/"
+          class="flex items-center justify-between h-12 px-4 rounded-full text-sm font-medium transition-all duration-200 {% if active_menu == 'mapel' or request.resolver_match.url_name == 'master_mapel' %}bg-orange-100 text-orange-950 dark:bg-orange-950/80 dark:text-orange-200 font-semibold shadow-xs{% else %}text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60{% endif %}"
+          @click="sidebarOpen = false"
+        >
+          <div class="flex items-center gap-3.5">
+            <i data-lucide="book" class="w-5 h-5 shrink-0 {% if active_menu == 'mapel' or request.resolver_match.url_name == 'master_mapel' %}text-orange-600 dark:text-orange-400{% endif %}"></i>
+            <span>Mata Pelajaran</span>
+          </div>
+        </a>
+
+        <!-- Penugasan Guru -->
+        <a 
+          href="/penugasan-guru/"
+          class="flex items-center justify-between h-12 px-4 rounded-full text-sm font-medium transition-all duration-200 {% if active_menu == 'penugasan' %}bg-orange-100 text-orange-950 dark:bg-orange-950/80 dark:text-orange-200 font-semibold shadow-xs{% else %}text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60{% endif %}"
+          @click="sidebarOpen = false"
+        >
+          <div class="flex items-center gap-3.5">
+            <i data-lucide="user-plus" class="w-5 h-5 shrink-0 {% if active_menu == 'penugasan' %}text-orange-600 dark:text-orange-400{% endif %}"></i>
+            <span>Penugasan Guru</span>
+          </div>
+        </a>
+      {% endif %}
+
+      <!-- SECTION: SISWA & LOGISTIK -->
+      <hr class="border-t border-stone-200/80 dark:border-stone-800/80 my-2 mx-3">
+
+      <div class="px-4 py-1 text-xs font-semibold tracking-wider text-stone-500 dark:text-stone-400 uppercase">
+        Siswa &amp; Logistik
+      </div>
+
+      <!-- Monitoring Sesi -->
+      {% if not user.is_student and user.role != 'siswa' %}
+        <a 
+          href="/session-management/"
+          class="flex items-center justify-between h-12 px-4 rounded-full text-sm font-medium transition-all duration-200 {% if active_menu == 'sesi' %}bg-orange-100 text-orange-950 dark:bg-orange-950/80 dark:text-orange-200 font-semibold shadow-xs{% else %}text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60{% endif %}"
+          @click="sidebarOpen = false"
+        >
+          <div class="flex items-center gap-3.5">
+            <i data-lucide="layout-grid" class="w-5 h-5 shrink-0 {% if active_menu == 'sesi' %}text-orange-600 dark:text-orange-400{% endif %}"></i>
+            <span>Monitoring Sesi</span>
+          </div>
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
+            Live
+          </span>
+        </a>
+
+        <!-- Hasil & Analisis Nilai -->
+        <a 
+          href="/hasil-ujian/"
+          class="flex items-center justify-between h-12 px-4 rounded-full text-sm font-medium transition-all duration-200 {% if active_menu == 'hasil_ujian' %}bg-orange-100 text-orange-950 dark:bg-orange-950/80 dark:text-orange-200 font-semibold shadow-xs{% else %}text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60{% endif %}"
+          @click="sidebarOpen = false"
+        >
+          <div class="flex items-center gap-3.5">
+            <i data-lucide="bar-chart-3" class="w-5 h-5 shrink-0 {% if active_menu == 'hasil_ujian' %}text-orange-600 dark:text-orange-400{% endif %}"></i>
+            <span>Hasil Ujian</span>
+          </div>
+        </a>
+      {% endif %}
+
+      {% if user.is_admin or user.role == 'admin' or user.role == 'kurikulum' or user.is_superuser %}
+        <!-- Kartu Peserta -->
+        <a 
+          href="/kartu-peserta/"
+          class="flex items-center justify-between h-12 px-4 rounded-full text-sm font-medium transition-all duration-200 {% if active_menu == 'kartu_peserta' %}bg-orange-100 text-orange-950 dark:bg-orange-950/80 dark:text-orange-200 font-semibold shadow-xs{% else %}text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60{% endif %}"
+          @click="sidebarOpen = false"
+        >
+          <div class="flex items-center gap-3.5">
+            <i data-lucide="credit-card" class="w-5 h-5 shrink-0 {% if active_menu == 'kartu_peserta' %}text-orange-600 dark:text-orange-400{% endif %}"></i>
+            <span>Kartu Peserta</span>
+          </div>
+        </a>
+
+        <!-- Daftar Hadir -->
+        <a 
+          href="/daftar-hadir/"
+          class="flex items-center justify-between h-12 px-4 rounded-full text-sm font-medium transition-all duration-200 {% if active_menu == 'daftar_hadir' %}bg-orange-100 text-orange-950 dark:bg-orange-950/80 dark:text-orange-200 font-semibold shadow-xs{% else %}text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60{% endif %}"
+          @click="sidebarOpen = false"
+        >
+          <div class="flex items-center gap-3.5">
+            <i data-lucide="clipboard-list" class="w-5 h-5 shrink-0 {% if active_menu == 'daftar_hadir' %}text-orange-600 dark:text-orange-400{% endif %}"></i>
+            <span>Daftar Hadir</span>
+          </div>
+        </a>
+
+        <!-- Alokasi Logistik -->
+        <a 
+          href="/logistics/"
+          class="flex items-center justify-between h-12 px-4 rounded-full text-sm font-medium transition-all duration-200 {% if active_menu == 'logistik' %}bg-orange-100 text-orange-950 dark:bg-orange-950/80 dark:text-orange-200 font-semibold shadow-xs{% else %}text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60{% endif %}"
+          @click="sidebarOpen = false"
+        >
+          <div class="flex items-center gap-3.5">
+            <i data-lucide="box" class="w-5 h-5 shrink-0 {% if active_menu == 'logistik' %}text-orange-600 dark:text-orange-400{% endif %}"></i>
+            <span>Alokasi Logistik</span>
+          </div>
+        </a>
+
+        <!-- Pengaturan Sistem -->
+        <a 
+          href="/pengaturan/"
+          class="flex items-center justify-between h-12 px-4 rounded-full text-sm font-medium transition-all duration-200 {% if active_menu == 'pengaturan' %}bg-orange-100 text-orange-950 dark:bg-orange-950/80 dark:text-orange-200 font-semibold shadow-xs{% else %}text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60{% endif %}"
+          @click="sidebarOpen = false"
+        >
+          <div class="flex items-center gap-3.5">
+            <i data-lucide="settings" class="w-5 h-5 shrink-0 {% if active_menu == 'pengaturan' %}text-orange-600 dark:text-orange-400{% endif %}"></i>
+            <span>Pengaturan Lembaga</span>
+          </div>
+        </a>
+      {% endif %}
+
+      <div class="h-4"></div>
+    </nav>
+
+    <!-- 3. M3 Drawer Footer (User Account Card & Quick Controls) -->
+    <div class="p-3 border-t border-stone-200/80 dark:border-stone-800/80 bg-stone-100/80 dark:bg-stone-900/90 shrink-0">
+      {% if user.is_authenticated %}
+        <div class="p-2.5 rounded-2xl bg-white dark:bg-stone-950 border border-stone-200/80 dark:border-stone-800/80 flex items-center justify-between shadow-xs">
+          <!-- User Info -->
+          <div class="flex items-center gap-2.5 min-w-0 flex-1 mr-2 text-left">
+            <div class="w-8 h-8 rounded-full bg-orange-600 text-white font-bold text-xs flex items-center justify-center uppercase shadow-xs shrink-0">
+              {{ user.first_name|default:user.username|slice:':1'|default:'U' }}
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-xs font-semibold text-stone-900 dark:text-white truncate">
+                {{ user.get_full_name|default:user.username }}
+              </p>
+              <p class="text-[11px] text-stone-500 dark:text-stone-400 capitalize truncate">
+                {{ user.get_role_display|default:user.role }}
+              </p>
+            </div>
+          </div>
+
+          <!-- Action Controls -->
+          <div class="flex items-center gap-1 shrink-0">
+            <!-- Theme Toggle Button -->
+            <button 
+              type="button"
+              onclick="window.toggleTheme()"
+              class="p-2 text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-stone-800 rounded-full transition cursor-pointer"
+              title="Ganti Tema (Dark/Light)"
+            >
+              <i data-lucide="sun" class="w-4 h-4 dark:hidden text-amber-500"></i>
+              <i data-lucide="moon" class="w-4 h-4 hidden dark:inline text-orange-400"></i>
+            </button>
+
+            <!-- Logout Form Button -->
+            <form method="post" action="{% url 'accounts:logout' %}">
+              {% csrf_token %}
+              <button 
+                type="submit"
+                class="p-2 text-stone-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-full transition cursor-pointer"
+                title="Keluar Akun"
+              >
+                <i data-lucide="log-out" class="w-4 h-4"></i>
+              </button>
+            </form>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</aside>
+
+<!-- Scrim Backdrop Overlay on Mobile -->
+<div 
+  x-show="sidebarOpen"
+  x-transition:enter="transition-opacity ease-out duration-300"
+  x-transition:enter-start="opacity-0"
+  x-transition:enter-end="opacity-100"
+  x-transition:leave="transition-opacity ease-in duration-200"
+  x-transition:leave-start="opacity-100"
+  x-transition:leave-end="opacity-0"
+  @click="sidebarOpen = false"
+  class="fixed inset-0 bg-black/60 backdrop-blur-xs z-45 lg:hidden"
+  style="display: none;"
+></div>

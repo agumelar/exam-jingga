@@ -1,0 +1,65 @@
+{% extends 'layouts/app.html' %}
+{% load static %}
+
+{% block page_header %}
+<header class="mb-8 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+  <!-- Back button & Exam Info Title -->
+  <div class="flex items-center gap-4">
+    <a 
+      href="{% url 'schedules:list' %}"
+      class="p-3.5 bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 rounded-2xl shadow-xs hover:text-orange-600 dark:hover:text-orange-400 transition-all text-stone-700 dark:text-white cursor-pointer select-none"
+      title="Kembali ke Jadwal Ujian"
+    >
+      <i data-lucide="arrow-left" class="w-5 h-5"></i>
+    </a>
+    <div class="text-left">
+      <h1 class="text-2xl sm:text-3xl font-bold text-stone-900 dark:text-white tracking-tight">
+        {{ exam.title }}
+      </h1>
+      <p class="text-orange-600 dark:text-orange-500 font-semibold text-xs mt-0.5">
+        {{ exam.subject.name }} &bull; Kelas {{ exam.level|default:"Semua Tingkat" }}
+      </p>
+    </div>
+  </div>
+
+  <!-- Live Counter Badge Container (Includes Save Button) -->
+  {% include 'schedules/partials/question_counter_badge.html' with collab_info=collab_info exam=exam %}
+</header>
+{% endblock %}
+
+{% block app_content %}
+<div class="space-y-6">
+
+  <!-- Collaboration Notice (if multi-teacher exam) -->
+  {% if collab_info.is_collab and others_selected_count > 0 %}
+    <div class="p-4 sm:p-5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-800 rounded-3xl flex items-center gap-3 text-blue-700 dark:text-blue-300 text-xs font-medium shadow-xs">
+      <i data-lucide="info" class="w-5 h-5 shrink-0 text-blue-600 dark:text-blue-400"></i>
+      <span>
+        <strong>Info Kolaborasi:</strong> Rekan guru lain sudah menyumbang <b>{{ others_selected_count }} butir soal</b>. Selesaikan kuota <b>{{ collab_info.quota }} soal</b> milik Anda.
+      </span>
+    </div>
+  {% endif %}
+
+  <!-- Questions List Container -->
+  <div class="grid grid-cols-1 gap-4">
+    {% if bank_questions %}
+      {% for q in bank_questions %}
+        {% with q_id_str=q.id|stringformat:"s" %}
+          {% if q_id_str in selected_ids %}
+            {% include 'schedules/partials/question_selection_row.html' with q=q idx=forloop.counter is_selected=True exam=exam collab_info=collab_info %}
+          {% else %}
+            {% include 'schedules/partials/question_selection_row.html' with q=q idx=forloop.counter is_selected=False exam=exam collab_info=collab_info %}
+          {% endif %}
+        {% endwith %}
+      {% endfor %}
+    {% else %}
+      <div class="py-16 text-center text-stone-400 dark:text-stone-500 font-medium bg-white dark:bg-stone-900 border-2 border-dashed border-stone-200 dark:border-stone-800 rounded-[2.5rem]">
+        <i data-lucide="help-circle" class="w-12 h-12 mx-auto mb-3 text-stone-300 dark:text-stone-700"></i>
+        <p class="text-base font-semibold text-stone-700 dark:text-stone-300">Belum ada butir soal di Bank Soal untuk mata pelajaran dan jenjang ini.</p>
+        <p class="text-xs text-stone-400 mt-1 font-normal">Silakan tambahkan butir soal terlebih dahulu di menu <strong>Bank Soal</strong>.</p>
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

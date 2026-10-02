@@ -1,0 +1,188 @@
+{% extends 'layouts/app.html' %}
+{% load static %}
+
+{% block page_header %}
+<div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+  <!-- Title & Subtitle -->
+  <div>
+    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 dark:text-white">
+      {% if is_admin %}Jadwal Ujian{% else %}Task Ujian Saya{% endif %}
+    </h1>
+    <p class="text-orange-600 dark:text-orange-500 font-medium text-xs mt-1">
+      Lifecycle Management Ujian CBT
+    </p>
+  </div>
+
+  <!-- Actions -->
+  <div class="flex items-center gap-3">
+    <!-- Refresh Button -->
+    <button 
+      type="button"
+      hx-get="{% url 'schedules:list' %}"
+      hx-include="#schedule-filter-form"
+      hx-target="#schedule-list-grid-container"
+      hx-swap="outerHTML"
+      class="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-600 dark:text-stone-300 hover:text-orange-600 dark:hover:text-orange-400 px-4 py-3 rounded-2xl font-semibold shadow-xs flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
+      title="Segarkan Data"
+    >
+      <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+      <span class="hidden sm:inline text-xs">Segarkan</span>
+    </button>
+
+    <!-- Create Schedule Button -->
+    {% if is_admin %}
+      <button 
+        type="button"
+        hx-get="{% url 'schedules:create' %}?type=PTS"
+        hx-target="#modal-container"
+        hx-swap="innerHTML"
+        class="bg-orange-600 hover:bg-orange-500 text-white px-6 py-3.5 rounded-2xl font-semibold shadow-md shadow-orange-600/20 text-xs tracking-wide flex items-center gap-2 transition-all active:scale-95 cursor-pointer select-none"
+      >
+        <i data-lucide="plus" class="w-4 h-4"></i>
+        <span>+ Buat Jadwal PTS / PAS</span>
+      </button>
+    {% else %}
+      <button 
+        type="button"
+        hx-get="{% url 'schedules:create' %}?type=UH"
+        hx-target="#modal-container"
+        hx-swap="innerHTML"
+        class="bg-orange-600 hover:bg-orange-500 text-white px-6 py-3.5 rounded-2xl font-semibold shadow-md shadow-orange-600/20 text-xs tracking-wide flex items-center gap-2 transition-all active:scale-95 cursor-pointer select-none"
+      >
+        <i data-lucide="plus" class="w-4 h-4"></i>
+        <span>+ Buat Ulangan Harian</span>
+      </button>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block app_content %}
+<div 
+  x-data="{
+    searchQuery: '{{ search_query }}',
+    dateFilter: '{{ date_filter }}',
+    statusFilter: '{{ status_filter }}',
+    selectedIds: [],
+
+    toggleSelect(id) {
+      if (this.selectedIds.includes(id)) {
+        this.selectedIds = this.selectedIds.filter(i => i !== id);
+      } else {
+        this.selectedIds.push(id);
+      }
+    },
+
+    isSelected(id) {
+      return this.selectedIds.includes(id);
+    },
+
+    selectAll() {
+      const cards = document.querySelectorAll('[id^=schedule-card-]');
+      const ids = Array.from(cards).map(c => c.id.replace('schedule-card-', ''));
+      this.selectedIds = ids;
+    },
+
+    clearSelection() {
+      this.selectedIds = [];
+    },
+
+    bulkDelete() {
+      if (this.selectedIds.length === 0) return;
+      if (!confirm(`Hapus ${this.selectedIds.length} jadwal terpilih?`)) return;
+
+      htmx.ajax('POST', '{% url 'schedules:bulk_delete' %}', {
+        target: '#schedule-list-grid-container',
+        swap: 'outerHTML',
+        values: { schedule_ids: this.selectedIds },
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+      }).then(() => {
+        this.selectedIds = [];
+      });
+    },
+
+    triggerFilter() {
+      htmx.trigger('#schedule-filter-form', 'submit');
+    }
+  }"
+  class="space-y-8"
+>
+
+  <!-- SEARCH & FILTER SURFACE (ScheduleFilters.jsx matching) -->
+  <div class="bg-white dark:bg-stone-900 p-4 sm:p-6 rounded-[2.5rem] border border-stone-200/80 dark:border-stone-800 shadow-xs">
+    <form 
+      id="schedule-filter-form"
+      hx-get="{% url 'schedules:list' %}"
+      hx-target="#schedule-list-grid-container"
+      hx-swap="outerHTML"
+      hx-trigger="submit, keyup changed delay:300ms from:#schedule-search-input, change from:#schedule-date-select, change from:#schedule-status-select"
+      class="flex flex-col sm:flex-row gap-4 items-center"
+    >
+      <!-- Search Input -->
+      <div class="flex-1 w-full relative">
+        <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none text-stone-400">
+          <i data-lucide="search" class="w-4.5 h-4.5"></i>
+        </div>
+        <input 
+          type="text" 
+          id="schedule-search-input"
+          name="q" 
+          x-model="searchQuery"
+          placeholder="Cari nama ujian atau mapel..."
+          class="w-full pl-12 pr-4 py-3.5 bg-stone-50 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 rounded-2xl outline-none focus:ring-2 focus:ring-orange-500 font-medium text-xs text-stone-900 dark:text-white transition"
+        />
+        <template x-if="searchQuery">
+          <button 
+            type="button" 
+            @click="searchQuery = ''; triggerFilter();" 
+            class="absolute inset-y-0 right-0 pr-4 flex items-center text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 cursor-pointer"
+          >
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </template>
+      </div>
+
+      <!-- Date Filter -->
+      <div class="w-full sm:w-60 relative">
+        <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none text-stone-400">
+          <i data-lucide="calendar-days" class="w-4.5 h-4.5"></i>
+        </div>
+        <select 
+          id="schedule-date-select"
+          name="date_filter"
+          x-model="dateFilter"
+          class="w-full pl-12 pr-8 py-3.5 bg-stone-50 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 rounded-2xl outline-none focus:ring-2 focus:ring-orange-500 font-medium text-xs text-stone-900 dark:text-white cursor-pointer transition"
+        >
+          <option value="Semua Ujian">Semua Waktu</option>
+          <option value="Hari Ini">Jadwal Hari Ini</option>
+        </select>
+      </div>
+
+      <!-- Status Filter -->
+      <div class="w-full sm:w-52 relative">
+        <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none text-stone-400">
+          <i data-lucide="filter" class="w-4.5 h-4.5"></i>
+        </div>
+        <select 
+          id="schedule-status-select"
+          name="status"
+          x-model="statusFilter"
+          class="w-full pl-12 pr-8 py-3.5 bg-stone-50 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 rounded-2xl outline-none focus:ring-2 focus:ring-orange-500 font-medium text-xs text-stone-900 dark:text-white cursor-pointer transition"
+        >
+          <option value="all">Semua Status</option>
+          <option value="aktif">Aktif</option>
+          <option value="selesai">Selesai</option>
+          <option value="draft">Draft</option>
+        </select>
+      </div>
+    </form>
+  </div>
+
+  <!-- SCHEDULE GRID TARGET CONTAINER -->
+  {% include 'schedules/partials/schedule_list_grid.html' with schedules=schedules is_admin=is_admin current_teacher=current_teacher %}
+
+  <!-- HTMX MODAL CONTAINER -->
+  <div id="modal-container"></div>
+
+</div>
+{% endblock %}

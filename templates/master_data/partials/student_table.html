@@ -1,0 +1,151 @@
+<div id="student-table-container">
+  <!-- M3 Student Table Surface -->
+  <div class="rounded-3xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 overflow-hidden m3-elevation-1">
+    <!-- Mobile Card View (Visible on smartphone < 640px) -->
+    <div class="block sm:hidden divide-y divide-stone-100 dark:divide-stone-800">
+      {% for s in students %}
+        <div class="p-4 space-y-2 hover:bg-stone-50/80 dark:hover:bg-stone-800/40 transition">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-xs font-bold text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/60 px-2 py-0.5 rounded-md border border-orange-200/80 dark:border-orange-900/50">
+              NIS: {{ s.nis }}
+            </span>
+            {% if s.status == 'aktif' %}
+              <span class="px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-[11px] font-medium border border-emerald-300 dark:border-emerald-800">
+                {{ s.status }}
+              </span>
+            {% else %}
+              <span class="px-2.5 py-0.5 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 text-[11px] font-medium border border-stone-200 dark:border-stone-700">
+                {{ s.status }}
+              </span>
+            {% endif %}
+          </div>
+          <div class="font-semibold text-sm text-stone-900 dark:text-white">
+            {{ s.full_name }}
+          </div>
+          <div class="flex items-center justify-between text-xs text-stone-500 dark:text-stone-400 pt-1">
+            <span class="inline-flex items-center gap-1 font-medium bg-stone-100 dark:bg-stone-800 px-2 py-1 rounded-lg text-stone-700 dark:text-stone-300 border border-stone-200/80 dark:border-stone-700/80">
+              <i data-lucide="graduation-cap" class="w-3.5 h-3.5 text-orange-500"></i>
+              {{ s.class_room.name|default:'-' }}
+            </span>
+            <span class="text-stone-400 font-mono text-[11px] truncate max-w-[160px]">
+              {{ s.email|default:'-' }}
+            </span>
+          </div>
+        </div>
+      {% empty %}
+        <div class="p-10 text-center text-stone-400 italic text-xs">
+          Tidak ada data siswa ditemukan.
+        </div>
+      {% endfor %}
+    </div>
+
+    <!-- Desktop Table (Visible on tablet & desktop >= 640px) -->
+    <div class="hidden sm:block overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="border-b border-stone-200/80 dark:border-stone-800 text-xs font-semibold text-stone-500 dark:text-stone-400 bg-stone-100/60 dark:bg-stone-900/60">
+            <th class="p-4 pl-6">No</th>
+            <th class="p-4">NIS</th>
+            <th class="p-4">Nama Lengkap</th>
+            <th class="p-4">Kelas</th>
+            <th class="p-4">Email SSO</th>
+            <th class="p-4 pr-6 text-center">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-stone-100 dark:divide-stone-800 text-xs font-medium text-stone-800 dark:text-stone-300">
+          {% for s in students %}
+            <tr class="hover:bg-stone-50/80 dark:hover:bg-stone-800/50 transition-colors">
+              <td class="p-4 pl-6 text-stone-400 font-mono text-xs">
+                {% if page_obj %}{{ page_obj.start_index|add:forloop.counter0 }}{% else %}{{ forloop.counter }}{% endif %}
+              </td>
+              <td class="p-4 font-mono font-semibold text-orange-600 dark:text-orange-400">
+                {{ s.nis }}
+              </td>
+              <td class="p-4 font-semibold text-stone-900 dark:text-white">
+                {{ s.full_name }}
+              </td>
+              <td class="p-4">
+                <span class="px-2.5 py-1 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 text-xs font-medium border border-stone-200 dark:border-stone-700">
+                  {{ s.class_room.name|default:'-' }}
+                </span>
+              </td>
+              <td class="p-4 font-mono text-xs text-stone-400">
+                {{ s.email|default:'-' }}
+              </td>
+              <td class="p-4 pr-6 text-center">
+                {% if s.status == 'aktif' %}
+                  <span class="px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-xs font-medium border border-emerald-300 dark:border-emerald-800">
+                    {{ s.status }}
+                  </span>
+                {% else %}
+                  <span class="px-2.5 py-0.5 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 text-xs font-medium border border-stone-200 dark:border-stone-700">
+                    {{ s.status }}
+                  </span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colSpan="6" class="p-12 text-center text-stone-400 italic">
+                Tidak ada data siswa ditemukan.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination Controls -->
+    {% if page_obj and page_obj.paginator.num_pages > 1 %}
+      <div class="p-4 border-t border-stone-200/80 dark:border-stone-800 bg-stone-50/60 dark:bg-stone-900/40 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-medium text-stone-500 dark:text-stone-400">
+        <div>
+          Menampilkan {{ page_obj.start_index }} - {{ page_obj.end_index }} dari {{ filtered_count }} siswa
+        </div>
+
+        <div class="flex items-center gap-1">
+          {% if page_obj.has_previous %}
+            <button 
+              type="button"
+              hx-get="{% url 'master_data:students' %}?page=1&q={{ search_query }}&class_id={{ filter_class }}&major_id={{ filter_major }}&status={{ filter_status }}"
+              hx-target="#student-table-container"
+              class="px-3 py-1.5 rounded-full bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-700 transition cursor-pointer text-stone-700 dark:text-stone-200"
+            >
+              &laquo;
+            </button>
+            <button 
+              type="button"
+              hx-get="{% url 'master_data:students' %}?page={{ page_obj.previous_page_number }}&q={{ search_query }}&class_id={{ filter_class }}&major_id={{ filter_major }}&status={{ filter_status }}"
+              hx-target="#student-table-container"
+              class="px-3 py-1.5 rounded-full bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-700 transition cursor-pointer text-stone-700 dark:text-stone-200"
+            >
+              Prev
+            </button>
+          {% endif %}
+
+          <span class="px-3.5 py-1.5 rounded-full bg-orange-600 text-white font-semibold text-xs">
+            {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+          </span>
+
+          {% if page_obj.has_next %}
+            <button 
+              type="button"
+              hx-get="{% url 'master_data:students' %}?page={{ page_obj.next_page_number }}&q={{ search_query }}&class_id={{ filter_class }}&major_id={{ filter_major }}&status={{ filter_status }}"
+              hx-target="#student-table-container"
+              class="px-3 py-1.5 rounded-full bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-700 transition cursor-pointer text-stone-700 dark:text-stone-200"
+            >
+              Next
+            </button>
+            <button 
+              type="button"
+              hx-get="{% url 'master_data:students' %}?page={{ page_obj.paginator.num_pages }}&q={{ search_query }}&class_id={{ filter_class }}&major_id={{ filter_major }}&status={{ filter_status }}"
+              hx-target="#student-table-container"
+              class="px-3 py-1.5 rounded-full bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-700 transition cursor-pointer text-stone-700 dark:text-stone-200"
+            >
+              &raquo;
+            </button>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>

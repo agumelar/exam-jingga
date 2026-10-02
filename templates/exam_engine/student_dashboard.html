@@ -1,0 +1,407 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard Siswa - EXAM JINGGA{% endblock %}
+
+{% block layout %}
+<div 
+  x-data="studentDashboard()" 
+  class="min-h-screen bg-slate-50 dark:bg-zinc-950 transition-colors duration-500 font-sans text-left pb-16 select-none"
+>
+  
+  <!-- Top Navigation Bar -->
+  <nav class="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md border-b border-slate-100 dark:border-zinc-800 px-4 sm:px-6 py-3.5 sticky top-0 z-30 shadow-xs">
+    <div class="max-w-6xl mx-auto flex justify-between items-center">
+      <div class="flex items-center gap-2.5">
+        <div class="bg-orange-600 p-2 rounded-xl shadow-md shadow-orange-600/20 text-white">
+          <i data-lucide="layout-dashboard" class="w-4.5 h-4.5"></i>
+        </div>
+        <!-- EXAM JINGGA -->
+        <h1 class="text-lg font-bold text-slate-900 dark:text-white tracking-tight">
+          Exam <span class="text-orange-600">Jingga</span>
+        </h1>
+      </div>
+      <div class="flex items-center gap-2.5">
+        <!-- Dark Mode Toggle -->
+        <button 
+          @click="toggleTheme()" 
+          type="button"
+          aria-label="Toggle Dark Mode"
+          class="p-2.5 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-orange-400 hover:scale-105 active:scale-95 transition-colors cursor-pointer"
+        >
+          <i data-lucide="sun" class="w-4.5 h-4.5 dark:hidden"></i>
+          <i data-lucide="moon" class="w-4.5 h-4.5 hidden dark:inline"></i>
+        </button>
+        <!-- Logout Button -->
+        <a
+          href="{% url 'accounts:logout' %}"
+          class="flex items-center gap-2 text-red-500 font-semibold text-xs bg-red-50 dark:bg-red-950/20 px-4 py-2.5 rounded-xl hover:bg-red-500 hover:text-white transition-all cursor-pointer"
+        >
+          <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+          <span>Keluar</span>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Container -->
+  <main class="max-w-6xl mx-auto p-4 sm:p-6 lg:p-10 space-y-8">
+    
+    <!-- Student Profile Card (Jingga Gradient) -->
+    <div class="bg-gradient-to-br from-orange-500 to-orange-700 rounded-[2.5rem] sm:rounded-[3rem] p-6 sm:p-10 text-white shadow-2xl shadow-orange-500/20 relative overflow-hidden">
+      <div class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none"></div>
+      
+      <div class="relative z-10 space-y-4">
+        <span class="inline-block px-3.5 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-semibold text-orange-100">
+          Peserta Ujian Resmi
+        </span>
+        <h2 class="text-2xl sm:text-4xl font-bold tracking-tight leading-tight">
+          {{ student_full_name }}
+        </h2>
+        <div class="flex flex-wrap gap-2.5 sm:gap-3 pt-1">
+          <div class="bg-black/20 backdrop-blur-md px-4 py-2 rounded-xl flex items-center gap-2 border border-white/10 text-xs font-semibold">
+            <i data-lucide="graduation-cap" class="w-4 h-4 text-orange-300"></i>
+            <span>{{ student_class_name }}</span>
+          </div>
+          <div class="bg-black/20 backdrop-blur-md px-4 py-2 rounded-xl flex items-center gap-2 border border-white/10 text-xs font-semibold font-mono">
+            <i data-lucide="user" class="w-4 h-4 text-orange-300"></i>
+            <span>NIS: {{ student_nis }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Grid: Schedules & Logistics -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+      
+      <!-- Left Column: Available / Active Exams -->
+      <div class="lg:col-span-2 space-y-6">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2.5">
+            <i data-lucide="book-open" class="w-5 h-5 text-orange-600"></i>
+            <span>Jadwal Ujian Tersedia</span>
+          </h3>
+          <button 
+            type="button"
+            onclick="window.location.reload()" 
+            aria-label="Refresh Jadwal"
+            class="p-2 text-slate-400 hover:text-orange-600 transition-colors cursor-pointer"
+          >
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          </button>
+        </div>
+        
+        {% if not available_exams %}
+          <!-- Empty State -->
+          <div class="bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 rounded-[2.5rem] p-12 text-center shadow-xs">
+            <i data-lucide="clock" class="w-10 h-10 text-slate-300 dark:text-zinc-600 mx-auto mb-3"></i>
+            <h4 class="font-semibold text-slate-500 dark:text-zinc-400 text-sm">
+              Tidak ada jadwal ujian aktif saat ini.
+            </h4>
+            <p class="text-xs text-slate-400 dark:text-zinc-500 mt-1">
+              Ujian akan muncul otomatis sesuai jam pelaksanaan.
+            </p>
+          </div>
+        {% else %}
+          <!-- Exam Schedules List -->
+          <div class="grid gap-4">
+            {% for item in available_exams %}
+              <div class="bg-white dark:bg-zinc-900 p-6 sm:p-7 rounded-[2rem] border border-slate-100 dark:border-zinc-800/80 shadow-xs hover:border-orange-500/50 dark:hover:border-orange-500/50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+                <div class="space-y-2 text-left">
+                  <div class="flex items-center gap-2">
+                    <span class="bg-orange-100 dark:bg-orange-950/50 text-orange-600 px-2.5 py-0.5 rounded-lg text-xs font-semibold">
+                      {{ item.schedule.exam.get_exam_type_display|default:item.schedule.exam.exam_type }}
+                    </span>
+                    <span class="text-xs font-medium text-slate-400 dark:text-zinc-500">
+                      {{ item.schedule.exam.duration|default:60 }} Menit
+                    </span>
+                    {% if item.schedule.room_name %}
+                      <span class="text-xs font-medium text-slate-400 dark:text-zinc-500">
+                        &bull; {{ item.schedule.room_name }}
+                      </span>
+                    {% endif %}
+                  </div>
+                  <h4 class="text-xl font-bold text-slate-900 dark:text-white leading-tight">
+                    {{ item.schedule.exam.title }}
+                  </h4>
+                  <p class="text-xs font-medium text-slate-500 dark:text-zinc-400">
+                    {{ item.schedule.exam.subject.name }}
+                    {% if item.schedule.teacher %}&bull; {{ item.schedule.teacher.full_name }}{% endif %}
+                  </p>
+                </div>
+
+                <button 
+                  type="button"
+                  @click="openTokenModal('{{ item.schedule.id }}', '{{ item.schedule.exam.title|escapejs }}', '{{ item.schedule.exam.exam_type|escapejs }}')" 
+                  class="w-full sm:w-auto bg-orange-600 hover:bg-orange-700 text-white px-8 py-4 rounded-2xl font-semibold text-xs tracking-wide flex items-center justify-center gap-2 shadow-lg shadow-orange-600/25 transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0"
+                >
+                  <span>{% if item.student_status == 'active' or item.student_status == 'locked' %}Lanjutkan Ujian{% else %}Masuk Ujian{% endif %}</span>
+                  <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                </button>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Right Column: Rules & History -->
+      <div class="space-y-6">
+        
+        <!-- Room & Session Allocation -->
+        <div class="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-slate-100 dark:border-zinc-800 shadow-xs">
+          <h3 class="font-semibold text-xs text-slate-600 dark:text-zinc-400 mb-4 flex items-center gap-2">
+            <i data-lucide="info" class="w-3.5 h-3.5 text-orange-600"></i>
+            <span>Ruang & Sesi Logistik</span>
+          </h3>
+          
+          <div class="grid grid-cols-2 gap-3 mb-4">
+            <div class="p-3.5 bg-slate-50 dark:bg-zinc-950 rounded-2xl text-center">
+              <span class="text-xs font-medium text-slate-400 block mb-1">Ruangan</span>
+              <span class="font-bold text-orange-600 dark:text-orange-400 text-sm">{{ logistics.room_name|default:'Lab CBT 1' }}</span>
+            </div>
+            <div class="p-3.5 bg-slate-50 dark:bg-zinc-950 rounded-2xl text-center">
+              <span class="text-xs font-medium text-slate-400 block mb-1">Sesi</span>
+              <span class="font-bold text-orange-600 dark:text-orange-400 text-sm">{{ logistics.session_name|default:'Sesi 1' }}</span>
+            </div>
+          </div>
+
+          <ul class="space-y-2.5 text-xs text-slate-600 dark:text-zinc-400 font-normal">
+            <li class="flex gap-2.5 items-start">
+              <div class="w-1.5 h-1.5 bg-orange-500 rounded-full mt-1.5 shrink-0"></div>
+              <span>Dilarang berpindah aplikasi atau tab selama ujian.</span>
+            </li>
+            <li class="flex gap-2.5 items-start">
+              <div class="w-1.5 h-1.5 bg-orange-500 rounded-full mt-1.5 shrink-0"></div>
+              <span>Minta token 6 karakter kepada pengawas ruangan.</span>
+            </li>
+            <li class="flex gap-2.5 items-start">
+              <div class="w-1.5 h-1.5 bg-orange-500 rounded-full mt-1.5 shrink-0"></div>
+              <span>Jawaban tersimpan otomatis setiap kali Anda memilih opsi.</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Exam Score History -->
+        <div class="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-slate-100 dark:border-zinc-800 shadow-xs">
+          <h3 class="font-semibold text-xs text-slate-600 dark:text-zinc-400 mb-4 flex items-center gap-2">
+            <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-600"></i>
+            <span>Riwayat Ujian Selesai</span>
+          </h3>
+          
+          <div class="space-y-2.5 max-h-[240px] overflow-y-auto pr-1">
+            {% if not exam_history %}
+              <p class="text-xs font-normal text-slate-400 dark:text-zinc-500 italic py-4 text-center">
+                Belum ada riwayat ujian yang diselesaikan.
+              </p>
+            {% else %}
+              {% for h in exam_history %}
+                <div class="flex justify-between items-center p-3 hover:bg-slate-50 dark:hover:bg-zinc-800/60 rounded-xl transition-all border-b border-slate-100 dark:border-zinc-800/50 last:border-0">
+                  <div class="max-w-[70%]">
+                    <p class="text-xs font-semibold text-slate-900 dark:text-white truncate">{{ h.schedule.exam.subject.name }}</p>
+                    <p class="text-xs text-slate-400 mt-0.5">{{ h.schedule.exam.title }}</p>
+                  </div>
+                  <span class="text-base font-bold text-emerald-500">{{ h.score|default:0 }}</span>
+                </div>
+              {% endfor %}
+            {% endif %}
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Alphanumeric Token Input OTP Modal (100% Fidelity TokenInputOTP.jsx) -->
+  <div 
+    x-show="showTokenModal"
+    x-cloak
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+    @click="closeTokenModal()"
+  >
+    <div 
+      class="bg-white dark:bg-zinc-950 w-full max-w-md rounded-[3rem] p-8 sm:p-10 shadow-2xl relative border border-slate-100 dark:border-zinc-800 animate-in zoom-in-95 duration-200"
+      @click.stop
+    >
+      <!-- Close Button -->
+      <button 
+        type="button"
+        @click="closeTokenModal()"
+        aria-label="Tutup Modal"
+        class="absolute top-6 right-6 p-3 text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-2xl hover:bg-slate-100 dark:hover:bg-zinc-900 transition-colors cursor-pointer"
+      >
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <!-- Modal Header -->
+      <div class="text-center mb-6">
+        <div class="inline-flex p-4 bg-orange-100 dark:bg-orange-950/40 text-orange-600 rounded-3xl mb-4 shadow-lg shadow-orange-600/10">
+          <i data-lucide="key-round" class="w-9 h-9"></i>
+        </div>
+        
+        <div class="flex items-center justify-center gap-2 mb-1">
+          <span class="bg-orange-600 text-white px-2.5 py-0.5 rounded-lg text-xs font-semibold" x-text="selectedExamType || 'UJIAN'">
+          </span>
+          <h3 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Verifikasi Token
+          </h3>
+        </div>
+        <p class="text-xs font-medium text-slate-500 dark:text-zinc-400 truncate max-w-xs mx-auto" x-text="selectedExamTitle">
+        </p>
+        <p class="text-xs font-normal text-slate-400 mt-2">
+          Minta 6 digit token (huruf/angka) kepada pengawas
+        </p>
+      </div>
+
+      <!-- Token Validation Error Container -->
+      <div id="token-error-container" class="mb-4"></div>
+
+      <!-- 6-Box OTP Form -->
+      <form 
+        hx-post="{% url 'exam_engine:confirm_token' %}"
+        hx-target="#token-error-container"
+        hx-swap="innerHTML"
+        @submit="submitting = true"
+        class="space-y-6"
+      >
+        {% csrf_token %}
+        <input type="hidden" name="schedule_id" :value="selectedScheduleId">
+        <input type="hidden" name="token" :value="tokenString">
+
+        <div 
+          @paste="handlePaste($event)"
+          class="flex justify-center gap-2 sm:gap-3 mb-6"
+        >
+          <template x-for="(digit, index) in digits" :key="index">
+            <input
+              type="text"
+              inputmode="text"
+              autocapitalize="characters"
+              autocomplete="one-time-code"
+              maxlength="1"
+              :id="'otp-box-' + index"
+              :value="digit"
+              @input="handleInput(index, $event.target.value)"
+              @keydown="handleKeyDown(index, $event)"
+              :class="digit 
+                ? 'border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-50/50 dark:bg-orange-950/20 shadow-md shadow-orange-500/10 scale-105' 
+                : 'border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:border-orange-500'"
+              class="w-11 sm:w-12 h-16 bg-slate-50 dark:bg-zinc-900 border-2 rounded-2xl text-center text-2xl font-bold font-mono transition-all outline-none"
+            />
+          </template>
+        </div>
+
+        <button
+          type="submit"
+          :disabled="tokenString.length !== 6 || submitting"
+          class="w-full bg-orange-600 hover:bg-orange-700 text-white py-4 rounded-2xl font-semibold text-xs tracking-wide shadow-xl shadow-orange-600/30 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+        >
+          <template x-if="submitting">
+            <span class="flex items-center gap-2">
+              <i data-lucide="refresh-cw" class="w-4 h-4 animate-spin"></i>
+              <span>Memvalidasi ke server...</span>
+            </span>
+          </template>
+          <template x-if="!submitting">
+            <span class="flex items-center gap-2">
+              <i data-lucide="sparkles" class="w-4 h-4"></i>
+              <span>Mulai Ujian Sekarang</span>
+            </span>
+          </template>
+        </button>
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  function studentDashboard() {
+    return {
+      showTokenModal: false,
+      selectedScheduleId: '',
+      selectedExamTitle: '',
+      selectedExamType: '',
+      digits: ['', '', '', '', '', ''],
+      submitting: false,
+
+      get tokenString() {
+        return this.digits.join('');
+      },
+
+      toggleTheme() {
+        window.toggleTheme();
+      },
+
+      openTokenModal(schId, title, type) {
+        this.selectedScheduleId = schId;
+        this.selectedExamTitle = title;
+        this.selectedExamType = type;
+        this.digits = ['', '', '', '', '', ''];
+        this.submitting = false;
+        const errContainer = document.getElementById('token-error-container');
+        if (errContainer) errContainer.innerHTML = '';
+        this.showTokenModal = true;
+        setTimeout(() => {
+          const first = document.getElementById('otp-box-0');
+          if (first) first.focus();
+        }, 150);
+      },
+
+      closeTokenModal() {
+        this.showTokenModal = false;
+      },
+
+      handleInput(index, val) {
+        const clean = val.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (clean.length > 1) {
+          const chars = clean.slice(0, 6).split('');
+          chars.forEach((c, i) => {
+            if (index + i < 6) this.digits[index + i] = c;
+          });
+          const nextIdx = Math.min(index + chars.length, 5);
+          const nextEl = document.getElementById('otp-box-' + nextIdx);
+          if (nextEl) nextEl.focus();
+          return;
+        }
+
+        this.digits[index] = clean;
+        if (clean && index < 5) {
+          const nextEl = document.getElementById('otp-box-' + (index + 1));
+          if (nextEl) nextEl.focus();
+        }
+      },
+
+      handleKeyDown(index, e) {
+        if (e.key === 'Backspace' && !this.digits[index] && index > 0) {
+          const prevEl = document.getElementById('otp-box-' + (index - 1));
+          if (prevEl) prevEl.focus();
+        }
+      },
+
+      handlePaste(e) {
+        e.preventDefault();
+        const pasted = (e.clipboardData || window.clipboardData).getData('text').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (!pasted) return;
+        const chars = pasted.slice(0, 6).split('');
+        const newDigits = ['', '', '', '', '', ''];
+        chars.forEach((c, idx) => {
+          newDigits[idx] = c;
+        });
+        this.digits = newDigits;
+        const focusIdx = Math.min(chars.length, 5);
+        const el = document.getElementById('otp-box-' + focusIdx);
+        if (el) el.focus();
+      }
+    };
+  }
+
+  document.body.addEventListener('htmx:afterRequest', function(evt) {
+    if (evt.detail.successful) {
+      if (window.lucide) window.lucide.createIcons();
+    }
+  });
+</script>
+{% endblock %}

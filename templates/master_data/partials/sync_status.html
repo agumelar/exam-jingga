@@ -1,0 +1,89 @@
+{% if success %}
+<div 
+  x-data="{ show: true }" 
+  x-show="show" 
+  x-transition:enter="transition ease-out duration-300 transform"
+  x-transition:enter-start="opacity-0 -translate-y-2"
+  x-transition:enter-end="opacity-100 translate-y-0"
+  x-transition:leave="transition ease-in duration-200 transform"
+  x-transition:leave-start="opacity-100 translate-y-0"
+  x-transition:leave-end="opacity-0 -translate-y-2"
+  class="rounded-3xl p-5 bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-stone-900 dark:text-stone-100 shadow-md shadow-emerald-600/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+>
+  <div class="flex items-center gap-3.5">
+    <div class="p-2.5 bg-emerald-600 text-white rounded-2xl shrink-0 shadow-md shadow-emerald-600/20">
+      <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+    </div>
+    <div>
+      <div class="flex items-center gap-2">
+        <h4 class="text-sm font-semibold tracking-tight text-emerald-900 dark:text-emerald-300">
+          Sinkronisasi Berhasil
+        </h4>
+        <span class="px-2 py-0.5 rounded-full bg-emerald-200/80 dark:bg-emerald-900/60 text-emerald-950 dark:text-emerald-200 text-xs font-medium">
+          Synced
+        </span>
+      </div>
+      <p class="text-xs text-emerald-800 dark:text-emerald-300/90 mt-0.5 font-normal">
+        {{ message }}
+      </p>
+      {% if result %}
+        <div class="flex flex-wrap items-center gap-3 mt-2 text-xs font-medium text-stone-600 dark:text-stone-400">
+          {% if result.majors_count is not None %}<span class="bg-white/80 dark:bg-stone-800/80 px-2 py-0.5 rounded-lg border border-stone-200 dark:border-stone-700">{{ result.majors_count }} Jurusan</span>{% endif %}
+          {% if result.classes_count is not None %}<span class="bg-white/80 dark:bg-stone-800/80 px-2 py-0.5 rounded-lg border border-stone-200 dark:border-stone-700">{{ result.classes_count }} Kelas</span>{% endif %}
+          {% if result.teachers_count is not None %}<span class="bg-white/80 dark:bg-stone-800/80 px-2 py-0.5 rounded-lg border border-stone-200 dark:border-stone-700">{{ result.teachers_count }} Guru</span>{% endif %}
+          {% if result.students_count is not None %}<span class="bg-white/80 dark:bg-stone-800/80 px-2 py-0.5 rounded-lg border border-stone-200 dark:border-stone-700">{{ result.students_count }} Siswa</span>{% endif %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="flex items-center gap-2 self-end md:self-center">
+    <button 
+      type="button" 
+      onclick="window.location.reload()"
+      class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full text-xs font-semibold tracking-wide transition shadow-sm cursor-pointer"
+    >
+      Muat Ulang Halaman
+    </button>
+    <button 
+      type="button" 
+      @click="show = false"
+      class="p-2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 rounded-full cursor-pointer"
+    >
+      <i data-lucide="x" class="w-4 h-4"></i>
+    </button>
+  </div>
+</div>
+{% else %}
+<div 
+  x-data="{ show: true }" 
+  x-show="show" 
+  class="rounded-3xl p-5 bg-rose-50/90 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-stone-900 dark:text-stone-100 shadow-md shadow-rose-600/10 flex items-start justify-between gap-4"
+>
+  <div class="flex items-start gap-3.5">
+    <div class="p-2.5 bg-rose-600 text-white rounded-2xl shrink-0 shadow-md shadow-rose-600/20">
+      <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+    </div>
+    <div>
+      <h4 class="text-sm font-semibold tracking-tight text-rose-900 dark:text-rose-300">
+        Sinkronisasi Gagal
+      </h4>
+      <p class="text-xs text-rose-800 dark:text-rose-300/90 mt-1 font-normal">
+        {{ message|default:error }}
+      </p>
+    </div>
+  </div>
+  <button 
+    type="button" 
+    @click="show = false"
+    class="p-2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 rounded-full cursor-pointer"
+  >
+    <i data-lucide="x" class="w-4 h-4"></i>
+  </button>
+</div>
+{% endif %}
+<script>
+  if (typeof lucide !== 'undefined') {
+    lucide.createIcons();
+  }
+</script>

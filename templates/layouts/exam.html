@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ exam_title|default:'Ujian Siswa' }} - EXAM JINGGA{% endblock %}
+
+{% block layout %}
+<div 
+  id="exam-container"
+  class="min-h-screen bg-stone-100/70 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex flex-col font-sans select-none"
+  oncontextmenu="return false;"
+  ondragstart="return false;"
+>
+  <!-- Exam Header Bar -->
+  <header class="w-full bg-white dark:bg-stone-900 border-b border-stone-200 dark:border-stone-800 px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-40 m3-elevation-1">
+    <!-- School & Exam Info -->
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="p-2 bg-orange-600 text-white rounded-xl shadow-xs shrink-0">
+        <i data-lucide="sparkles" class="w-4 h-4"></i>
+      </div>
+      <div class="min-w-0">
+        <h1 class="text-sm sm:text-base font-bold text-stone-900 dark:text-white tracking-tight truncate">
+          {% block exam_title %}{{ exam_title|default:'Exam Jingga CBT' }}{% endblock %}
+        </h1>
+        <p class="text-xs font-medium text-stone-500 dark:text-stone-400 truncate">
+          {% block exam_subtitle %}{{ exam_subtitle|default:'SMKN 1 Rongga' }}{% endblock %}
+        </p>
+      </div>
+    </div>
+
+    <!-- Center/Right: Timer, Student Chip & Actions -->
+    <div class="flex items-center gap-3 shrink-0">
+      {% block exam_header_actions %}
+        <!-- Timer Badge Slot -->
+        <div id="exam-timer" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-900 dark:text-orange-200 border border-orange-300 dark:border-orange-800 font-mono font-bold text-xs sm:text-sm">
+          <i data-lucide="clock" class="w-4 h-4 text-orange-600 dark:text-orange-400"></i>
+          {% block exam_timer_display %}<span>{{ timer_text|default:'--:--:--' }}</span>{% endblock %}
+        </div>
+
+        <!-- Student Profile Pill (Desktop) -->
+        {% if user.is_authenticated %}
+          <div class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs font-medium">
+            <div class="w-5 h-5 rounded-full bg-orange-600 text-white flex items-center justify-center text-[10px] font-bold uppercase">
+              {{ user.first_name|default:user.username|slice:':1'|default:'S' }}
+            </div>
+            <span class="max-w-[130px] truncate">{{ user.get_full_name|default:user.username }}</span>
+          </div>
+        {% endif %}
+
+        <!-- Theme Toggle -->
+        <button 
+          type="button"
+          onclick="window.toggleTheme()" 
+          aria-label="Ganti Tema"
+          class="p-2 rounded-full bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-orange-400 border border-stone-200 dark:border-stone-700 transition cursor-pointer"
+        >
+          <i data-lucide="sun" class="w-4 h-4 dark:hidden"></i>
+          <i data-lucide="moon" class="w-4 h-4 hidden dark:inline"></i>
+        </button>
+      {% endblock %}
+    </div>
+  </header>
+
+  <!-- Main Exam Content Area -->
+  <main class="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full flex flex-col">
+    {% block exam_content %}
+      {% block content %}{% endblock %}
+    {% endblock %}
+  </main>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Anti-Cheat Protective Layer (Keyboard shortcuts prevention)
+  document.addEventListener('keydown', function(e) {
+    // Disable F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, Ctrl+S, Ctrl+C, Ctrl+V inside exam
+    if (
+      e.key === 'F12' ||
+      (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) ||
+      (e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.key === 's' || e.key === 'S'))
+    ) {
+      e.preventDefault();
+      return false;
+    }
+  });
+</script>
+{% endblock %}

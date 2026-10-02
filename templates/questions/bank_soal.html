@@ -1,0 +1,446 @@
+{% extends 'layouts/app.html' %}
+{% load static %}
+
+{% block page_header %}
+<div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+  <!-- Left Title & Counts -->
+  <div>
+    <h1 class="text-2xl sm:text-3xl font-bold text-stone-900 dark:text-white flex items-center gap-3 tracking-tight">
+      <i data-lucide="file-text" class="w-8 h-8 text-orange-600"></i>
+      <span>Bank Soal</span>
+    </h1>
+    <div class="flex flex-wrap items-center gap-2 mt-2">
+      <p class="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-medium">
+        Kelola & susun butir soal ujian per Mata Pelajaran dan Jenjang Kelas
+      </p>
+      <span class="inline-flex items-center gap-1.5 bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 px-3 py-0.5 rounded-full text-xs font-medium border border-orange-200/80 dark:border-orange-800/60">
+        <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+        <span>{{ total_questions_count }} Butir Soal</span>
+      </span>
+      <span class="inline-flex items-center gap-1.5 bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 px-3 py-0.5 rounded-full text-xs font-medium">
+        <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+        <span>{{ subjects_count }} Mapel</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- Right Actions: Tambah Butir Soal -->
+  <div class="flex items-center gap-3">
+    <button 
+      type="button" 
+      hx-get="{% url 'questions:create' %}"
+      hx-include="#filter-form"
+      hx-target="#modal-container"
+      hx-swap="innerHTML"
+      class="bg-orange-600 hover:bg-orange-500 text-white px-6 py-3.5 rounded-2xl font-semibold shadow-md shadow-orange-600/20 active:scale-95 transition-all text-xs tracking-wide flex items-center gap-2 cursor-pointer select-none"
+    >
+      <i data-lucide="plus" class="w-4.5 h-4.5"></i>
+      <span>Tambah Butir Soal</span>
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block app_content %}
+<script id="bank-soal-teachers-data" type="application/json">{{ teachers_json|safe }}</script>
+<script>
+window.BANK_SOAL_TEACHERS = (function() {
+  try {
+    var raw = document.getElementById('bank-soal-teachers-data');
+    return raw && raw.textContent ? JSON.parse(raw.textContent) : [];
+  } catch (e) {
+    console.error('Error parsing teachers data:', e);
+    return [];
+  }
+})();
+
+function bankSoalFilter() {
+  return {
+    lightboxImg: null,
+    selectedLevel: '{{ selected_level|default:"" }}',
+    selectedSubject: '{{ selected_subject|default:"" }}',
+    selectedTeacher: '{{ selected_teacher|default:"" }}',
+    searchKeyword: '{{ search_query|default:"" }}',
+    allTeachers: window.BANK_SOAL_TEACHERS || [],
+
+    init: function() {
+      if (this.selectedSubject) {
+        this.updateTeacherOptions();
+      }
+    },
+
+    updateTeacherOptions: function() {
+      var selectEl = document.getElementById('teacher-select');
+      if (!selectEl) return;
+      
+      var prevVal = this.selectedTeacher;
+      var subjId = this.selectedSubject;
+      
+      var filtered = this.allTeachers;
+      if (subjId) {
+        filtered = this.allTeachers.filter(function(t) {
+          return t.subject_ids && t.subject_ids.indexOf(subjId) !== -1;
+        });
+      }
+
+      selectEl.innerHTML = '';
+      
+      var defaultOpt = document.createElement('option');
+      defaultOpt.value = '';
+      defaultOpt.textContent = subjId ? 'Semua Guru Pengampu Mapel Ini' : 'Semua Guru Pembuat';
+      selectEl.appendChild(defaultOpt);
+
+      var foundPrev = false;
+      filtered.forEach(function(t) {
+        var opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = t.name;
+        if (t.id === prevVal) {
+          opt.selected = true;
+          foundPrev = true;
+        }
+        selectEl.appendChild(opt);
+      });
+
+      if (prevVal && !foundPrev) {
+        this.selectedTeacher = '';
+        selectEl.value = '';
+      }
+    },
+
+    onSubjectChange: function() {
+      this.updateTeacherOptions();
+      this.triggerFilter();
+    },
+
+    setLevel: function(lvl) {
+      this.selectedLevel = (this.selectedLevel === String(lvl)) ? '' : String(lvl);
+      this.triggerFilter();
+    },
+
+    triggerFilter: function() {
+      if (window.htmx) {
+        window.htmx.trigger('#filter-form', 'submit');
+      }
+    }
+  };
+}
+
+function questionModalData(initial) {
+  var teachers = window.BANK_SOAL_TEACHERS || [];
+  if (!teachers || teachers.length === 0) {
+    try {
+      var modalRaw = document.getElementById('modal-teachers-data');
+      if (modalRaw && modalRaw.textContent) {
+        teachers = JSON.parse(modalRaw.textContent);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+  return {
+    showModal: true,
+    isSubmitting: false,
+    correctAnswer: (initial && initial.correctAnswer) || 'A',
+    selectAnswer: function(ans) {
+      this.correctAnswer = ans;
+    },
+    previewQuestionImg: (initial && initial.previewQuestionImg) || '',
+    previewA: (initial && initial.previewA) || '',
+    previewB: (initial && initial.previewB) || '',
+    previewC: (initial && initial.previewC) || '',
+    previewD: (initial && initial.previewD) || '',
+    previewE: (initial && initial.previewE) || '',
+    modalSubject: (initial && initial.modalSubject) || '',
+    modalTeacher: (initial && initial.modalTeacher) || '',
+    allTeachers: teachers,
+
+    clearImage: function(field) {
+      if (field === 'question') {
+        this.previewQuestionImg = '';
+        if (this.$refs.clearQuestionImg) this.$refs.clearQuestionImg.value = '1';
+        if (this.$refs.inputQuestionImg) this.$refs.inputQuestionImg.value = '';
+      }
+      if (field === 'a') {
+        this.previewA = '';
+        if (this.$refs.clearImgA) this.$refs.clearImgA.value = '1';
+        if (this.$refs.inputImgA) this.$refs.inputImgA.value = '';
+      }
+      if (field === 'b') {
+        this.previewB = '';
+        if (this.$refs.clearImgB) this.$refs.clearImgB.value = '1';
+        if (this.$refs.inputImgB) this.$refs.inputImgB.value = '';
+      }
+      if (field === 'c') {
+        this.previewC = '';
+        if (this.$refs.clearImgC) this.$refs.clearImgC.value = '1';
+        if (this.$refs.inputImgC) this.$refs.inputImgC.value = '';
+      }
+      if (field === 'd') {
+        this.previewD = '';
+        if (this.$refs.clearImgD) this.$refs.clearImgD.value = '1';
+        if (this.$refs.inputImgD) this.$refs.inputImgD.value = '';
+      }
+      if (field === 'e') {
+        this.previewE = '';
+        if (this.$refs.clearImgE) this.$refs.clearImgE.value = '1';
+        if (this.$refs.inputImgE) this.$refs.inputImgE.value = '';
+      }
+    },
+
+    previewFile: function(event, field) {
+      var file = event.target.files[0];
+      if (!file) return;
+      var self = this;
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        if (field === 'question') self.previewQuestionImg = e.target.result;
+        if (field === 'a') self.previewA = e.target.result;
+        if (field === 'b') self.previewB = e.target.result;
+        if (field === 'c') self.previewC = e.target.result;
+        if (field === 'd') self.previewD = e.target.result;
+        if (field === 'e') self.previewE = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    },
+
+    initModal: function() {
+      if (this.modalSubject) {
+        this.updateModalTeacherOptions();
+      }
+    },
+
+    updateModalTeacherOptions: function() {
+      var sel = document.getElementById('modal-teacher-select');
+      if (!sel) return;
+      var prevVal = this.modalTeacher;
+      var subjId = this.modalSubject;
+
+      var filtered = this.allTeachers;
+      if (subjId) {
+        filtered = this.allTeachers.filter(function(t) {
+          return t.subject_ids && t.subject_ids.indexOf(subjId) !== -1;
+        });
+      }
+
+      sel.innerHTML = '';
+      var def = document.createElement('option');
+      def.value = '';
+      def.textContent = subjId ? '-- Pilih Guru Pengampu Mapel Ini --' : '-- Pilih Guru Pembuat --';
+      sel.appendChild(def);
+
+      var found = false;
+      filtered.forEach(function(t) {
+        var opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = t.name;
+        if (t.id === prevVal) {
+          opt.selected = true;
+          found = true;
+        }
+        sel.appendChild(opt);
+      });
+
+      if (prevVal && !found) {
+        this.modalTeacher = '';
+        sel.value = '';
+      }
+    }
+  };
+}
+</script>
+
+<div 
+  x-data="bankSoalFilter()"
+  class="space-y-8"
+>
+
+  <!-- FILTER & SEARCH BAR SURFACE -->
+  <div class="bg-white dark:bg-stone-900 p-6 sm:p-8 rounded-[2.5rem] border border-stone-200/80 dark:border-stone-800 shadow-xs">
+    
+    <form 
+      id="filter-form"
+      hx-get="{% url 'questions:filter' %}"
+      hx-target="#question-list-container"
+      hx-swap="outerHTML"
+      hx-trigger="submit, keyup changed delay:300ms from:#search-input, change from:#teacher-select"
+      class="space-y-6"
+    >
+      <!-- Hidden Level Input -->
+      <input type="hidden" name="level" :value="selectedLevel">
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+        
+        <!-- Search Keyword Input (Lg 4 cols) -->
+        <div class="lg:col-span-4 relative">
+          <label class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-1.5 block">
+            <i data-lucide="search" class="w-3.5 h-3.5 inline mr-1"></i> Pencarian Soal
+          </label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-stone-400">
+              <i data-lucide="search" class="w-4 h-4"></i>
+            </div>
+            <input 
+              type="text" 
+              id="search-input"
+              name="q" 
+              x-model="searchKeyword"
+              placeholder="Cari butir pertanyaan..."
+              class="w-full bg-stone-50 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 text-xs font-medium rounded-2xl pl-11 pr-4 py-3.5 outline-none focus:ring-2 focus:ring-orange-500 text-stone-900 dark:text-white shadow-xs transition"
+            />
+            <template x-if="searchKeyword">
+              <button 
+                type="button" 
+                @click="searchKeyword = ''; triggerFilter();" 
+                class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 cursor-pointer"
+              >
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <!-- Mata Pelajaran Select (Lg 4 cols) -->
+        <div class="lg:col-span-4">
+          <label class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-1.5 block">
+            <i data-lucide="book-open" class="w-3.5 h-3.5 inline mr-1"></i> Mata Pelajaran
+          </label>
+          <select 
+            id="subject-select"
+            name="subject_id" 
+            x-model="selectedSubject"
+            @change="onSubjectChange()"
+            class="w-full bg-stone-50 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 text-xs font-medium rounded-2xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-orange-500 text-stone-900 dark:text-white shadow-xs cursor-pointer transition"
+          >
+            <option value="">Semua Mata Pelajaran</option>
+            {% for s in subjects %}
+              <option value="{{ s.id }}" {% if selected_subject == s.id|stringformat:"s" %}selected{% endif %}>
+                {{ s.name }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Guru Pengampu / Author Filter (Lg 4 cols if admin, else level takes more space) -->
+        {% if is_staff_admin %}
+          <div class="lg:col-span-4">
+            <label class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-1.5 block">
+              <i data-lucide="user" class="w-3.5 h-3.5 inline mr-1"></i> Guru Pembuat Soal
+            </label>
+            <select 
+              id="teacher-select"
+              name="teacher_id" 
+              x-model="selectedTeacher"
+              @change="triggerFilter()"
+              class="w-full bg-stone-50 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 text-xs font-medium rounded-2xl px-4 py-3.5 outline-none focus:ring-2 focus:ring-orange-500 text-stone-900 dark:text-white shadow-xs cursor-pointer transition"
+            >
+              <option value="">Semua Guru Pembuat</option>
+              {% for t in teachers %}
+                <option value="{{ t.id }}" {% if selected_teacher == t.id|stringformat:"s" %}selected{% endif %}>
+                  {{ t.full_name }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        {% else %}
+          <div class="lg:col-span-4 flex items-end">
+            <div class="w-full p-3.5 bg-stone-50 dark:bg-stone-800/60 rounded-2xl border border-stone-200/80 dark:border-stone-700 text-xs font-medium text-stone-600 dark:text-stone-300 flex items-center justify-between">
+              <span class="flex items-center gap-2">
+                <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
+                <span>Bank Soal Guru:</span>
+              </span>
+              <strong class="text-stone-900 dark:text-white font-semibold">{{ current_teacher.full_name|default:user.get_full_name }}</strong>
+            </div>
+          </div>
+        {% endif %}
+
+      </div>
+
+      <!-- Level Chips Selector (Smooth horizontal scroll on mobile) -->
+      <div class="flex items-center gap-2 pt-2 border-t border-stone-100 dark:border-stone-800 overflow-x-auto no-scrollbar pb-1 -mx-2 px-2 sm:mx-0 sm:px-0">
+        <span class="text-xs font-semibold text-stone-500 dark:text-stone-400 shrink-0 mr-1">
+          Tingkat:
+        </span>
+
+        <!-- Chip: Semua -->
+        <button 
+          type="button"
+          @click="setLevel('')"
+          :class="selectedLevel === '' ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20' : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700'"
+          class="shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition cursor-pointer select-none active:scale-95"
+        >
+          Semua Kelas
+        </button>
+
+        <!-- Chip: Kelas 10 -->
+        <button 
+          type="button"
+          @click="setLevel('10')"
+          :class="selectedLevel === '10' ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20' : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700'"
+          class="shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition cursor-pointer select-none active:scale-95"
+        >
+          Kelas 10 (Fase E)
+        </button>
+
+        <!-- Chip: Kelas 11 -->
+        <button 
+          type="button"
+          @click="setLevel('11')"
+          :class="selectedLevel === '11' ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20' : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700'"
+          class="shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition cursor-pointer select-none active:scale-95"
+        >
+          Kelas 11 (Fase F)
+        </button>
+
+        <!-- Chip: Kelas 12 -->
+        <button 
+          type="button"
+          @click="setLevel('12')"
+          :class="selectedLevel === '12' ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20' : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700'"
+          class="shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition cursor-pointer select-none active:scale-95"
+        >
+          Kelas 12 (Fase F+)
+        </button>
+      </div>
+
+    </form>
+  </div>
+
+  <!-- HTMX QUESTION LIST TARGET CONTAINER -->
+  {% include 'questions/partials/question_list.html' with questions=questions questions_count=questions_count page_obj=page_obj %}
+
+  <!-- DYNAMIC MODAL ANCHOR (Loaded via HTMX) -->
+  <div id="modal-container"></div>
+
+  <!-- IMAGE LIGHTBOX OVERLAY -->
+  <div 
+    x-show="lightboxImg"
+    x-cloak
+    x-transition:enter="transition ease-out duration-300"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="transition ease-in duration-200"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    @click="lightboxImg = null"
+    @keydown.escape.window="lightboxImg = null"
+    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md"
+  >
+    <button 
+      type="button" 
+      @click="lightboxImg = null" 
+      class="absolute top-6 right-6 p-3 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition cursor-pointer"
+      aria-label="Tutup Perbesaran"
+    >
+      <i data-lucide="x" class="w-6 h-6"></i>
+    </button>
+    <img 
+      :src="lightboxImg" 
+      alt="Perbesaran Gambar Soal" 
+      class="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/10"
+      @click.stop
+    />
+  </div>
+
+</div>
+{% endblock %}

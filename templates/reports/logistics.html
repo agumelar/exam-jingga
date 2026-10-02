@@ -1,0 +1,225 @@
+{% extends 'layouts/app.html' %}
+{% load static %}
+
+{% block page_header %}
+<div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+  <div>
+    <h2 class="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 dark:text-white">
+      Logistik & Sesi Ruangan
+    </h2>
+    <p class="text-orange-600 dark:text-orange-500 font-semibold text-xs mt-1">
+      Otomatisasi Penempatan Ruang & Sesi Ujian Siswa CBT
+    </p>
+  </div>
+
+  <div class="flex items-center gap-3">
+    <a
+      href="{% url 'reports:logistics_export' %}?room={{ filter_room }}&session={{ filter_session }}"
+      class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-semibold text-xs tracking-wide transition shadow-lg shadow-emerald-600/20 active:scale-95 flex items-center gap-2"
+    >
+      <i data-lucide="download" class="w-4 h-4"></i>
+      <span>Export Excel</span>
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Summary Stats Counter Cards -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+    <div class="bg-white dark:bg-stone-900 p-6 rounded-3xl border-b-4 border-blue-500 border-x border-t border-stone-200/80 dark:border-stone-800 shadow-xs">
+      <p class="text-xs font-medium text-stone-400 mb-1">Peserta Aktif</p>
+      <h4 class="text-3xl font-bold text-stone-900 dark:text-white">{{ total_active_students }}</h4>
+    </div>
+
+    <div class="bg-white dark:bg-stone-900 p-6 rounded-3xl border-b-4 border-emerald-500 border-x border-t border-stone-200/80 dark:border-stone-800 shadow-xs">
+      <p class="text-xs font-medium text-stone-400 mb-1">Teralokasi</p>
+      <h4 class="text-3xl font-bold text-emerald-600">{{ allocated_count }}</h4>
+    </div>
+
+    <div class="bg-white dark:bg-stone-900 p-6 rounded-3xl border-b-4 {% if unassigned_count > 0 %}border-red-500{% else %}border-stone-400{% endif %} border-x border-t border-stone-200/80 dark:border-stone-800 shadow-xs">
+      <p class="text-xs font-medium text-stone-400 mb-1">Belum Terbagi</p>
+      <h4 class="text-3xl font-bold {% if unassigned_count > 0 %}text-red-500{% else %}text-stone-400{% endif %}">
+        {{ unassigned_count }}
+      </h4>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+    <!-- LEFT: GENERATOR FORM -->
+    <div class="bg-white dark:bg-stone-900 p-6 sm:p-8 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-sm h-fit">
+      <h3 class="font-bold text-xs mb-6 flex items-center gap-2 text-stone-400">
+        <i data-lucide="refresh-cw" class="w-4 h-4 text-orange-600"></i>
+        <span>Konfigurasi Acakan Ruang</span>
+      </h3>
+
+      <form method="post" action="{% url 'reports:logistics_generate' %}" class="space-y-5">
+        {% csrf_token %}
+
+        <!-- Jenjang Selection -->
+        <div>
+          <label class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-2.5 block">Jenjang Peserta</label>
+          <div class="grid grid-cols-3 gap-2">
+            <label class="flex items-center justify-center p-3 rounded-2xl border border-stone-200 dark:border-stone-800 font-semibold text-xs cursor-pointer hover:border-orange-500 has-checked:bg-orange-600 has-checked:text-white has-checked:border-orange-600 transition">
+              <input type="checkbox" name="levels" value="10" checked class="hidden" />
+              <span>Kelas 10</span>
+            </label>
+            <label class="flex items-center justify-center p-3 rounded-2xl border border-stone-200 dark:border-stone-800 font-semibold text-xs cursor-pointer hover:border-orange-500 has-checked:bg-orange-600 has-checked:text-white has-checked:border-orange-600 transition">
+              <input type="checkbox" name="levels" value="11" checked class="hidden" />
+              <span>Kelas 11</span>
+            </label>
+            <label class="flex items-center justify-center p-3 rounded-2xl border border-stone-200 dark:border-stone-800 font-semibold text-xs cursor-pointer hover:border-orange-500 has-checked:bg-orange-600 has-checked:text-white has-checked:border-orange-600 transition">
+              <input type="checkbox" name="levels" value="12" checked class="hidden" />
+              <span>Kelas 12</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Room Count & Capacity -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-1.5 block">Jml Ruangan</label>
+            <input
+              type="number"
+              name="room_count"
+              value="5"
+              min="1"
+              max="50"
+              class="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 p-3.5 rounded-2xl font-medium text-sm outline-none focus:ring-2 focus:ring-orange-500 text-stone-900 dark:text-white"
+            />
+          </div>
+          <div>
+            <label class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-1.5 block">Kapasitas / Ruang</label>
+            <input
+              type="number"
+              name="capacity"
+              value="36"
+              min="1"
+              max="100"
+              class="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 p-3.5 rounded-2xl font-medium text-sm outline-none focus:ring-2 focus:ring-orange-500 text-stone-900 dark:text-white"
+            />
+          </div>
+        </div>
+
+        <!-- Sessions Count -->
+        <div>
+          <label class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-1.5 block">Jumlah Sesi Ujian</label>
+          <select
+            name="sessions_count"
+            class="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 p-3.5 rounded-2xl font-medium text-sm outline-none focus:ring-2 focus:ring-orange-500 text-stone-900 dark:text-white cursor-pointer"
+          >
+            <option value="1">1 Sesi (Serentak)</option>
+            <option value="2" selected>2 Sesi (Pagi & Siang)</option>
+            <option value="3">3 Sesi</option>
+            <option value="4">4 Sesi</option>
+          </select>
+        </div>
+
+        <!-- Submit Button -->
+        <button
+          type="submit"
+          onclick="return confirm('Kocok ulang penempatan ruang dan sesi untuk seluruh siswa jenjang terpilih? Data lama akan digantikan.')"
+          class="w-full bg-stone-900 dark:bg-white dark:text-stone-900 text-white py-3.5 rounded-2xl font-semibold text-xs tracking-wide shadow-xl hover:scale-[1.01] active:scale-95 transition cursor-pointer"
+        >
+          Generate & Kocok Sekarang
+        </button>
+      </form>
+    </div>
+
+    <!-- RIGHT: LOGISTICS TABLE & FILTER -->
+    <div class="xl:col-span-2 bg-white dark:bg-stone-900 rounded-3xl border border-stone-200/80 dark:border-stone-800 overflow-hidden shadow-sm flex flex-col">
+      
+      <!-- Toolbar Header -->
+      <div class="p-5 border-b border-stone-100 dark:border-stone-800 flex flex-wrap justify-between items-center gap-3">
+        <h3 class="font-semibold text-xs text-stone-400 flex items-center gap-2">
+          <i data-lucide="filter" class="w-4 h-4 text-orange-600"></i>
+          <span>Filter Alokasi Siswa</span>
+        </h3>
+
+        <form method="get" class="flex flex-wrap items-center gap-2">
+          <select
+            name="room"
+            onchange="this.form.submit()"
+            class="bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 px-3 py-2 rounded-xl font-medium text-xs outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
+          >
+            <option value="all">Semua Ruang</option>
+            {% for r in rooms %}
+              <option value="{{ r }}" {% if filter_room == r %}selected{% endif %}>{{ r }}</option>
+            {% endfor %}
+          </select>
+
+          <select
+            name="session"
+            onchange="this.form.submit()"
+            class="bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 px-3 py-2 rounded-xl font-medium text-xs outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
+          >
+            <option value="all">Semua Sesi</option>
+            {% for s in sessions %}
+              <option value="{{ s }}" {% if filter_session == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+
+          <a
+            href="{% url 'reports:attendance_list' %}?room={{ filter_room }}&session={{ filter_session }}"
+            class="px-3.5 py-2 bg-orange-600 text-white rounded-xl font-semibold text-xs flex items-center gap-1.5 hover:bg-orange-700 transition"
+          >
+            <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+            <span>Cetak Absen</span>
+          </a>
+        </form>
+      </div>
+
+      <!-- Table View -->
+      <div class="overflow-x-auto max-h-[560px]">
+        <table class="w-full text-left border-collapse">
+          <thead class="bg-stone-50 dark:bg-stone-950/60 sticky top-0 z-10 text-xs font-semibold text-stone-400">
+            <tr>
+              <th class="py-4 px-5">Nama Siswa</th>
+              <th class="py-4 px-5 text-center">Kelas</th>
+              <th class="py-4 px-5 text-center">Ruangan</th>
+              <th class="py-4 px-5 text-center">Sesi</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-stone-100 dark:divide-stone-800/80">
+            {% for l in logistics %}
+              <tr class="hover:bg-stone-50/50 dark:hover:bg-stone-800/30 transition-colors">
+                <td class="py-4 px-5">
+                  <p class="font-semibold text-sm text-stone-900 dark:text-white leading-tight mb-0.5">
+                    {{ l.student.full_name }}
+                  </p>
+                  <p class="text-xs font-mono text-stone-400">{{ l.student.nis }}</p>
+                </td>
+                <td class="py-4 px-5 text-center">
+                  <span class="text-xs font-medium px-2.5 py-1 bg-stone-100 dark:bg-stone-800 rounded-lg text-stone-600 dark:text-stone-300">
+                    {{ l.student.class_room.name }}
+                  </span>
+                </td>
+                <td class="py-4 px-5 text-center font-semibold text-blue-600 dark:text-blue-400 text-xs">
+                  {{ l.room_name }}
+                </td>
+                <td class="py-4 px-5 text-center">
+                  <span class="bg-orange-600/10 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400 px-3 py-1 rounded-xl font-medium text-xs border border-orange-600/20">
+                    {{ l.session_name }}
+                  </span>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="4" class="py-16 text-center text-stone-400 italic">
+                  Belum ada data alokasi ruangan. Gunakan form acakan di sebelah kiri untuk mengocok siswa.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

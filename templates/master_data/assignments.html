@@ -1,0 +1,394 @@
+{% extends 'layouts/app.html' %}
+{% load static %}
+
+{% block page_header %}
+<header class="mb-6">
+  <div class="flex items-center gap-3">
+    <div class="p-2.5 bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 rounded-2xl shrink-0">
+      <i data-lucide="user-plus" class="w-6 h-6"></i>
+    </div>
+    <div>
+      <h1 class="text-xl sm:text-2xl font-bold text-stone-900 dark:text-white tracking-tight">
+        Penugasan Pengampu
+      </h1>
+      <p class="text-xs font-medium text-stone-500 dark:text-stone-400 mt-0.5">
+        Atur guru yang mengampu mata pelajaran di tiap kelas
+      </p>
+    </div>
+  </div>
+</header>
+{% endblock %}
+
+{% block app_content %}
+<!-- SweetAlert2 Script -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+{% if messages %}
+  <div class="mb-6 space-y-2">
+    {% for message in messages %}
+      <div class="p-4 rounded-2xl text-xs font-bold flex items-center justify-between {% if message.tags == 'error' %}bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-900/60{% else %}bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/60{% endif %}">
+        <div class="flex items-center gap-2">
+          <i data-lucide="{% if message.tags == 'error' %}alert-circle{% else %}check-circle-2{% endif %}" class="w-4 h-4"></i>
+          <span>{{ message }}</span>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<div 
+  x-data="{
+    editingId: null,
+    selectedTeacher: '',
+    selectedSubject: '',
+    selectedClasses: [],
+    searchQuery: '',
+    filterSubject: '',
+    assignmentItems: [
+      {% for a in assignments %}
+      {
+        id: '{{ a.id }}',
+        teacher: '{{ a.teacher.full_name|escapejs }}',
+        subject_id: '{% if a.subject %}{{ a.subject.id }}{% endif %}',
+      }{% if not forloop.last %},{% endif %}
+      {% endfor %}
+    ],
+
+    get filteredCount() {
+      const q = this.searchQuery.toLowerCase().trim();
+      const sub = this.filterSubject;
+      return this.assignmentItems.filter(a => 
+        (!q || a.teacher.toLowerCase().includes(q)) &&
+        (!sub || a.subject_id === sub)
+      ).length;
+    },
+    
+    toggleClass(id) {
+      if (this.editingId) {
+        this.selectedClasses = [id];
+      } else {
+        if (this.selectedClasses.includes(id)) {
+          this.selectedClasses = this.selectedClasses.filter(c => c !== id);
+        } else {
+          this.selectedClasses.push(id);
+        }
+      }
+    },
+    
+    startEdit(id, teacherId, subjectId, classId) {
+      this.editingId = id;
+      this.selectedTeacher = teacherId;
+      this.selectedSubject = subjectId;
+      this.selectedClasses = [classId];
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    
+    cancelEdit() {
+      this.editingId = null;
+      this.selectedTeacher = '';
+      this.selectedSubject = '';
+      this.selectedClasses = [];
+    },
+
+    matches(teacherName, subjectId) {
+      const q = this.searchQuery.toLowerCase().trim();
+      const matchName = !q || teacherName.toLowerCase().includes(q);
+      const matchSubject = !this.filterSubject || subjectId === this.filterSubject;
+      return matchName && matchSubject;
+    },
+
+    handleSave(form) {
+      if (!this.selectedTeacher || !this.selectedSubject || this.selectedClasses.length === 0) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            title: 'Oops!',
+            text: 'Pilih Guru, Mapel, dan minimal satu Kelas!',
+            icon: 'warning',
+            confirmButtonColor: '#ea580c'
+          });
+        } else {
+          alert('Pilih Guru, Mapel, dan minimal satu Kelas!');
+        }
+        return;
+      }
+      form.submit();
+    },
+
+    confirmDelete(id, teacherName, subjectName, className) {
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          title: 'Hapus Penugasan?',
+          text: `Apakah Anda yakin ingin menghapus penugasan ${teacherName} (${subjectName} - ${className})?`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#ea580c',
+          cancelButtonColor: '#71717a',
+          confirmButtonText: 'Ya, Hapus!',
+          cancelButtonText: 'Batal',
+          customClass: {
+            popup: 'rounded-[2rem] dark:bg-stone-900 dark:text-white',
+          }
+        }).then((result) => {
+          if (result.isConfirmed) {
+            const form = document.getElementById('delete-form-' + id);
+            if (form) form.submit();
+          }
+        });
+      } else {
+        if (confirm(`Hapus penugasan ${teacherName}?`)) {
+          const form = document.getElementById('delete-form-' + id);
+          if (form) form.submit();
+        }
+      }
+    }
+  }"
+  class="grid grid-cols-1 xl:grid-cols-3 gap-8"
+>
+
+  <!-- FORM INPUT (LEFT COLUMN) -->
+  <div 
+    class="p-8 rounded-[2.5rem] shadow-sm border h-fit transition-all"
+    :class="editingId ? 'bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800' : 'bg-white dark:bg-zinc-900 border-slate-100 dark:border-zinc-800'"
+  >
+    <form method="post" action="{% url 'penugasan_guru' %}" class="space-y-6">
+      {% csrf_token %}
+      <input type="hidden" name="action" :value="editingId ? 'update' : 'create'">
+      <input type="hidden" name="assignment_id" :value="editingId || ''">
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+
+      <!-- Mode Edit Banner -->
+      <div 
+        x-show="editingId" 
+        x-cloak
+        class="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 px-4 py-3 rounded-2xl flex justify-between items-center text-xs font-bold uppercase tracking-widest"
+      >
+        <span>Mode Edit Aktif</span>
+        <button type="button" @click="cancelEdit()" class="hover:text-red-500 transition-colors cursor-pointer">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Pilih Guru -->
+      <div>
+        <label class="text-[10px] font-black uppercase text-slate-400 dark:text-zinc-500 mb-2 flex items-center gap-2">
+          <i data-lucide="user-check" class="w-3.5 h-3.5"></i>
+          <span>Pilih Guru</span>
+        </label>
+        <select 
+          name="teacher_id" 
+          x-model="selectedTeacher"
+          required
+          class="w-full bg-slate-50 dark:bg-zinc-800 p-4 rounded-2xl dark:text-white outline-none focus:ring-2 focus:ring-orange-500 border border-slate-200 dark:border-zinc-700 cursor-pointer text-xs font-medium"
+        >
+          <option value="">-- Pilih Guru --</option>
+          {% for t in teachers %}
+            <option value="{{ t.id }}">{{ t.full_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Pilih Mata Pelajaran -->
+      <div>
+        <label class="text-[10px] font-black uppercase text-slate-400 dark:text-zinc-500 mb-2 flex items-center gap-2">
+          <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+          <span>Pilih Mata Pelajaran</span>
+        </label>
+        <select 
+          name="subject_id" 
+          x-model="selectedSubject"
+          required
+          class="w-full bg-slate-50 dark:bg-zinc-800 p-4 rounded-2xl dark:text-white outline-none focus:ring-2 focus:ring-orange-500 border border-slate-200 dark:border-zinc-700 cursor-pointer text-xs font-medium"
+        >
+          <option value="">-- Pilih Mapel --</option>
+          {% for s in subjects %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Pilih Kelas -->
+      <div>
+        <label class="text-[10px] font-black uppercase text-slate-400 dark:text-zinc-500 mb-2 flex items-center gap-2">
+          <i data-lucide="school" class="w-3.5 h-3.5"></i>
+          <span x-text="editingId ? 'Pilih Kelas (1 Kelas Saja)' : 'Pilih Kelas (Bisa pilih banyak)'"></span>
+        </label>
+
+        <!-- Hidden inputs for selected classes -->
+        <template x-for="cid in selectedClasses" :key="cid">
+          <input type="hidden" :name="editingId ? 'class_id' : 'class_ids'" :value="cid">
+        </template>
+
+        <div class="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 bg-slate-50/50 dark:bg-zinc-800/40 rounded-2xl border border-slate-200/60 dark:border-zinc-700/60">
+          {% for c in classes %}
+            <button
+              type="button"
+              @click="toggleClass('{{ c.id }}')"
+              :class="selectedClasses.includes('{{ c.id }}') ? 'bg-orange-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-zinc-700'"
+              class="p-3 rounded-xl text-xs font-bold transition-all text-center select-none cursor-pointer"
+            >
+              {{ c.name }}
+            </button>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex gap-2 pt-2">
+        <button 
+          type="button"
+          x-show="editingId"
+          x-cloak
+          @click="cancelEdit()"
+          class="flex-1 bg-slate-200 text-slate-700 dark:bg-zinc-800 dark:text-zinc-300 py-4 rounded-2xl font-black shadow-sm hover:bg-slate-300 dark:hover:bg-zinc-700 transition-all active:scale-95 uppercase text-xs cursor-pointer"
+        >
+          Batal
+        </button>
+        <button 
+          type="button"
+          @click="handleSave($event.target.closest('form'))"
+          :class="editingId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-orange-600 hover:bg-orange-700'"
+          class="flex-[2] text-white py-4 rounded-2xl font-black shadow-lg transition-all active:scale-95 uppercase text-xs cursor-pointer select-none tracking-wider"
+        >
+          <span x-text="editingId ? 'Update Penugasan' : 'Simpan Penugasan'"></span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- TABLE LIST & FILTER BAR (RIGHT COLUMN) -->
+  <div class="xl:col-span-2 space-y-4">
+    
+    <!-- Header with Search & Filter Controls -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
+      <div class="flex items-center gap-3">
+        <h3 class="font-black dark:text-white uppercase tracking-tighter text-lg">
+          Daftar Pengampu
+        </h3>
+        <span 
+          x-text="filteredCount + ' Penugasan'"
+          class="bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-400 text-[10px] font-black uppercase px-2.5 py-1 rounded-full"
+        >
+          {{ assignments|length }} Penugasan
+        </span>
+      </div>
+      
+      <!-- Instant Search & Filter Controls -->
+      <div class="flex flex-col sm:flex-row w-full md:w-auto gap-2">
+        <!-- Search Input -->
+        <div class="relative flex-1 sm:w-64">
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+            <i data-lucide="search" class="w-4 h-4"></i>
+          </div>
+          <input
+            type="text"
+            x-model="searchQuery"
+            placeholder="Cari nama guru..."
+            class="w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-sm rounded-2xl pl-10 pr-4 py-3 outline-none focus:border-orange-500 dark:text-white shadow-sm"
+          />
+        </div>
+        
+        <!-- Filter Subject -->
+        <div class="relative flex-1 sm:w-48">
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+            <i data-lucide="filter" class="w-4 h-4"></i>
+          </div>
+          <select
+            x-model="filterSubject"
+            class="w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-sm rounded-2xl pl-10 pr-4 py-3 outline-none focus:border-orange-500 dark:text-white shadow-sm appearance-none cursor-pointer"
+          >
+            <option value="">Semua Mapel</option>
+            {% for s in subjects %}
+              <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Reset Button -->
+        <button 
+          type="button"
+          x-show="searchQuery || filterSubject"
+          x-cloak
+          @click="searchQuery = ''; filterSubject = ''"
+          class="p-3 bg-white dark:bg-zinc-900 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 border border-slate-200 dark:border-zinc-800 rounded-2xl flex items-center justify-center transition cursor-pointer"
+          title="Reset Filter"
+        >
+          <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Table Surface -->
+    <div class="bg-white dark:bg-zinc-900 rounded-[2.5rem] border border-slate-100 dark:border-zinc-800 overflow-hidden shadow-sm">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-slate-50 dark:bg-zinc-800/50">
+              <th class="p-5 text-[10px] font-black uppercase text-slate-400">Guru</th>
+              <th class="p-5 text-[10px] font-black uppercase text-slate-400">Mapel</th>
+              <th class="p-5 text-[10px] font-black uppercase text-slate-400">Kelas</th>
+              <th class="p-5 text-[10px] font-black uppercase text-slate-400 text-center">Aksi</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-zinc-800">
+            {% for a in assignments %}
+              <tr 
+                x-show="matches('{{ a.teacher.full_name|escapejs }}', '{% if a.subject %}{{ a.subject.id }}{% endif %}')"
+                class="hover:bg-slate-50/50 dark:hover:bg-zinc-800/30 transition-colors"
+              >
+                <td class="p-5 text-sm font-black dark:text-white uppercase tracking-tighter">
+                  {{ a.teacher.full_name }}
+                </td>
+                <td class="p-5 text-sm font-bold text-orange-600 dark:text-orange-400 uppercase">
+                  {{ a.subject.name|default:a.subject_name }}
+                </td>
+                <td class="p-5">
+                  <span class="bg-slate-100 dark:bg-zinc-800 px-3 py-1 rounded-lg text-[10px] font-black uppercase text-slate-700 dark:text-zinc-300">
+                    {{ a.class_room.name }}
+                  </span>
+                </td>
+                <td class="p-5 text-center">
+                  <div class="flex justify-center items-center gap-3">
+                    <!-- Edit Button -->
+                    <button 
+                      type="button"
+                      @click="startEdit('{{ a.id }}', '{{ a.teacher.id }}', '{% if a.subject %}{{ a.subject.id }}{% endif %}', '{{ a.class_room.id }}')"
+                      class="text-slate-300 dark:text-zinc-600 hover:text-blue-500 transition-colors cursor-pointer" 
+                      title="Edit Data"
+                    >
+                      <i data-lucide="edit-3" class="w-4.5 h-4.5"></i>
+                    </button>
+
+                    <!-- Delete Button with SweetAlert2 Confirmation -->
+                    <button 
+                      type="button"
+                      @click="confirmDelete('{{ a.id }}', '{{ a.teacher.full_name|escapejs }}', '{{ a.subject.name|default:a.subject_name|escapejs }}', '{{ a.class_room.name|escapejs }}')"
+                      class="text-slate-300 dark:text-zinc-600 hover:text-red-500 transition-colors cursor-pointer" 
+                      title="Hapus Data"
+                    >
+                      <i data-lucide="trash-2" class="w-4.5 h-4.5"></i>
+                    </button>
+
+                    <!-- Hidden Form for Safe Deletion -->
+                    <form id="delete-form-{{ a.id }}" method="post" action="{% url 'penugasan_guru' %}" class="hidden">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="delete">
+                      <input type="hidden" name="assignment_id" value="{{ a.id }}">
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    </form>
+                  </div>
+                </td>
+            {% endfor %}
+            <tr x-show="filteredCount === 0" x-cloak>
+              <td colSpan="4" class="p-8 text-center text-slate-400 text-sm font-bold italic">
+                Tidak ada data penugasan ditemukan.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

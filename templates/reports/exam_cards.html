@@ -1,0 +1,376 @@
+{% extends 'layouts/app.html' %}
+{% load static %}
+
+{% block page_header %}
+<div class="print:hidden mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+  <div>
+    <h2 class="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 dark:text-white">
+      Kartu Peserta Ujian
+    </h2>
+    <p class="text-orange-600 dark:text-orange-500 font-semibold text-xs mt-1">
+      Cetak Kartu Login & Kredensial Siswa CBT (Tahun {{ settings.academic_year }})
+    </p>
+  </div>
+
+  <div class="flex items-center gap-3">
+    <form method="get" class="flex flex-wrap items-center gap-2">
+      <select
+        name="room"
+        onchange="this.form.submit()"
+        class="bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-800 rounded-2xl px-3.5 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer shadow-xs"
+      >
+        <option value="all">Semua Ruangan</option>
+        {% for r in rooms %}
+          <option value="{{ r }}" {% if filter_room == r %}selected{% endif %}>{{ r }}</option>
+        {% endfor %}
+      </select>
+
+      <select
+        name="session"
+        onchange="this.form.submit()"
+        class="bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-800 rounded-2xl px-3.5 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer shadow-xs"
+      >
+        <option value="all">Semua Sesi</option>
+        {% for s in sessions %}
+          <option value="{{ s }}" {% if filter_session == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+
+      <select
+        name="class_id"
+        onchange="this.form.submit()"
+        class="bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-800 rounded-2xl px-3.5 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer shadow-xs"
+      >
+        <option value="all">Semua Kelas</option>
+        {% for c in classes %}
+          <option value="{{ c.id }}" {% if filter_class == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </form>
+
+    <button
+      type="button"
+      onclick="window.print()"
+      class="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-semibold text-xs tracking-wide transition shadow-lg shadow-orange-600/20 active:scale-95 flex items-center gap-2 cursor-pointer"
+    >
+      <i data-lucide="printer" class="w-4 h-4"></i>
+      <span>Cetak Masal</span>
+    </button>
+  </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- SCREEN PREVIEW GRID -->
+<div class="print:hidden space-y-6">
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+    {% for s in students %}
+      <div class="bg-white dark:bg-stone-900 p-6 rounded-3xl border border-stone-200/80 dark:border-stone-800 text-left shadow-xs hover:border-orange-500 transition-all group">
+        <div class="flex justify-between items-start mb-4">
+          <div class="bg-orange-100 dark:bg-orange-950/40 p-2.5 rounded-2xl text-orange-600 group-hover:scale-110 transition-transform">
+            <i data-lucide="qr-code" class="w-5 h-5"></i>
+          </div>
+          <span class="text-xs font-medium text-stone-800 dark:text-stone-200 bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 px-3 py-1 rounded-full shadow-xs">
+            {{ s.room_name }}
+          </span>
+        </div>
+        <h3 class="font-semibold text-base truncate text-stone-900 dark:text-white">
+          {{ s.student.full_name }}
+        </h3>
+        <p class="text-stone-500 text-xs font-normal mt-1">
+          NIS: <span class="font-mono font-semibold text-orange-600 dark:text-orange-400">{{ s.student.nis }}</span> &bull; {{ s.student.class_room.name }}
+        </p>
+        <div class="mt-4 pt-4 border-t border-dashed border-stone-200 dark:border-stone-800 flex justify-between items-center text-xs font-medium">
+          <span class="text-stone-400">{{ s.session_name }}</span>
+          <span class="text-orange-600 font-semibold">Siap Dicetak</span>
+        </div>
+      </div>
+    {% empty %}
+      <div class="col-span-full py-16 text-center bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800">
+        <p class="font-medium text-stone-400 text-sm">Tidak ada data kartu peserta untuk kriteria filter ini.</p>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- PRINT CONTAINER (ONLY VISIBLE ON PRINT) -->
+<div class="hidden print:block font-sans">
+  <div class="print-cards-grid">
+    {% for s in students %}
+      <div class="print-card">
+        {% if settings.watermark_url %}
+          <img src="{{ settings.watermark_url }}" class="print-watermark" alt="watermark" />
+        {% endif %}
+        
+        <div class="print-card-content">
+          <!-- Kop Surat Kartu -->
+          <div class="print-header">
+            {% if settings.logo_left_url %}
+              <img src="{{ settings.logo_left_url }}" class="print-header-logo" alt="Logo" />
+            {% else %}
+              <div style="width: 14mm;"></div>
+            {% endif %}
+
+            <div class="print-header-text">
+              {% if settings.header_1 %}<h4>{{ settings.header_1 }}</h4>{% endif %}
+              {% if settings.header_2 %}<h4>{{ settings.header_2 }}</h4>{% endif %}
+              {% if settings.header_3 %}<h4>{{ settings.header_3 }}</h4>{% endif %}
+              <h3>{{ settings.school_name|default:'SMK NEGERI 1 RONGGA' }}</h3>
+              <p>Program Keahlian: {{ settings.school_majors_list|default:'-' }}</p>
+              <p class="info">{{ settings.school_address|default:'' }} Telp. {{ settings.school_phone|default:'' }}</p>
+              <p class="info">Website: {{ settings.school_website|default:'' }} &bull; Email: {{ settings.school_email|default:'' }}</p>
+            </div>
+
+            {% if settings.logo_right_url %}
+              <img src="{{ settings.logo_right_url }}" class="print-header-logo" alt="Logo" />
+            {% else %}
+              <div style="width: 14mm;"></div>
+            {% endif %}
+          </div>
+
+          <div class="print-title">
+            KARTU PESERTA {{ settings.exam_name|default:'UJIAN' }}<br>
+            TAHUN AJARAN {{ settings.academic_year|default:'2025/2026' }}
+          </div>
+
+          <table class="print-info-table">
+            <tr>
+              <td class="lbl">NIS</td>
+              <td>: <b>{{ s.student.nis }}</b></td>
+            </tr>
+            <tr>
+              <td class="lbl">Password</td>
+              <td>: <b>{{ s.student.password_plain|default:'********' }}</b></td>
+            </tr>
+            <tr>
+              <td class="lbl">Nama Siswa</td>
+              <td>: <b>{{ s.student.full_name }}</b></td>
+            </tr>
+            <tr>
+              <td class="lbl">Kelas</td>
+              <td>: {{ s.student.class_room.name }}</td>
+            </tr>
+            <tr>
+              <td class="lbl">Ruang / Sesi</td>
+              <td>: <b>{{ s.room_name }}</b> / <b>{{ s.session_name }}</b></td>
+            </tr>
+          </table>
+
+          <div class="print-footer">
+            <div class="print-photo-box">FOTO 3X4</div>
+            <div class="print-qr-box">
+              <div style="width: 15mm; height: 15mm; border: 1pt dashed #999; display: flex; align-items: center; justify-content: center; font-size: 5pt; text-align: center;">
+                QR {{ s.student.nis }}
+              </div>
+            </div>
+            <div class="print-signature-area">
+              {{ settings.exam_city|default:'Rongga' }}, {{ settings.exam_date|default:'................' }}<br>
+              Kepala Sekolah,
+              <div class="print-sig-space">
+                {% if settings.headmaster_signature_url %}
+                  <img src="{{ settings.headmaster_signature_url }}" class="print-img-ttd" alt="TTD" />
+                {% endif %}
+                {% if settings.school_seal_url %}
+                  <img src="{{ settings.school_seal_url }}" class="print-img-cap" alt="Cap" />
+                {% endif %}
+              </div>
+              <b><u>{{ settings.headmaster_name|default:'.......................' }}</u></b><br>
+              NIP. {{ settings.headmaster_nip|default:'.......................' }}
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<style>
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 6mm;
+  }
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    font-family: Arial, sans-serif !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  nav, aside, header, footer, .print\\:hidden {
+    display: none !important;
+  }
+  .lg\\:ml-64 {
+    margin-left: 0 !important;
+  }
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  .print-cards-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8mm !important;
+    width: 100% !important;
+  }
+
+  .print-card {
+    width: 95mm !important;
+    min-height: 62mm !important;
+    border: 1.2pt solid #000 !important;
+    padding: 3mm !important;
+    box-sizing: border-box !important;
+    position: relative !important;
+    background: #fff !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    overflow: hidden !important;
+    margin-bottom: 2mm !important;
+  }
+
+  .print-watermark {
+    position: absolute !important;
+    top: 55% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: 32mm !important;
+    opacity: 0.1 !important;
+    z-index: 0 !important;
+    pointer-events: none !important;
+  }
+
+  .print-card-content {
+    position: relative !important;
+    z-index: 1 !important;
+  }
+
+  .print-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    border-bottom: 1.5pt solid #000 !important;
+    padding-bottom: 2px !important;
+    margin-bottom: 3px !important;
+  }
+
+  .print-header-logo {
+    width: 12mm !important;
+    height: 12mm !important;
+    object-fit: contain !important;
+  }
+
+  .print-header-text {
+    text-align: center !important;
+    flex: 1 !important;
+    padding: 0 2px !important;
+  }
+
+  .print-header-text h4 {
+    margin: 0 !important;
+    font-size: 5pt !important;
+    font-weight: bold !important;
+    text-transform: uppercase !important;
+    line-height: 1.1 !important;
+  }
+
+  .print-header-text h3 {
+    margin: 1px 0 !important;
+    font-size: 7.5pt !important;
+    font-weight: bold !important;
+    color: #000 !important;
+  }
+
+  .print-header-text p {
+    margin: 0 !important;
+    font-size: 4pt !important;
+    line-height: 1.1 !important;
+    font-style: italic !important;
+  }
+
+  .print-header-text .info {
+    font-style: normal !important;
+  }
+
+  .print-title {
+    text-align: center !important;
+    font-weight: bold !important;
+    font-size: 7pt !important;
+    margin: 3px 0 !important;
+    text-transform: uppercase !important;
+    text-decoration: underline !important;
+  }
+
+  .print-info-table {
+    width: 100% !important;
+    font-size: 7pt !important;
+    border-collapse: collapse !important;
+    margin-bottom: 3px !important;
+  }
+
+  .print-info-table td {
+    padding: 1px 0 !important;
+    vertical-align: top !important;
+  }
+
+  .print-info-table .lbl {
+    width: 22mm !important;
+  }
+
+  .print-footer {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: flex-end !important;
+    margin-top: 3px !important;
+  }
+
+  .print-photo-box {
+    width: 16mm !important;
+    height: 22mm !important;
+    border: 1pt solid #000 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 5.5pt !important;
+    background: #f0f0f0 !important;
+  }
+
+  .print-qr-box {
+    width: 15mm !important;
+    height: 15mm !important;
+  }
+
+  .print-signature-area {
+    position: relative !important;
+    text-align: center !important;
+    font-size: 6pt !important;
+    width: 40mm !important;
+  }
+
+  .print-sig-space {
+    height: 10mm !important;
+    position: relative !important;
+  }
+
+  .print-img-ttd {
+    height: 10mm !important;
+    object-fit: contain !important;
+    position: absolute !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    z-index: 2 !important;
+  }
+
+  .print-img-cap {
+    height: 12mm !important;
+    object-fit: contain !important;
+    position: absolute !important;
+    left: 5% !important;
+    top: -2mm !important;
+    z-index: 3 !important;
+    opacity: 0.8 !important;
+    mix-blend-mode: multiply !important;
+  }
+}
+</style>
+{% endblock %}

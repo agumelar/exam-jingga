@@ -1,0 +1,59 @@
+{% load static %}
+{% comment %}
+HTMX Target Grid Container for Schedules
+{% endcomment %}
+
+<div id="schedule-list-grid-container" class="space-y-6">
+  
+  <!-- ADMIN BULK ACTION CONTROLS -->
+  {% if is_admin %}
+    <div class="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-stone-900 p-4 rounded-3xl border border-stone-200/80 dark:border-stone-800 shadow-xs">
+      <div class="flex items-center gap-2">
+        <button
+          type="button"
+          @click="selectAll()"
+          class="bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 border border-stone-300/80 dark:border-stone-700 px-4 py-2.5 rounded-xl text-xs font-semibold text-stone-700 dark:text-stone-200 transition cursor-pointer select-none"
+        >
+          Pilih Semua
+        </button>
+        <button
+          type="button"
+          @click="clearSelection()"
+          class="bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 border border-stone-300/80 dark:border-stone-700 px-4 py-2.5 rounded-xl text-xs font-semibold text-stone-700 dark:text-stone-200 transition cursor-pointer select-none"
+        >
+          Batal Pilih
+        </button>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <span x-show="selectedIds.length > 0" class="text-xs font-semibold text-orange-600 dark:text-orange-400">
+          <span x-text="selectedIds.length"></span> Terpilih
+        </span>
+        <button
+          type="button"
+          @click="bulkDelete()"
+          :disabled="selectedIds.length === 0"
+          class="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl text-xs font-semibold disabled:opacity-40 transition shadow-xs cursor-pointer select-none"
+        >
+          <i data-lucide="trash-2" class="w-3.5 h-3.5 inline mr-1"></i> Hapus Terpilih
+        </button>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- SCHEDULE CARDS GRID -->
+  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 text-left font-sans">
+    {% if schedules %}
+      {% for s in schedules %}
+        {% include 'schedules/partials/schedule_card.html' with s=s is_admin=is_admin current_teacher=current_teacher %}
+      {% endfor %}
+    {% else %}
+      <div class="col-span-full py-16 text-center text-stone-400 dark:text-stone-500 font-medium bg-white dark:bg-stone-900 border-2 border-dashed border-stone-200 dark:border-stone-800 rounded-[2.5rem]">
+        <i data-lucide="calendar-x" class="w-12 h-12 mx-auto mb-3 text-stone-300 dark:text-stone-700"></i>
+        <p class="text-base font-semibold text-stone-700 dark:text-stone-300">Tidak ada jadwal ujian yang ditemukan.</p>
+        <p class="text-xs text-stone-400 mt-1 font-normal">Coba sesuaikan kata kunci pencarian atau ubah filter tanggal.</p>
+      </div>
+    {% endif %}
+  </div>
+
+</div>

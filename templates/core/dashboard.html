@@ -1,0 +1,455 @@
+{% extends 'layouts/app.html' %}
+{% load static %}
+
+{% block page_header %}
+  <!-- Custom Hero Header Rendered in app_content -->
+{% endblock %}
+
+{% block app_content %}
+<div class="space-y-6 sm:space-y-8">
+  
+  <!-- 1. M3 Hero Banner (School Institution & Welcome) -->
+  <div 
+    class="relative overflow-hidden rounded-3xl bg-orange-600 bg-linear-to-r from-orange-600 via-orange-500 to-amber-600 text-white p-6 sm:p-8 lg:p-10 shadow-lg shadow-orange-600/20"
+    style="background: linear-gradient(135deg, #ea580c 0%, #f97316 50%, #d97706 100%); color: #ffffff;"
+  >
+    <!-- Ambient Background Pattern -->
+    <div class="absolute -right-10 -bottom-10 w-72 h-72 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+    <div class="absolute right-20 top-0 w-48 h-48 bg-amber-400/20 rounded-full blur-xl pointer-events-none"></div>
+
+    <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div class="space-y-2 max-w-2xl text-left">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold text-white tracking-wide">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+          <span>{{ settings.school_name|default:'SMK NEGERI 1 RONGGA' }}</span>
+        </div>
+        
+        <h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-white leading-tight">
+          Selamat Datang, {{ user.get_full_name|default:user.username|default:'Bapak/Ibu Guru' }}!
+        </h1>
+        
+        <p class="text-orange-50 text-sm sm:text-base leading-relaxed">
+          Tahun Ajaran {{ settings.academic_year|default:'2025/2026' }} &bull; Semester {{ settings.semester|default:'Ganjil' }} &bull; Sistem Ujian Berbasis Komputer (CBT) Terpusat.
+        </p>
+      </div>
+
+      <!-- Quick Hero Action Buttons -->
+      <div class="flex flex-wrap items-center gap-3 shrink-0">
+        <a 
+          href="/session-management/"
+          class="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-white text-orange-700 hover:bg-orange-50 font-semibold text-xs sm:text-sm shadow-md transition-all active:scale-95 cursor-pointer"
+        >
+          <i data-lucide="layout-grid" class="w-4 h-4 text-orange-600"></i>
+          <span>Live Monitoring</span>
+        </a>
+
+        {% if not user.is_student and user.role != 'siswa' %}
+          <a 
+            href="/jadwal-ujian/"
+            class="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-orange-700/60 hover:bg-orange-700/80 text-white border border-white/30 backdrop-blur-md font-medium text-xs sm:text-sm transition-all active:scale-95 cursor-pointer"
+          >
+            <i data-lucide="calendar-plus" class="w-4 h-4"></i>
+            <span>Jadwal Ujian</span>
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Top 4 M3 Metric Statistics Cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+    
+    <!-- Stat 1: Total Siswa -->
+    <div class="p-5 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800/80 shadow-xs hover:shadow-md transition-all text-left group">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wider">
+          Peserta Didik
+        </span>
+        <div class="w-10 h-10 rounded-2xl bg-orange-50 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+          <i data-lucide="users" class="w-5 h-5"></i>
+        </div>
+      </div>
+      <div class="space-y-1">
+        <h3 class="text-2xl sm:text-3xl font-bold text-stone-900 dark:text-white tracking-tight">
+          {{ total_students|default:'0' }}
+        </h3>
+        <p class="text-xs text-stone-500 dark:text-stone-400">
+          {{ total_classes|default:'0' }} Rombel &bull; {{ total_majors|default:'0' }} Jurusan
+        </p>
+      </div>
+    </div>
+
+    <!-- Stat 2: Bank Soal -->
+    <div class="p-5 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800/80 shadow-xs hover:shadow-md transition-all text-left group">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wider">
+          Bank Soal CBT
+        </span>
+        <div class="w-10 h-10 rounded-2xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+          <i data-lucide="file-text" class="w-5 h-5"></i>
+        </div>
+      </div>
+      <div class="space-y-1">
+        <h3 class="text-2xl sm:text-3xl font-bold text-stone-900 dark:text-white tracking-tight">
+          {{ total_questions|default:'0' }}
+        </h3>
+        <p class="text-xs text-stone-500 dark:text-stone-400">
+          {{ total_exams|default:'0' }} Paket Naskah Ujian
+        </p>
+      </div>
+    </div>
+
+    <!-- Stat 3: Jadwal Aktif -->
+    <div class="p-5 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800/80 shadow-xs hover:shadow-md transition-all text-left group">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wider">
+          Jadwal Aktif
+        </span>
+        <div class="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+          <i data-lucide="calendar-check-2" class="w-5 h-5"></i>
+        </div>
+      </div>
+      <div class="space-y-1">
+        <h3 class="text-2xl sm:text-3xl font-bold text-stone-900 dark:text-white tracking-tight flex items-center gap-2">
+          <span>{{ active_schedules_count|default:'0' }}</span>
+          {% if active_schedules_count > 0 %}
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          {% endif %}
+        </h3>
+        <p class="text-xs text-stone-500 dark:text-stone-400">
+          Dari total {{ total_schedules_count|default:'0' }} jadwal terdaftar
+        </p>
+      </div>
+    </div>
+
+    <!-- Stat 4: Sesi Peserta Berjalan -->
+    <div class="p-5 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800/80 shadow-xs hover:shadow-md transition-all text-left group">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-xs font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wider">
+          Sesi Peserta
+        </span>
+        <div class="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+          <i data-lucide="activity" class="w-5 h-5"></i>
+        </div>
+      </div>
+      <div class="space-y-1">
+        <h3 class="text-2xl sm:text-3xl font-bold text-stone-900 dark:text-white tracking-tight">
+          {{ active_sessions_count|default:'0' }}
+        </h3>
+        <p class="text-xs text-stone-500 dark:text-stone-400">
+          {{ finished_sessions_count|default:'0' }} Selesai &bull; {{ locked_sessions_count|default:'0' }} Terkunci
+        </p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 3. Operational Main Section (2 Columns: Active Schedules + Quick Actions) -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    
+    <!-- Left 2 Cols: Jadwal Ujian Terkini & Berlangsung -->
+    <div class="lg:col-span-2 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800/80 p-6 shadow-xs text-left">
+      <div class="flex items-center justify-between mb-5">
+        <div>
+          <h2 class="text-lg font-bold text-stone-900 dark:text-white tracking-tight">
+            Jadwal Ujian Terkini
+          </h2>
+          <p class="text-xs text-stone-500 dark:text-stone-400">
+            Daftar sesi ujian aktif dan terjadwal hari ini
+          </p>
+        </div>
+        
+        <a 
+          href="/jadwal-ujian/"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/40 transition"
+        >
+          <span>Lihat Semua</span>
+          <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+        </a>
+      </div>
+
+      <!-- Schedules List -->
+      <div class="space-y-3">
+        {% if recent_schedules %}
+          {% for schedule in recent_schedules %}
+            <div class="p-4 rounded-2xl bg-stone-50/80 dark:bg-stone-950/60 border border-stone-200/60 dark:border-stone-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-orange-300 dark:hover:border-orange-800/80 transition-all">
+              <div class="space-y-1.5 min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <h4 class="font-semibold text-sm text-stone-900 dark:text-white truncate">
+                    {{ schedule.exam.title }}
+                  </h4>
+                  {% if schedule.status == 'active' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse"></span>
+                      Aktif
+                    </span>
+                  {% elif schedule.status == 'closed' %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-400">
+                      Selesai
+                    </span>
+                  {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300">
+                      Draft
+                    </span>
+                  {% endif %}
+                </div>
+
+                <div class="flex flex-wrap items-center gap-y-1 gap-x-3 text-xs text-stone-500 dark:text-stone-400">
+                  <span class="inline-flex items-center gap-1 font-medium text-stone-700 dark:text-stone-300">
+                    <i data-lucide="school" class="w-3.5 h-3.5 text-stone-400"></i>
+                    {{ schedule.class_room.name|default:'Semua Kelas' }}
+                  </span>
+                  <span>&bull;</span>
+                  <span class="inline-flex items-center gap-1">
+                    <i data-lucide="clock" class="w-3.5 h-3.5 text-stone-400"></i>
+                    {{ schedule.start_time|date:"H:i" }} - {{ schedule.end_time|date:"H:i" }} WIB
+                  </span>
+                  <span>&bull;</span>
+                  <span class="inline-flex items-center gap-1">
+                    <i data-lucide="map-pin" class="w-3.5 h-3.5 text-stone-400"></i>
+                    {{ schedule.room_name|default:'Lab CBT' }} (Sesi {{ schedule.session_no|default:'1' }})
+                  </span>
+                </div>
+              </div>
+
+              <!-- Action & Token Area -->
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-right">
+                  <span class="text-[10px] text-stone-400 block uppercase tracking-wider font-semibold">Token</span>
+                  <span class="px-3 py-1 rounded-full font-mono font-bold text-xs bg-orange-100 dark:bg-orange-950/80 text-orange-800 dark:text-orange-200 border border-orange-200 dark:border-orange-800/80 inline-block">
+                    {{ schedule.token|default:'------' }}
+                  </span>
+                </div>
+
+                <a 
+                  href="/session-management/?schedule_id={{ schedule.id }}"
+                  class="p-2.5 rounded-full bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-950/40 dark:hover:text-orange-400 transition"
+                  title="Buka Monitoring Sesi"
+                >
+                  <i data-lucide="layout-grid" class="w-4 h-4"></i>
+                </a>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="py-12 px-4 rounded-2xl border border-dashed border-stone-200 dark:border-stone-800 text-center space-y-3">
+            <div class="w-12 h-12 rounded-full bg-orange-50 dark:bg-orange-950/40 text-orange-600 flex items-center justify-center mx-auto">
+              <i data-lucide="calendar" class="w-6 h-6"></i>
+            </div>
+            <p class="text-sm font-medium text-stone-700 dark:text-stone-300">Belum ada jadwal ujian yang aktif saat ini.</p>
+            <a 
+              href="/jadwal-ujian/"
+              class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-600 text-white text-xs font-semibold hover:bg-orange-700 transition"
+            >
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+              <span>Buat Jadwal Ujian Baru</span>
+            </a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Right 1 Col: Pintasan Aksi Cepat (Quick Actions Grid) -->
+    <div class="rounded-3xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800/80 p-6 shadow-xs text-left flex flex-col">
+      <div class="mb-5">
+        <h2 class="text-lg font-bold text-stone-900 dark:text-white tracking-tight">
+          Pintasan Cepat
+        </h2>
+        <p class="text-xs text-stone-500 dark:text-stone-400">
+          Akses modul operasional dalam satu sentuhan
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2.5 flex-1">
+        <!-- Shortcut 1: Bank Soal -->
+        <a 
+          href="/bank-soal/"
+          class="p-3.5 rounded-2xl bg-stone-50/80 dark:bg-stone-950/60 border border-stone-200/60 dark:border-stone-800/60 hover:bg-orange-50/60 dark:hover:bg-orange-950/30 hover:border-orange-200 dark:hover:border-orange-800 flex items-center gap-3.5 transition group cursor-pointer"
+        >
+          <div class="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-950/80 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+            <i data-lucide="file-plus" class="w-4.5 h-4.5"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <h4 class="text-xs font-semibold text-stone-900 dark:text-white truncate">Tambah Butir Soal</h4>
+            <p class="text-[11px] text-stone-500 dark:text-stone-400 leading-tight">Kelola bank soal &amp; gambar opsi</p>
+          </div>
+          <i data-lucide="chevron-right" class="w-4 h-4 text-stone-400 group-hover:text-orange-600 transition"></i>
+        </a>
+
+        <!-- Shortcut 2: Jadwal Ujian -->
+        <a 
+          href="/jadwal-ujian/"
+          class="p-3.5 rounded-2xl bg-stone-50/80 dark:bg-stone-950/60 border border-stone-200/60 dark:border-stone-800/60 hover:bg-orange-50/60 dark:hover:bg-orange-950/30 hover:border-orange-200 dark:hover:border-orange-800 flex items-center gap-3.5 transition group cursor-pointer"
+        >
+          <div class="w-9 h-9 rounded-xl bg-sky-100 dark:bg-sky-950/80 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+            <i data-lucide="calendar-plus" class="w-4.5 h-4.5"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <h4 class="text-xs font-semibold text-stone-900 dark:text-white truncate">Buat Jadwal Ujian</h4>
+            <p class="text-[11px] text-stone-500 dark:text-stone-400 leading-tight">Atur sesi, ruang &amp; token OTP</p>
+          </div>
+          <i data-lucide="chevron-right" class="w-4 h-4 text-stone-400 group-hover:text-orange-600 transition"></i>
+        </a>
+
+        <!-- Shortcut 3: Data Siswa & Sinkronisasi -->
+        <a 
+          href="/data-siswa/"
+          class="p-3.5 rounded-2xl bg-stone-50/80 dark:bg-stone-950/60 border border-stone-200/60 dark:border-stone-800/60 hover:bg-orange-50/60 dark:hover:bg-orange-950/30 hover:border-orange-200 dark:hover:border-orange-800 flex items-center gap-3.5 transition group cursor-pointer"
+        >
+          <div class="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+            <i data-lucide="refresh-cw" class="w-4.5 h-4.5"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <h4 class="text-xs font-semibold text-stone-900 dark:text-white truncate">Sinkron Data Siswa</h4>
+            <p class="text-[11px] text-stone-500 dark:text-stone-400 leading-tight">Tarik 722+ siswa dari OpenAPI</p>
+          </div>
+          <i data-lucide="chevron-right" class="w-4 h-4 text-stone-400 group-hover:text-orange-600 transition"></i>
+        </a>
+
+        <!-- Shortcut 4: Cetak Kartu Peserta -->
+        <a 
+          href="/kartu-peserta/"
+          class="p-3.5 rounded-2xl bg-stone-50/80 dark:bg-stone-950/60 border border-stone-200/60 dark:border-stone-800/60 hover:bg-orange-50/60 dark:hover:bg-orange-950/30 hover:border-orange-200 dark:hover:border-orange-800 flex items-center gap-3.5 transition group cursor-pointer"
+        >
+          <div class="w-9 h-9 rounded-xl bg-purple-100 dark:bg-purple-950/80 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+            <i data-lucide="credit-card" class="w-4.5 h-4.5"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <h4 class="text-xs font-semibold text-stone-900 dark:text-white truncate">Cetak Kartu Peserta</h4>
+            <p class="text-[11px] text-stone-500 dark:text-stone-400 leading-tight">Format A4 resmi siap print</p>
+          </div>
+          <i data-lucide="chevron-right" class="w-4 h-4 text-stone-400 group-hover:text-orange-600 transition"></i>
+        </a>
+
+        <!-- Shortcut 5: Daftar Hadir & Berita Acara -->
+        <a 
+          href="/daftar-hadir/"
+          class="p-3.5 rounded-2xl bg-stone-50/80 dark:bg-stone-950/60 border border-stone-200/60 dark:border-stone-800/60 hover:bg-orange-50/60 dark:hover:bg-orange-950/30 hover:border-orange-200 dark:hover:border-orange-800 flex items-center gap-3.5 transition group cursor-pointer"
+        >
+          <div class="w-9 h-9 rounded-xl bg-rose-100 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+            <i data-lucide="clipboard-list" class="w-4.5 h-4.5"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <h4 class="text-xs font-semibold text-stone-900 dark:text-white truncate">Daftar Hadir &amp; Berita Acara</h4>
+            <p class="text-[11px] text-stone-500 dark:text-stone-400 leading-tight">Format cetak kop sekolah</p>
+          </div>
+          <i data-lucide="chevron-right" class="w-4 h-4 text-stone-400 group-hover:text-orange-600 transition"></i>
+        </a>
+
+        <!-- Shortcut 6: Rekapitulasi Nilai -->
+        <a 
+          href="/hasil-ujian/"
+          class="p-3.5 rounded-2xl bg-stone-50/80 dark:bg-stone-950/60 border border-stone-200/60 dark:border-stone-800/60 hover:bg-orange-50/60 dark:hover:bg-orange-950/30 hover:border-orange-200 dark:hover:border-orange-800 flex items-center gap-3.5 transition group cursor-pointer"
+        >
+          <div class="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+            <i data-lucide="bar-chart-3" class="w-4.5 h-4.5"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <h4 class="text-xs font-semibold text-stone-900 dark:text-white truncate">Hasil &amp; Analisis Nilai</h4>
+            <p class="text-[11px] text-stone-500 dark:text-stone-400 leading-tight">Ekspor Excel &amp; daya pembeda</p>
+          </div>
+          <i data-lucide="chevron-right" class="w-4 h-4 text-stone-400 group-hover:text-orange-600 transition"></i>
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 4. Recent Activity & Active Exam Sessions Table -->
+  <div class="rounded-3xl bg-white dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800/80 p-6 shadow-xs text-left">
+    <div class="flex items-center justify-between mb-5">
+      <div>
+        <h2 class="text-lg font-bold text-stone-900 dark:text-white tracking-tight">
+          Aktivitas Sesi Peserta Terkini
+        </h2>
+        <p class="text-xs text-stone-500 dark:text-stone-400">
+          Riwayat siswa yang sedang dan baru saja menyelesaikan ujian
+        </p>
+      </div>
+
+      <a 
+        href="/session-management/"
+        class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-950 dark:bg-orange-950/80 dark:text-orange-200 hover:bg-orange-200 transition"
+      >
+        <i data-lucide="activity" class="w-3.5 h-3.5 text-orange-600"></i>
+        <span>Buka Live Monitoring</span>
+      </a>
+    </div>
+
+    <!-- Table Container -->
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead>
+          <tr class="border-b border-stone-200/80 dark:border-stone-800/80 text-stone-500 dark:text-stone-400">
+            <th class="py-3 px-4 font-semibold uppercase tracking-wider">Nama Peserta</th>
+            <th class="py-3 px-4 font-semibold uppercase tracking-wider">NIS / Rombel</th>
+            <th class="py-3 px-4 font-semibold uppercase tracking-wider">Mata Pelajaran</th>
+            <th class="py-3 px-4 font-semibold uppercase tracking-wider">Mulai Ujian</th>
+            <th class="py-3 px-4 font-semibold uppercase tracking-wider">Status</th>
+            <th class="py-3 px-4 font-semibold uppercase tracking-wider text-right">Nilai Akhir</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-stone-200/60 dark:divide-stone-800/60">
+          {% if recent_sessions %}
+            {% for session in recent_sessions %}
+              <tr class="hover:bg-stone-50/80 dark:hover:bg-stone-950/50 transition-colors">
+                <td class="py-3.5 px-4 font-semibold text-stone-900 dark:text-white">
+                  <div class="flex items-center gap-2.5">
+                    <div class="w-7 h-7 rounded-full bg-orange-600 text-white font-bold text-[10px] flex items-center justify-center uppercase shrink-0">
+                      {{ session.student.full_name|slice:':1'|default:'S' }}
+                    </div>
+                    <span class="truncate max-w-[180px]">{{ session.student.full_name }}</span>
+                  </div>
+                </td>
+                <td class="py-3.5 px-4 text-stone-600 dark:text-stone-400">
+                  <span class="font-mono font-medium">{{ session.student.nis }}</span>
+                  <span class="block text-[11px] text-stone-400">{{ session.student.class_room.name|default:'-' }}</span>
+                </td>
+                <td class="py-3.5 px-4 text-stone-800 dark:text-stone-200 font-medium">
+                  {{ session.schedule.exam.title|default:'Ujian CBT' }}
+                </td>
+                <td class="py-3.5 px-4 text-stone-500">
+                  {{ session.started_at|date:"H:i:s" }} WIB
+                </td>
+                <td class="py-3.5 px-4">
+                  {% if session.status == 'active' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse"></span>
+                      Mengerjakan
+                    </span>
+                  {% elif session.status == 'finished' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300">
+                      Selesai
+                    </span>
+                  {% elif session.status == 'locked' %}
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-800 dark:bg-red-950/80 dark:text-red-300">
+                      <i data-lucide="lock" class="w-3 h-3 mr-1"></i>
+                      Terkunci
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="py-3.5 px-4 text-right font-mono font-bold text-sm">
+                  {% if session.status == 'finished' %}
+                    <span class="{% if session.score >= 75 %}text-emerald-600 dark:text-emerald-400{% else %}text-orange-600 dark:text-orange-400{% endif %}">
+                      {{ session.score|floatformat:1 }}
+                    </span>
+                  {% else %}
+                    <span class="text-stone-400 font-normal text-xs">-</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="6" class="py-8 text-center text-stone-400 dark:text-stone-500">
+                Belum ada aktivitas sesi pengerjaan ujian pada hari ini.
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

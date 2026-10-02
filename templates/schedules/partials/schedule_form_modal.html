@@ -1,0 +1,331 @@
+{% load static %}
+{% comment %}
+M3 Schedule Form Modal matching React ScheduleFormModal.jsx
+{% endcomment %}
+
+<div 
+  x-data="{
+    examType: '{{ form.initial.exam_type|default:"UH" }}',
+    subType: '{{ form.initial.sub_type|default:"" }}',
+    selectedLevel: '{{ form.initial.level|default:"" }}',
+    selectedClass: '{{ form.initial.class_room.id|default:"" }}',
+    selectedSubject: '{{ form.initial.subject.id|default:"" }}',
+    tokenVal: '{{ generated_token|default:form.initial.token }}',
+    isSaving: false,
+
+    generateToken() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let res = '';
+      for (let i = 0; i < 6; i++) {
+        res += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      this.tokenVal = res;
+    }
+  }"
+  x-init="$nextTick(() => { initIcons(); })"
+  class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto font-sans"
+  @keydown.escape.window="document.getElementById('modal-container').innerHTML = ''"
+>
+  <div 
+    class="bg-white dark:bg-stone-900 w-full max-w-4xl rounded-[3rem] p-6 sm:p-10 shadow-2xl text-left relative text-stone-900 dark:text-white font-bold border border-stone-200/80 dark:border-stone-800 max-h-[90vh] overflow-y-auto"
+    @click.outside="document.getElementById('modal-container').innerHTML = ''"
+  >
+    <!-- Close Button -->
+    <button
+      type="button"
+      onclick="document.getElementById('modal-container').innerHTML = ''"
+      class="absolute top-6 right-6 sm:top-8 sm:right-8 p-2 text-stone-400 hover:text-red-500 transition-colors cursor-pointer"
+      aria-label="Tutup Modal"
+    >
+      <i data-lucide="x" class="w-6 h-6"></i>
+    </button>
+
+    <!-- Header Title -->
+    <h3 class="text-2xl font-bold mb-8 border-l-8 border-orange-600 pl-4 tracking-tight text-stone-900 dark:text-white">
+      Konfigurasi <span x-text="examType"></span>
+    </h3>
+
+    <!-- Form -->
+    <form 
+      {% if editing %}
+        hx-post="{% url 'schedules:edit' pk=schedule.id %}"
+      {% else %}
+        hx-post="{% url 'schedules:create' %}"
+      {% endif %}
+      hx-target="#schedule-list-grid-container"
+      hx-swap="outerHTML"
+      @submit="isSaving = true"
+      class="space-y-4"
+    >
+      {% csrf_token %}
+
+      <!-- Error message alerts if any -->
+      {% if form.errors %}
+        <div class="p-4 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-2xl text-red-600 dark:text-red-300 text-xs font-medium space-y-1">
+          {% for field, errors in form.errors.items %}
+            <p>&bull; {{ field|capfirst }}: {{ errors|join:", " }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <!-- Exam Type Selector Tabs (Admin Create Mode) -->
+      {% if is_admin and not editing %}
+        <div class="grid grid-cols-3 gap-3 mb-6">
+          <button
+            type="button"
+            @click="examType = 'PTS'; subType = '';"
+            :class="examType === 'PTS' ? 'bg-orange-600 text-white border-orange-600 shadow-lg shadow-orange-600/30' : 'bg-stone-50 dark:bg-stone-800 text-stone-500 border-stone-200 dark:border-stone-700'"
+            class="py-4 rounded-2xl font-semibold text-xs transition-all border cursor-pointer select-none active:scale-95"
+          >
+            PTS
+          </button>
+          <button
+            type="button"
+            @click="examType = 'PAS'; subType = '';"
+            :class="examType === 'PAS' ? 'bg-orange-600 text-white border-orange-600 shadow-lg shadow-orange-600/30' : 'bg-stone-50 dark:bg-stone-800 text-stone-500 border-stone-200 dark:border-stone-700'"
+            class="py-4 rounded-2xl font-semibold text-xs transition-all border cursor-pointer select-none active:scale-95"
+          >
+            PAS / PAT
+          </button>
+          <button
+            type="button"
+            @click="examType = 'SAJ'; subType = '';"
+            :class="examType === 'SAJ' ? 'bg-orange-600 text-white border-orange-600 shadow-lg shadow-orange-600/30' : 'bg-stone-50 dark:bg-stone-800 text-stone-500 border-stone-200 dark:border-stone-700'"
+            class="py-4 rounded-2xl font-semibold text-xs transition-all border cursor-pointer select-none active:scale-95"
+          >
+            SAJ
+          </button>
+        </div>
+        <input type="hidden" name="exam_type" :value="examType">
+      {% else %}
+        <input type="hidden" name="exam_type" :value="examType">
+      {% endif %}
+
+      <!-- Judul Ujian (Khusus UH) -->
+      <div x-show="examType === 'UH'" class="space-y-1">
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1 block">
+          Nama Ujian
+        </label>
+        <input
+          type="text"
+          name="title"
+          :required="examType === 'UH'"
+          value="{{ form.initial.title|default:'' }}"
+          placeholder="Cth: Ulangan Harian Bab 1"
+          class="w-full bg-stone-50 dark:bg-stone-800 p-4 rounded-2xl border border-stone-200 dark:border-stone-700 font-medium text-xs shadow-xs outline-none focus:ring-2 focus:ring-orange-500 text-stone-900 dark:text-white"
+        />
+      </div>
+
+      <!-- Jenis Semester (PTS / PAS / PAT) -->
+      <div x-show="examType === 'PTS' || examType === 'PAS' || examType === 'PAT'" class="space-y-1">
+        <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1 block">
+          Jenis Semester
+        </label>
+        <select
+          name="sub_type"
+          x-model="subType"
+          class="w-full bg-stone-50 dark:bg-stone-800 p-4 rounded-2xl border border-stone-200 dark:border-stone-700 outline-none focus:ring-2 focus:ring-orange-500 text-stone-900 dark:text-white cursor-pointer font-medium text-xs"
+        >
+          <option value="">-- Pilih Jenis/Semester --</option>
+          <template x-if="examType === 'PTS'">
+            <optgroup label="Penilaian Tengah Semester">
+              <option value="PTS Ganjil">PTS Ganjil</option>
+              <option value="PTS Genap">PTS Genap</option>
+            </optgroup>
+          </template>
+          <template x-if="examType === 'PAS' || examType === 'PAT'">
+            <optgroup label="Semester / Akhir Tahun">
+              <option value="Penilaian Akhir Semester">PAS (Ganjil)</option>
+              <option value="Penilaian Akhir Tahun">PAT (Genap)</option>
+            </optgroup>
+          </template>
+        </select>
+      </div>
+
+      <!-- Jenjang, Kelas, Mapel, Guru Row -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Tingkat Jenjang -->
+        <div class="space-y-1">
+          <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1 block">
+            Tingkat Jenjang
+          </label>
+          <select
+            required
+            name="level"
+            x-model="selectedLevel"
+            class="w-full bg-stone-50 dark:bg-stone-800 p-4 rounded-2xl border border-stone-200 dark:border-stone-700 outline-none focus:ring-2 focus:ring-orange-500 text-stone-900 dark:text-white cursor-pointer font-medium text-xs"
+          >
+            <option value="">-- Pilih Jenjang --</option>
+            {% for lvl in available_levels %}
+              <option value="{{ lvl }}">Kelas {{ lvl }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Pilih Rombel Kelas (Untuk UH & PTS) -->
+        <div x-show="examType === 'UH' || examType === 'PTS'" class="space-y-1">
+          <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1 block">
+            Pilih Kelas
+          </label>
+          <select
+            name="class_room"
+            x-model="selectedClass"
+            :required="examType === 'UH' || examType === 'PTS'"
+            class="w-full bg-orange-50 dark:bg-orange-950/30 p-4 rounded-2xl border border-orange-200 dark:border-orange-900 outline-none focus:ring-2 focus:ring-orange-500 text-stone-900 dark:text-white cursor-pointer font-medium text-xs"
+          >
+            <option value="">-- Pilih Kelas --</option>
+            {% for c in available_classes %}
+              <option value="{{ c.id }}">{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Mata Pelajaran -->
+        <div class="space-y-1">
+          <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1 block">
+            Mata Pelajaran
+          </label>
+          <select
+            required
+            name="subject"
+            x-model="selectedSubject"
+            class="w-full bg-stone-50 dark:bg-stone-800 p-4 rounded-2xl border border-stone-200 dark:border-stone-700 outline-none focus:ring-2 focus:ring-orange-500 text-stone-900 dark:text-white cursor-pointer font-medium text-xs"
+          >
+            <option value="">-- Pilih Mapel --</option>
+            {% for s in available_subjects %}
+              <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Guru Penanggung Jawab (Admin Only) -->
+        {% if is_admin %}
+          <div class="space-y-1 md:col-span-3">
+            <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1 block">
+              Guru Penanggung Jawab
+            </label>
+            <select
+              name="teacher"
+              class="w-full bg-stone-50 dark:bg-stone-800 p-4 rounded-2xl border border-stone-200 dark:border-stone-700 outline-none focus:ring-2 focus:ring-orange-500 text-stone-900 dark:text-white cursor-pointer font-medium text-xs"
+            >
+              <option value="">-- Pilih Guru Penanggung Jawab --</option>
+              {% for t in available_teachers %}
+                <option value="{{ t.id }}" {% if form.initial.teacher.id == t.id %}selected{% endif %}>
+                  {{ t.full_name }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Waktu Mulai & Token -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Waktu Mulai Ujian -->
+        <div class="space-y-1">
+          <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1 block">
+            Waktu Mulai Ujian
+          </label>
+          <input
+            type="datetime-local"
+            name="start_time"
+            required
+            value="{{ form.initial.start_time|default:'' }}"
+            class="w-full bg-stone-50 dark:bg-stone-800 p-4 rounded-2xl border border-stone-200 dark:border-stone-700 outline-none focus:ring-2 focus:ring-orange-500 text-stone-900 dark:text-white font-medium text-xs"
+          />
+        </div>
+
+        <!-- Token Akses -->
+        <div class="space-y-1">
+          <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1 block">
+            Token Akses (6 Digit)
+          </label>
+          <div class="relative">
+            <input
+              type="text"
+              name="token"
+              x-model="tokenVal"
+              readonly
+              class="w-full bg-stone-50 dark:bg-stone-800 p-4 rounded-2xl border border-stone-200 dark:border-stone-700 font-bold tracking-widest text-orange-600 dark:text-orange-400 outline-none font-mono text-center sm:text-left select-all"
+            />
+            <button
+              type="button"
+              @click="generateToken()"
+              class="absolute right-4 top-4 text-stone-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors cursor-pointer"
+              title="Acak Token Baru"
+            >
+              <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Durasi, Target Soal, Sesi Ujian -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <!-- Durasi -->
+        <div class="space-y-1">
+          <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1 block">
+            Durasi (Menit)
+          </label>
+          <input
+            type="number"
+            name="duration"
+            min="1"
+            required
+            value="{{ form.initial.duration|default:60 }}"
+            class="w-full bg-stone-50 dark:bg-stone-800 p-4 rounded-2xl border border-stone-200 dark:border-stone-700 shadow-inner outline-none focus:ring-2 focus:ring-orange-500 text-stone-900 dark:text-white font-medium text-xs"
+          />
+        </div>
+
+        <!-- Target Soal -->
+        <div class="space-y-1">
+          <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1 block">
+            Target Soal
+          </label>
+          <input
+            type="number"
+            name="target_question_count"
+            min="1"
+            required
+            value="{{ form.initial.target_question_count|default:40 }}"
+            class="w-full bg-stone-50 dark:bg-stone-800 p-4 rounded-2xl border border-stone-200 dark:border-stone-700 shadow-inner outline-none focus:ring-2 focus:ring-orange-500 text-stone-900 dark:text-white font-medium text-xs"
+          />
+        </div>
+
+        <!-- Sesi Ujian -->
+        <div class="space-y-1">
+          <label class="text-xs font-medium text-stone-500 dark:text-stone-400 ml-1 block">
+            Sesi Ujian
+          </label>
+          <select
+            name="session_no"
+            class="w-full bg-stone-50 dark:bg-stone-800 p-4 rounded-2xl border border-stone-200 dark:border-stone-700 outline-none focus:ring-2 focus:ring-orange-500 text-stone-900 dark:text-white cursor-pointer font-medium text-xs"
+          >
+            <option value="0" {% if form.initial.session_no == '0' %}selected{% endif %}>Semua Sesi</option>
+            <option value="1" {% if form.initial.session_no == '1' %}selected{% endif %}>Sesi 1</option>
+            <option value="2" {% if form.initial.session_no == '2' %}selected{% endif %}>Sesi 2</option>
+            <option value="3" {% if form.initial.session_no == '3' %}selected{% endif %}>Sesi 3</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Submit Button -->
+      <div class="pt-6">
+        <button
+          type="submit"
+          :disabled="isSaving"
+          class="w-full bg-orange-600 hover:bg-orange-500 text-white py-4.5 rounded-2xl font-semibold text-xs tracking-wide shadow-lg shadow-orange-600/30 transition-all active:scale-[0.98] disabled:opacity-50 flex justify-center items-center gap-2 cursor-pointer select-none"
+        >
+          <span x-show="!isSaving">
+            {% if editing %}Perbarui Jadwal Ujian{% else %}Simpan Jadwal Ujian{% endif %}
+          </span>
+          <span x-show="isSaving" class="flex items-center gap-2">
+            <i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i>
+            <span>Memproses...</span>
+          </span>
+        </button>
+      </div>
+
+    </form>
+  </div>
+</div>
