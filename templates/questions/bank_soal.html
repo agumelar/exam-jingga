@@ -116,6 +116,10 @@ function bankSoalFilter() {
 
     setLevel: function(lvl) {
       this.selectedLevel = (this.selectedLevel === String(lvl)) ? '' : String(lvl);
+      var inputEl = document.getElementById('level-input') || document.querySelector('input[name="level"]');
+      if (inputEl) {
+        inputEl.value = this.selectedLevel;
+      }
       this.triggerFilter();
     },
 
@@ -268,7 +272,7 @@ function questionModalData(initial) {
       class="space-y-6"
     >
       <!-- Hidden Level Input -->
-      <input type="hidden" name="level" :value="selectedLevel">
+      <input type="hidden" id="level-input" name="level" :value="selectedLevel">
 
       <!-- BARIS 1: PENCARIAN SOAL & TOPIK CP (FULL WIDTH) -->
       <div class="relative">
