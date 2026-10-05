@@ -302,7 +302,7 @@ def test_custom_error_pages_render():
 @pytest.mark.django_db
 def test_dashboard_caching_and_partial_recent_sessions(client):
     """Verify DashboardView caching and HTMX partial recent_sessions response."""
-    admin_user = User.objects.create_superuser(username='admin_dash_test', email='adm_d@test.com', password='password123')
+    admin_user = User.objects.create_superuser(username='admin_dash_test', email='adm_d@test.com', password='password123', role='admin')
     client.force_login(admin_user)
 
     # 1. Full page request

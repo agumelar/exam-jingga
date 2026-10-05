@@ -18,7 +18,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return self.handle_no_permission()
-        if getattr(request.user, 'is_student', False) or getattr(request.user, 'role', '') == 'siswa':
+        if not request.user.is_superuser and (getattr(request.user, 'is_student', False) or getattr(request.user, 'role', '') == 'siswa'):
             return redirect('/student/dashboard/')
         return super().dispatch(request, *args, **kwargs)
 
