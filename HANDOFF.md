@@ -9,7 +9,7 @@
 * **Nama Proyek**: Exam Jingga (Aplikasi CBT Ujian Sekolah SMKN 1 Rongga)
 * **Arsitektur**: **DATH Modern Monolith** (Django 5.1 LTS, Alpine.js, Tailwind CSS v4, HTMX) menggantikan arsitektur SPA React lama.
 * **Tujuan Utama**: Membangun sistem CBT sekolah yang kokoh, zero-CORS browser dependency, offline-first vendor assets, real-time HTMX auto-save & polling, mitigasi beban 722+ siswa serentak di VPS ARM64, integrasi Keycloak SSO & OpenAPI Central Data Master, serta otomatisasi deployment produksi dengan Gunicorn + WhiteNoise + Nginx + Systemd.
-* **Status Keseluruhan**: **🎉 SELURUH RE-ENGINEERING DATH STACK (TASK 1 s/d TASK 9) 100% SELESAI, PASS 108 TESTS (100% PASS RATE), DAN PRODUCTION-READY UNTUK VPS UBUNTU ARM64**.
+* **Status Keseluruhan**: **🎉 SELURUH RE-ENGINEERING DATH STACK (TASK 1 s/d TASK 12) 100% SELESAI, PASS 128 TESTS (100% PASS RATE), DAN PRODUCTION-READY UNTUK VPS UBUNTU ARM64**.
 
 ---
 
@@ -47,7 +47,8 @@
 | **Task 9: Production Configs, E2E & Deploy** | `config/settings/production.py`, Gunicorn conf, Systemd service, Nginx conf, `deploy_vps_dath.sh`, 10-stage End-to-End workflow verification test. | ✅ PASS (2 tests) |
 | **Task 10: Google Material 3 (M3) UI Overhaul** | Overhaul UI menyeluruh ke Google Material Design 3 (M3): tokens CSS lengkap (Light & Dark), atomic M3 components, responsive layouts, floating timer pill, filter chips drawer, thumb-zone bottom navigation bar dengan ragu-ragu tonal toggle, M3 search bars & cards. | ✅ PASS (120 tests) |
 | **Task 11: Security Hardening & M3 Error Handling** | Pengamanan rute root (`/`) dan (`/dashboard/`) dengan `LoginRequiredMixin` & auto-redirect role (anonim ke login 302, siswa ke portal siswa 302, staf ke dashboard), mitigasi total kebocoran PII & token ujian aktif, halaman error kustom M3 (`404.html` & `500.html`), perbaikan text wrapping widget pintasan cepat, dan validasi durasi jadwal ujian (min 15 menit, `end_time > start_time`). | ✅ PASS (124 tests) |
-| **TOTAL TEST SUITE** | **Seluruh 124 Pengujian Django & Integration Tests Lulus 100% (0 Error, 0 Failure)** | 🏆 **124 / 124 PASS** |
+| **Task 12: CBT Operational Hardening, Hard-Stop Gates, Role Scoping & Anti-Slop UI Craft** | Caching agregasi metrik dashboard (TTL 30 detik), live monitoring HTMX polling halus (15s) pada tabel sesi terkini, penegakan Opsi A (Strict Hard-Stop) pada timer & gerbang token ujian (siswa terlambat ditolak, timer capped di waktu selesai jadwal), pembatasan peran jadwal (guru hanya Ulangan Harian, admin/kurikulum mengelola PTS/PAS/PAT/SAJ, durasi kuis min 1 menit), tombol token interaktif (copy-to-clipboard dengan Alpine visual feedback), dan empty state jadwal ujian berilustrasi kalender dengan tombol aksi (+ Buat Jadwal Baru). Sesuai standar Anti-Slop Craftmanship. | ✅ PASS (128 tests) |
+| **TOTAL TEST SUITE** | **Seluruh 128 Pengujian Django & Integration Tests Lulus 100% (0 Error, 0 Failure)** | 🏆 **128 / 128 PASS** |
 
 ---
 
@@ -95,7 +96,9 @@ Test suite `tests/test_e2e_workflow.py` mensimulasikan siklus penuh asesmen seko
 ## ⚡ 6. Pembaruan Operasional Terkini (Live Ready)
 * **Sentralisasi Media Storage**: 282 media gambar bank soal tersimpan permanen di storage NVMe VPS (`/opt/exam-jingga/media/`) dengan streaming Nginx CORS dan smart resolver `image_url`. Lingkungan lokal streaming langsung dari VPS tanpa membebani disk lokal.
 * **Form Login Mandiri & Logout Normal**: Form login utama di depan mendukung NIS siswa & Username/NIP guru secara instan. Logout membersihkan sesi dan me-redirect langsung ke halaman login lokal.
-* **Jadwal Ujian Aktif**: Paket ujian Ulangan Harian Matematika Kelas 11 RPL 1 aktif dengan Token `MAT11X`.
+* **Jadwal Ujian Aktif & Aturan Hard-Stop Opsi A**: Paket ujian Ulangan Harian Matematika Kelas 11 RPL 1 aktif dengan Token `MAT11X`. Siswa yang mencoba masuk setelah batas `end_time` jadwal (misal 13:31 pada jadwal 12:30-13:30) secara otomatis ditolak gerbang ujian (*strict token gate*), dan durasi sisa pengerjaan siswa terpotong otomatis agar tepat berakhir bersamaan dengan waktu penutupan jadwal.
+* **Scoping Hak Akses Jadwal Guru**: Guru kini dibatasi secara eksklusif hanya dapat menjadwalkan jenis **Ulangan Harian (UH)**. Jenis ujian besar (PTS, PAS, PAT, SAJ) dikelola terpusat oleh Admin/Waka Kurikulum.
+* **Anti-Slop Craftmanship & Live Polling**: Pemasangan live stream aktivitas ujian HTMX (interval 15 detik), caching agregasi kartu metrik dashboard (TTL 30 detik), interaktivitas tombol salin token dengan feedback visual Alpine.js, dan Empty State jadwal ujian berorientasi aksi (+ Buat Jadwal Baru).
 
 ---
 
