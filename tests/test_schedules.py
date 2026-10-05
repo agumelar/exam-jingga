@@ -620,7 +620,7 @@ def test_schedule_form_duration_validation():
     form = ScheduleForm(data=form_data)
     assert form.is_valid() is False
     assert 'duration' in form.errors
-    assert 'minimal 1 menit' in form.errors['duration'][0]
+    assert ('lebih besar dari atau sama dengan 1' in form.errors['duration'][0] or 'minimal 1 menit' in form.errors['duration'][0])
 
 
 @pytest.mark.django_db

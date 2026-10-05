@@ -11,6 +11,8 @@ from apps.core.models import SchoolSetting
 from apps.core.views import DashboardView
 from apps.accounts.views import LoginView
 
+User = get_user_model()
+
 
 @pytest.mark.django_db
 def test_school_setting_defaults():
