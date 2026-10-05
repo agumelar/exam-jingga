@@ -23,6 +23,19 @@ class Question(models.Model):
         (12, 'Kelas 12'),
     ]
 
+    CP_CHOICES = [
+        ('CP 1', 'CP 1'),
+        ('CP 2', 'CP 2'),
+        ('CP 3', 'CP 3'),
+        ('CP 4', 'CP 4'),
+        ('CP 5', 'CP 5'),
+        ('CP 6', 'CP 6'),
+        ('CP 7', 'CP 7'),
+        ('CP 8', 'CP 8'),
+        ('CP 9', 'CP 9'),
+        ('CP 10', 'CP 10'),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     subject = models.ForeignKey(
         Subject,
@@ -47,6 +60,20 @@ class Question(models.Model):
         null=True,
         blank=True,
         help_text="Tingkat / Jenjang Kelas (10, 11, 12)"
+    )
+    cp_code = models.CharField(
+        max_length=10,
+        choices=CP_CHOICES,
+        blank=True,
+        default='',
+        db_index=True,
+        help_text="Capaian Pembelajaran (CP 1 - CP 10)"
+    )
+    cp_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text="Keterangan Topik/Materi Capaian Pembelajaran"
     )
     question_text = models.TextField(help_text="Isi Teks Pertanyaan Soal")
     question_image = models.ImageField(
@@ -83,9 +110,23 @@ class Question(models.Model):
 
     class Meta:
         db_table = 'questions'
-        ordering = ['created_at']
+        ordering = ['-created_at']
         verbose_name = 'Butir Soal'
         verbose_name_plural = 'Bank Soal'
+        indexes = [
+            models.Index(fields=['subject', 'level', 'cp_code']),
+            models.Index(fields=['-created_at']),
+        ]
+
+    @property
+    def cp_display(self):
+        if self.cp_code and self.cp_name:
+            return f"{self.cp_code}: {self.cp_name}"
+        return self.cp_code or self.cp_name or ""
+
+    @property
+    def has_empty_option_e(self):
+        return not bool(str(self.option_e).strip() or self.image_e)
 
     def clean(self):
         super().clean()

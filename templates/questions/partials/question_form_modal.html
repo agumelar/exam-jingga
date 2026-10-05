@@ -145,6 +145,7 @@ if (typeof window.questionModalData !== 'function') {
   x-show="showModal"
   x-cloak
   @htmx:after-request="showModal = false"
+  @keydown.escape.window="showModal = false"
   class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
   role="dialog"
   aria-modal="true"
@@ -175,7 +176,7 @@ if (typeof window.questionModalData !== 'function') {
   >
     <!-- Modal Close Top Button -->
     <button 
-      type="button"
+      type="button" 
       @click="showModal = false"
       class="absolute top-6 right-6 sm:top-8 sm:right-8 p-2.5 text-stone-400 hover:text-red-500 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-full transition cursor-pointer"
       aria-label="Tutup Modal"
@@ -222,7 +223,7 @@ if (typeof window.questionModalData !== 'function') {
         <!-- Jenjang Kelas -->
         <div>
           <label class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-2 block">
-            <i data-lucide="layers" class="w-3.5 h-3.5 inline mr-1 text-orange-600"></i> Jenjang Kelas
+            <i data-lucide="layers" class="w-3.5 h-3.5 inline mr-1 text-orange-600"></i> Jenjang Kelas <span class="text-red-500">*</span>
           </label>
           <select 
             name="level" 
@@ -241,10 +242,10 @@ if (typeof window.questionModalData !== 'function') {
         <!-- Mata Pelajaran -->
         <div>
           <label class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-2 block">
-            <i data-lucide="book-open" class="w-3.5 h-3.5 inline mr-1 text-orange-600"></i> Mata Pelajaran
+            <i data-lucide="book-open" class="w-3.5 h-3.5 inline mr-1 text-orange-600"></i> Mata Pelajaran <span class="text-red-500">*</span>
           </label>
           <select 
-            id="modal-subject-select"
+            id="modal-subject-select" 
             name="subject" 
             x-model="modalSubject"
             @change="updateModalTeacherOptions()"
@@ -289,6 +290,41 @@ if (typeof window.questionModalData !== 'function') {
           {% endif %}
         </div>
 
+      </div>
+
+      <!-- SECTION 1B: CAPAIAN PEMBELAJARAN (CP) METADATA -->
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-4 bg-orange-50/50 dark:bg-orange-950/20 p-5 rounded-[2rem] border border-orange-200/60 dark:border-orange-800/40">
+        <!-- Kode CP (Dropdown CP 1 s/d CP 10) -->
+        <div class="md:col-span-4">
+          <label class="text-xs font-semibold text-orange-800 dark:text-orange-300 mb-2 block">
+            <i data-lucide="tag" class="w-3.5 h-3.5 inline mr-1 text-orange-600"></i> Capaian Pembelajaran (CP)
+          </label>
+          <select 
+            name="cp_code" 
+            class="w-full bg-white dark:bg-stone-900 p-3.5 rounded-2xl text-xs font-semibold text-stone-900 dark:text-white border border-orange-200 dark:border-stone-700 outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer shadow-xs"
+          >
+            <option value="">-- Tanpa CP / Umum --</option>
+            {% for code, label in cp_choices %}
+              <option value="{{ code }}" {% if question.cp_code == code or preselected_cp == code %}selected{% endif %}>
+                {{ label }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Nama/Topik Materi CP -->
+        <div class="md:col-span-8">
+          <label class="text-xs font-semibold text-orange-800 dark:text-orange-300 mb-2 block">
+            <i data-lucide="bookmark" class="w-3.5 h-3.5 inline mr-1 text-orange-600"></i> Topik / Materi Pokok CP (Opsional)
+          </label>
+          <input 
+            type="text" 
+            name="cp_name" 
+            value="{{ question.cp_name|default:'' }}"
+            placeholder="Contoh: Basis Data Relasional, Sistem Pengereman, Aljabar Linier..."
+            class="w-full bg-white dark:bg-stone-900 p-3.5 rounded-2xl text-xs font-medium text-stone-900 dark:text-white border border-orange-200 dark:border-stone-700 outline-none focus:ring-2 focus:ring-orange-500 shadow-xs placeholder:text-stone-400"
+          />
+        </div>
       </div>
 
       <!-- SECTION 2: QUESTION TEXT & QUESTION IMAGE -->

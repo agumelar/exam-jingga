@@ -57,6 +57,7 @@ def get_scoped_questions_queryset(request):
     subject_id = request.GET.get('subject_id', '').strip() or request.POST.get('filter_subject_id', '').strip()
     level = request.GET.get('level', '').strip() or request.POST.get('filter_level', '').strip()
     teacher_id = request.GET.get('teacher_id', '').strip() or request.POST.get('filter_teacher_id', '').strip()
+    cp_code = request.GET.get('cp_code', '').strip() or request.POST.get('filter_cp_code', '').strip()
     q = request.GET.get('q', '').strip() or request.POST.get('filter_q', '').strip()
 
     if subject_id:
@@ -65,9 +66,12 @@ def get_scoped_questions_queryset(request):
         qs = qs.filter(level=int(level))
     if teacher_id and is_staff_admin:
         qs = qs.filter(created_by_id=teacher_id)
+    if cp_code:
+        qs = qs.filter(cp_code=cp_code)
     if q:
         qs = qs.filter(
             Q(question_text__icontains=q) |
+            Q(cp_name__icontains=q) |
             Q(option_a__icontains=q) |
             Q(option_b__icontains=q) |
             Q(option_c__icontains=q) |
@@ -102,6 +106,44 @@ def get_teachers_subject_mapping(teachers_qs=None):
     return teachers_data
 
 
+def _render_question_list_partial(request, toast_message=None, status_code=200):
+    """Shared helper to render question_list.html partial with full pagination and filter context."""
+    user = request.user
+    teacher = get_current_teacher(user)
+    is_staff_admin = (
+        user.is_superuser or
+        getattr(user, 'is_admin', False) or
+        user.role in [Role.ADMIN, Role.PLATFORM_ADMIN, Role.DATA_ADMIN, Role.KURIKULUM]
+    )
+    questions_qs = get_scoped_questions_queryset(request)
+    filtered_count = questions_qs.count()
+
+    per_page = int(request.GET.get('per_page') or request.POST.get('per_page') or 20)
+    paginator = Paginator(questions_qs, per_page)
+    page_number = request.GET.get('page') or request.POST.get('page', 1)
+    try:
+        page_obj = paginator.page(page_number)
+    except (PageNotAnInteger, ValueError):
+        page_obj = paginator.page(1)
+    except EmptyPage:
+        page_obj = paginator.page(paginator.num_pages)
+
+    context = {
+        'page_obj': page_obj,
+        'questions': page_obj.object_list,
+        'questions_count': filtered_count,
+        'selected_subject': request.GET.get('subject_id', '').strip() or request.POST.get('filter_subject_id', '').strip(),
+        'selected_level': request.GET.get('level', '').strip() or request.POST.get('filter_level', '').strip(),
+        'selected_teacher': request.GET.get('teacher_id', '').strip() or request.POST.get('filter_teacher_id', '').strip(),
+        'selected_cp': request.GET.get('cp_code', '').strip() or request.POST.get('filter_cp_code', '').strip(),
+        'search_query': request.GET.get('q', '').strip() or request.POST.get('filter_q', '').strip(),
+        'is_staff_admin': is_staff_admin,
+        'current_teacher': teacher,
+        'toast_message': toast_message,
+    }
+    return render(request, 'questions/partials/question_list.html', context, status=status_code)
+
+
 @method_decorator(teacher_required, name='dispatch')
 class BankSoalView(View):
     """
@@ -122,6 +164,7 @@ class BankSoalView(View):
         selected_subject = request.GET.get('subject_id', '').strip()
         selected_level = request.GET.get('level', '').strip()
         selected_teacher = request.GET.get('teacher_id', '').strip() if is_staff_admin else (str(teacher.id) if teacher else '')
+        selected_cp = request.GET.get('cp_code', '').strip()
 
         # Build list of available subjects and teachers mapping
         teachers_data = []
@@ -187,9 +230,11 @@ class BankSoalView(View):
             'teachers': teachers,
             'teachers_json': json.dumps(teachers_data),
             'levels': [10, 11, 12],
+            'cp_choices': Question.CP_CHOICES,
             'selected_subject': selected_subject,
             'selected_level': selected_level,
             'selected_teacher': selected_teacher,
+            'selected_cp': selected_cp,
             'search_query': request.GET.get('q', '').strip(),
             'is_staff_admin': is_staff_admin,
             'current_teacher': teacher,
@@ -206,39 +251,7 @@ class QuestionFilterView(View):
     partial_template_name = 'questions/partials/question_list.html'
 
     def get(self, request, *args, **kwargs):
-        user = request.user
-        teacher = get_current_teacher(user)
-        is_staff_admin = (
-            user.is_superuser or
-            getattr(user, 'is_admin', False) or
-            user.role in [Role.ADMIN, Role.PLATFORM_ADMIN, Role.DATA_ADMIN, Role.KURIKULUM]
-        )
-        questions_qs = get_scoped_questions_queryset(request)
-        filtered_count = questions_qs.count()
-
-        # Pagination: 20 per page
-        per_page = int(request.GET.get('per_page', 20))
-        paginator = Paginator(questions_qs, per_page)
-        page_number = request.GET.get('page', 1)
-        try:
-            page_obj = paginator.page(page_number)
-        except (PageNotAnInteger, ValueError):
-            page_obj = paginator.page(1)
-        except EmptyPage:
-            page_obj = paginator.page(paginator.num_pages)
-
-        context = {
-            'page_obj': page_obj,
-            'questions': page_obj.object_list,
-            'questions_count': filtered_count,
-            'selected_subject': request.GET.get('subject_id', '').strip(),
-            'selected_level': request.GET.get('level', '').strip(),
-            'selected_teacher': request.GET.get('teacher_id', '').strip(),
-            'search_query': request.GET.get('q', '').strip(),
-            'is_staff_admin': is_staff_admin,
-            'current_teacher': teacher,
-        }
-        return render(request, self.partial_template_name, context)
+        return _render_question_list_partial(request)
 
 
 @method_decorator(teacher_required, name='dispatch')
@@ -280,6 +293,7 @@ class QuestionCreateView(View):
             'teachers': teachers,
             'teachers_json': json.dumps(teachers_data),
             'levels': [10, 11, 12],
+            'cp_choices': Question.CP_CHOICES,
             'preselected_subject': preselected_subject,
             'preselected_level': preselected_level,
             'preselected_teacher': preselected_teacher,
@@ -308,15 +322,7 @@ class QuestionCreateView(View):
             question.save()
 
             if request.headers.get('HX-Request') or request.POST.get('is_htmx'):
-                questions_qs = get_scoped_questions_queryset(request)
-                context = {
-                    'questions': questions_qs,
-                    'questions_count': questions_qs.count(),
-                    'is_staff_admin': is_staff_admin,
-                    'current_teacher': teacher,
-                    'toast_message': 'Butir soal berhasil ditambahkan ke bank soal.',
-                }
-                response = render(request, self.list_template_name, context)
+                response = _render_question_list_partial(request, toast_message='Butir soal berhasil ditambahkan ke bank soal.')
                 response['HX-Trigger'] = json.dumps({'questionSaved': True, 'closeModal': True})
                 return response
 
@@ -337,6 +343,7 @@ class QuestionCreateView(View):
             'teachers': teachers,
             'teachers_json': json.dumps(teachers_data),
             'levels': [10, 11, 12],
+            'cp_choices': Question.CP_CHOICES,
             'is_staff_admin': is_staff_admin,
             'current_teacher': teacher,
             'is_edit': False,
@@ -404,6 +411,7 @@ class QuestionEditView(View):
             'teachers': teachers,
             'teachers_json': json.dumps(teachers_data),
             'levels': [10, 11, 12],
+            'cp_choices': Question.CP_CHOICES,
             'preselected_subject': curr_subject,
             'preselected_level': str(question.level) if question.level else '',
             'preselected_teacher': str(question.created_by.id) if question.created_by else '',
@@ -431,15 +439,7 @@ class QuestionEditView(View):
             updated_question.save()
 
             if request.headers.get('HX-Request') or request.POST.get('is_htmx'):
-                questions_qs = get_scoped_questions_queryset(request)
-                context = {
-                    'questions': questions_qs,
-                    'questions_count': questions_qs.count(),
-                    'is_staff_admin': is_staff_admin,
-                    'current_teacher': teacher,
-                    'toast_message': 'Butir soal berhasil diperbarui.',
-                }
-                response = render(request, self.list_template_name, context)
+                response = _render_question_list_partial(request, toast_message='Butir soal berhasil diperbarui.')
                 response['HX-Trigger'] = json.dumps({'questionSaved': True, 'closeModal': True})
                 return response
 
@@ -459,6 +459,7 @@ class QuestionEditView(View):
             'teachers': teachers,
             'teachers_json': json.dumps(teachers_data),
             'levels': [10, 11, 12],
+            'cp_choices': Question.CP_CHOICES,
             'is_staff_admin': is_staff_admin,
             'current_teacher': teacher,
             'is_edit': True,
@@ -528,15 +529,7 @@ class QuestionDeleteView(View):
         question.delete()
 
         if request.headers.get('HX-Request') or request.POST.get('is_htmx'):
-            questions_qs = get_scoped_questions_queryset(request)
-            context = {
-                'questions': questions_qs,
-                'questions_count': questions_qs.count(),
-                'is_staff_admin': is_staff_admin,
-                'current_teacher': teacher,
-                'toast_message': 'Butir soal berhasil dihapus.',
-            }
-            response = render(request, self.list_template_name, context)
+            response = _render_question_list_partial(request, toast_message='Butir soal berhasil dihapus.')
             response['HX-Trigger'] = json.dumps({'questionDeleted': True, 'closeModal': True})
             return response
 

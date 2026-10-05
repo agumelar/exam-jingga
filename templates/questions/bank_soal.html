@@ -60,6 +60,7 @@ function bankSoalFilter() {
     selectedLevel: '{{ selected_level|default:"" }}',
     selectedSubject: '{{ selected_subject|default:"" }}',
     selectedTeacher: '{{ selected_teacher|default:"" }}',
+    selectedCp: '{{ selected_cp|default:"" }}',
     searchKeyword: '{{ search_query|default:"" }}',
     allTeachers: window.BANK_SOAL_TEACHERS || [],
 
@@ -263,13 +264,13 @@ function questionModalData(initial) {
       hx-get="{% url 'questions:filter' %}"
       hx-target="#question-list-container"
       hx-swap="outerHTML"
-      hx-trigger="submit, keyup changed delay:300ms from:#search-input, change from:#teacher-select"
+      hx-trigger="submit, keyup changed delay:300ms from:#search-input, change from:#teacher-select, change from:#cp-select"
       class="space-y-6"
     >
       <!-- Hidden Level Input -->
       <input type="hidden" name="level" :value="selectedLevel">
 
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-center">
         
         <!-- Search Keyword Input (Lg 4 cols) -->
         <div class="lg:col-span-4 relative">
@@ -282,10 +283,10 @@ function questionModalData(initial) {
             </div>
             <input 
               type="text" 
-              id="search-input"
+              id="search-input" 
               name="q" 
               x-model="searchKeyword"
-              placeholder="Cari butir pertanyaan..."
+              placeholder="Cari butir pertanyaan / CP..."
               class="w-full bg-stone-50 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 text-xs font-medium rounded-2xl pl-11 pr-4 py-3.5 outline-none focus:ring-2 focus:ring-orange-500 text-stone-900 dark:text-white shadow-xs transition"
             />
             <template x-if="searchKeyword">
@@ -300,13 +301,13 @@ function questionModalData(initial) {
           </div>
         </div>
 
-        <!-- Mata Pelajaran Select (Lg 4 cols) -->
-        <div class="lg:col-span-4">
+        <!-- Mata Pelajaran Select (Lg 3 cols) -->
+        <div class="lg:col-span-3">
           <label class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-1.5 block">
             <i data-lucide="book-open" class="w-3.5 h-3.5 inline mr-1"></i> Mata Pelajaran
           </label>
           <select 
-            id="subject-select"
+            id="subject-select" 
             name="subject_id" 
             x-model="selectedSubject"
             @change="onSubjectChange()"
@@ -321,11 +322,32 @@ function questionModalData(initial) {
           </select>
         </div>
 
-        <!-- Guru Pengampu / Author Filter (Lg 4 cols if admin, else level takes more space) -->
+        <!-- Capaian Pembelajaran (CP) Select (Lg 2 cols) -->
+        <div class="lg:col-span-2">
+          <label class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-1.5 block">
+            <i data-lucide="tag" class="w-3.5 h-3.5 inline mr-1 text-orange-600"></i> Capaian (CP)
+          </label>
+          <select 
+            id="cp-select" 
+            name="cp_code" 
+            x-model="selectedCp"
+            @change="triggerFilter()"
+            class="w-full bg-stone-50 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 text-xs font-medium rounded-2xl px-3 py-3.5 outline-none focus:ring-2 focus:ring-orange-500 text-stone-900 dark:text-white shadow-xs cursor-pointer transition"
+          >
+            <option value="">Semua CP</option>
+            {% for code, label in cp_choices %}
+              <option value="{{ code }}" {% if selected_cp == code %}selected{% endif %}>
+                {{ label }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Guru Pengampu / Author Filter (Lg 3 cols) -->
         {% if is_staff_admin %}
-          <div class="lg:col-span-4">
+          <div class="lg:col-span-3">
             <label class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-1.5 block">
-              <i data-lucide="user" class="w-3.5 h-3.5 inline mr-1"></i> Guru Pembuat Soal
+              <i data-lucide="user" class="w-3.5 h-3.5 inline mr-1"></i> Guru Pembuat
             </label>
             <select 
               id="teacher-select"
@@ -343,13 +365,13 @@ function questionModalData(initial) {
             </select>
           </div>
         {% else %}
-          <div class="lg:col-span-4 flex items-end">
+          <div class="lg:col-span-3 flex items-end">
             <div class="w-full p-3.5 bg-stone-50 dark:bg-stone-800/60 rounded-2xl border border-stone-200/80 dark:border-stone-700 text-xs font-medium text-stone-600 dark:text-stone-300 flex items-center justify-between">
               <span class="flex items-center gap-2">
                 <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
-                <span>Bank Soal Guru:</span>
+                <span>Bank Soal:</span>
               </span>
-              <strong class="text-stone-900 dark:text-white font-semibold">{{ current_teacher.full_name|default:user.get_full_name }}</strong>
+              <strong class="text-stone-900 dark:text-white font-semibold truncate">{{ current_teacher.full_name|default:user.get_full_name }}</strong>
             </div>
           </div>
         {% endif %}

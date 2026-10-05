@@ -314,9 +314,14 @@ def test_question_edit_view_get_and_post_htmx(client):
     update_data = {
         'subject': str(subject.id),
         'level': 11,
+        'cp_code': 'CP 2',
+        'cp_name': 'Konfigurasi Jaringan Dasar',
         'question_text': 'Alamat default gateway untuk jaringan lokal?',
         'option_a': '192.168.1.1',
         'option_b': '127.0.0.1 (Loopback)',
+        'option_c': '255.255.255.0',
+        'option_d': '0.0.0.0',
+        'option_e': '169.254.0.1',
         'correct_answer': 'A',
     }
     post_res = client.post(
@@ -328,6 +333,8 @@ def test_question_edit_view_get_and_post_htmx(client):
     q.refresh_from_db()
     assert 'untuk jaringan lokal' in q.question_text
     assert q.option_b == '127.0.0.1 (Loopback)'
+    assert q.cp_code == 'CP 2'
+    assert q.cp_name == 'Konfigurasi Jaringan Dasar'
 
 
 @pytest.mark.django_db
@@ -504,4 +511,95 @@ def test_restore_supabase_images_command(monkeypatch):
     q.refresh_from_db()
     assert "https://vlawnrlczxagcitlaokh.supabase.co" in q.question_image.name
     assert "opt_a.png" in q.image_a.name
+
+
+@pytest.mark.django_db
+def test_question_form_requires_five_options():
+    """Verify QuestionForm strictly requires all 5 options (A-E) for SMK standard."""
+    from apps.questions.forms import QuestionForm
+
+    subject = Subject.objects.create(name='Pemrograman Web')
+
+    # 1. Invalid when option_e is missing
+    form_incomplete = QuestionForm(data={
+        'subject': subject.id,
+        'level': 11,
+        'question_text': 'Apa fungsi tag div?',
+        'option_a': 'Container',
+        'option_b': 'Paragraf',
+        'option_c': 'Judul',
+        'option_d': 'Gambar',
+        'correct_answer': 'A',
+    })
+    assert not form_incomplete.is_valid()
+    assert 'option_e' in form_incomplete.errors
+
+    # 2. Valid when all 5 options provided
+    form_complete = QuestionForm(data={
+        'subject': subject.id,
+        'level': 11,
+        'cp_code': 'CP 1',
+        'cp_name': 'Elemen HTML Dasar',
+        'question_text': 'Apa fungsi tag div?',
+        'option_a': 'Container',
+        'option_b': 'Paragraf',
+        'option_c': 'Judul',
+        'option_d': 'Gambar',
+        'option_e': 'Tautan',
+        'correct_answer': 'A',
+    })
+    assert form_complete.is_valid(), form_complete.errors
+    saved = form_complete.save()
+    assert saved.cp_code == 'CP 1'
+    assert saved.cp_display == 'CP 1: Elemen HTML Dasar'
+
+
+@pytest.mark.django_db
+def test_question_cp_tagging_and_filtering(client):
+    """Verify CP filter in Bank Soal view and Question Selection view."""
+    admin_user = User.objects.create_superuser(username='admin_cp', email='admin_cp@test.com', password='password123')
+    client.force_login(admin_user)
+
+    subject = Subject.objects.create(name='Basis Data')
+    q_cp1 = Question.objects.create(
+        subject=subject,
+        level=11,
+        cp_code='CP 1',
+        cp_name='DDL & DML',
+        question_text='Perintah SQL untuk membuat tabel?',
+        option_a='CREATE TABLE', option_b='ALTER TABLE', option_c='DROP TABLE', option_d='SELECT', option_e='UPDATE',
+        correct_answer='A'
+    )
+    q_cp2 = Question.objects.create(
+        subject=subject,
+        level=11,
+        cp_code='CP 2',
+        cp_name='Normalisasi',
+        question_text='Bentuk normal pertama disebut?',
+        option_a='1NF', option_b='2NF', option_c='3NF', option_d='BCNF', option_e='4NF',
+        correct_answer='A'
+    )
+
+    # Filter in Bank Soal
+    res_cp1 = client.get(reverse('questions:filter') + f'?subject_id={subject.id}&cp_code=CP 1', HTTP_HX_REQUEST='true')
+    assert res_cp1.status_code == 200
+    content_cp1 = res_cp1.content.decode()
+    assert 'CREATE TABLE' in content_cp1
+    assert '1NF' not in content_cp1
+
+    # Filter in Select Questions view
+    from apps.schedules.models import Exam
+    exam = Exam.objects.create(
+        title='UH Basis Data',
+        subject=subject,
+        level=11,
+        exam_type='UH',
+        target_question_count=10,
+    )
+    res_select = client.get(reverse('schedules:select_questions', kwargs={'exam_id': exam.id}) + '?cp_code=CP 2')
+    assert res_select.status_code == 200
+    select_content = res_select.content.decode()
+    assert '1NF' in select_content
+    assert 'CREATE TABLE' not in select_content
+
 

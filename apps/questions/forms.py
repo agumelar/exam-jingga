@@ -19,6 +19,8 @@ class QuestionForm(forms.ModelForm):
             'subject',
             'created_by',
             'level',
+            'cp_code',
+            'cp_name',
             'question_text',
             'question_image',
             'option_a',
@@ -34,6 +36,8 @@ class QuestionForm(forms.ModelForm):
             'correct_answer',
         ]
         widgets = {
+            'cp_code': forms.Select(attrs={'class': 'w-full'}),
+            'cp_name': forms.TextInput(attrs={'placeholder': 'Nama/topik Capaian Pembelajaran (opsional)...'}),
             'question_text': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Tuliskan butir soal di sini...'}),
             'option_a': forms.TextInput(attrs={'placeholder': 'Pilihan jawaban A...'}),
             'option_b': forms.TextInput(attrs={'placeholder': 'Pilihan jawaban B...'}),
@@ -42,6 +46,18 @@ class QuestionForm(forms.ModelForm):
             'option_e': forms.TextInput(attrs={'placeholder': 'Pilihan jawaban E...'}),
             'correct_answer': forms.RadioSelect(choices=Question.ANSWER_CHOICES),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        for opt in ['a', 'b', 'c', 'd', 'e']:
+            text_val = str(cleaned_data.get(f'option_{opt}') or '').strip()
+            img_val = cleaned_data.get(f'image_{opt}')
+            instance_img = getattr(self.instance, f'image_{opt}', None)
+            clear_img = cleaned_data.get(f'clear_image_{opt}')
+            has_img = bool(img_val or (instance_img and not clear_img))
+            if not text_val and not has_img:
+                self.add_error(f'option_{opt}', f'Pilihan jawaban {opt.upper()} wajib diisi (teks atau gambar) untuk jenjang SMK.')
+        return cleaned_data
 
     def save(self, commit=True):
         instance = super().save(commit=False)

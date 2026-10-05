@@ -482,6 +482,14 @@ class SelectQuestionsView(View):
         if exam.level:
             q_filter &= Q(level=exam.level)
         
+        selected_cp = request.GET.get('cp_code', '').strip()
+        if selected_cp:
+            q_filter &= Q(cp_code=selected_cp)
+
+        search_query = request.GET.get('q', '').strip()
+        if search_query:
+            q_filter &= (Q(question_text__icontains=search_query) | Q(cp_name__icontains=search_query))
+
         # If teacher, show questions created by teacher or available in subject
         bank_questions = Question.objects.filter(q_filter).select_related('created_by', 'subject').order_by('created_at')
 
@@ -517,6 +525,9 @@ class SelectQuestionsView(View):
             'selected_ids': [str(qid) for qid in my_selected_ids],
             'all_selected_ids': [str(qid) for qid in all_selected_ids],
             'others_selected_count': len(others_selected_ids),
+            'cp_choices': Question.CP_CHOICES,
+            'selected_cp': selected_cp,
+            'search_query': search_query,
             'collab_info': {
                 'is_collab': is_collab,
                 'quota': quota,
