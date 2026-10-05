@@ -514,3 +514,76 @@ def test_student_dashboard_view(client):
     assert 'UH Sistem Starter' in content
     assert 'Bengkel Otomotif' in content
     assert ('88.5' in content or '88,5' in content)
+
+
+@pytest.mark.django_db
+def test_opsi_a_hard_stop_remaining_seconds():
+    """Verify calculate_remaining_seconds caps remaining duration by schedule.end_time (Opsi A)."""
+    now = timezone.now()
+    subject = Subject.objects.create(name='Bahasa Indonesia')
+    exam = Exam.objects.create(subject=subject, title='PTS B.Indo', duration=60, status='ready')
+    # Schedule closes in 20 minutes
+    schedule = Schedule.objects.create(
+        exam=exam,
+        start_time=now - timedelta(minutes=40),
+        end_time=now + timedelta(minutes=20),
+        token='INDO01',
+        status='active'
+    )
+    student_user = User.objects.create_user(username='siswa_hardstop', role=Role.SISWA)
+    student = Student.objects.create(user=student_user, nis='999111222', full_name='Siswa Hardstop')
+    # Student starts now, personal 60m duration would end at now + 60m
+    session = ExamSession.objects.create(
+        student=student,
+        schedule=schedule,
+        started_at=now,
+        status='active',
+        remaining_seconds=3600
+    )
+    # Remaining seconds should be capped by schedule.end_time (approx 20 minutes = 1200 seconds), NOT 60m (3600s)
+    rem = session.calculate_remaining_seconds()
+    assert 1190 <= rem <= 1205
+
+
+@pytest.mark.django_db
+def test_confirm_token_time_gates(client):
+    """Verify ConfirmTokenView rejects token submission if outside schedule start_time/end_time window."""
+    now = timezone.now()
+    subject = Subject.objects.create(name='IPAS')
+    exam = Exam.objects.create(subject=subject, title='PTS IPAS', duration=60, status='ready')
+    student_user = User.objects.create_user(username='siswa_gate', role=Role.SISWA)
+    Student.objects.create(user=student_user, nis='999333444', full_name='Siswa Gate')
+    client.force_login(student_user)
+
+    # 1. Schedule already ended (e.g. 13:31 test)
+    ended_schedule = Schedule.objects.create(
+        exam=exam,
+        start_time=now - timedelta(hours=2),
+        end_time=now - timedelta(minutes=5),
+        token='PASSED',
+        status='active'
+    )
+    res_ended = client.post(
+        reverse('exam_engine:confirm_token'),
+        {'schedule_id': str(ended_schedule.id), 'token': 'PASSED'},
+        HTTP_HX_REQUEST='true'
+    )
+    assert res_ended.status_code == 400
+    assert 'telah berakhir' in res_ended.content.decode('utf-8')
+
+    # 2. Schedule not started yet
+    future_schedule = Schedule.objects.create(
+        exam=exam,
+        start_time=now + timedelta(hours=1),
+        end_time=now + timedelta(hours=2),
+        token='FUTURE',
+        status='active'
+    )
+    res_future = client.post(
+        reverse('exam_engine:confirm_token'),
+        {'schedule_id': str(future_schedule.id), 'token': 'FUTURE'},
+        HTTP_HX_REQUEST='true'
+    )
+    assert res_future.status_code == 400
+    assert 'belum dibuka' in res_future.content.decode('utf-8')
+

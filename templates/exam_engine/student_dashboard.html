@@ -130,14 +130,26 @@
                   </p>
                 </div>
 
-                <button 
-                  type="button"
-                  @click="openTokenModal('{{ item.schedule.id }}', '{{ item.schedule.exam.title|escapejs }}', '{{ item.schedule.exam.exam_type|escapejs }}')" 
-                  class="w-full sm:w-auto bg-orange-600 hover:bg-orange-700 text-white px-8 py-4 rounded-2xl font-semibold text-xs tracking-wide flex items-center justify-center gap-2 shadow-lg shadow-orange-600/25 transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0"
-                >
-                  <span>{% if item.student_status == 'active' or item.student_status == 'locked' %}Lanjutkan Ujian{% else %}Masuk Ujian{% endif %}</span>
-                  <i data-lucide="arrow-right" class="w-4 h-4"></i>
-                </button>
+                {% if item.is_time_ended %}
+                  <div class="px-6 py-3.5 rounded-2xl bg-stone-100 dark:bg-zinc-800 text-stone-400 dark:text-zinc-500 font-semibold text-xs flex items-center justify-center gap-2 border border-stone-200 dark:border-zinc-700/60 cursor-not-allowed select-none">
+                    <i data-lucide="clock" class="w-4 h-4 text-stone-400"></i>
+                    <span>Sesi Berakhir ({{ item.schedule.end_time|date:"H:i" }} WIB)</span>
+                  </div>
+                {% elif item.is_not_started %}
+                  <div class="px-6 py-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-semibold text-xs flex items-center justify-center gap-2 border border-amber-200 dark:border-amber-900/60 cursor-not-allowed select-none">
+                    <i data-lucide="clock" class="w-4 h-4 text-amber-500"></i>
+                    <span>Dibuka Pukul {{ item.schedule.start_time|date:"H:i" }} WIB</span>
+                  </div>
+                {% else %}
+                  <button 
+                    type="button"
+                    @click="openTokenModal('{{ item.schedule.id }}', '{{ item.schedule.exam.title|escapejs }}', '{{ item.schedule.exam.exam_type|escapejs }}')" 
+                    class="w-full sm:w-auto bg-orange-600 hover:bg-orange-700 text-white px-8 py-4 rounded-2xl font-semibold text-xs tracking-wide flex items-center justify-center gap-2 shadow-lg shadow-orange-600/25 transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0"
+                  >
+                    <span>{% if item.student_status == 'active' or item.student_status == 'locked' %}Lanjutkan Ujian{% else %}Masuk Ujian{% endif %}</span>
+                    <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                  </button>
+                {% endif %}
               </div>
             {% endfor %}
           </div>

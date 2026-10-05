@@ -104,16 +104,26 @@ class ExamSession(models.Model):
         return self.student_answers.filter(is_correct=True).count()
 
     def calculate_remaining_seconds(self):
-        """Menghitung sisa detik pengerjaan berdasarkan started_at dan durasi jadwal."""
+        """
+        Menghitung sisa detik pengerjaan berdasarkan started_at, durasi jadwal,
+        dan batas jam selesai jadwal (Opsi A: Strict Hard-Stop).
+        """
         if self.status == 'finished':
             return 0
         if not self.started_at or not self.schedule or not self.schedule.exam:
             return self.remaining_seconds
 
         duration_minutes = self.schedule.exam.duration or 60
-        end_time = self.started_at + timedelta(minutes=duration_minutes)
+        personal_end = self.started_at + timedelta(minutes=duration_minutes)
+
+        # Opsi A: Strict Hard-Stop dibatasi oleh batas akhir jadwal (schedule.end_time)
+        if self.schedule.end_time:
+            effective_end = min(personal_end, self.schedule.end_time)
+        else:
+            effective_end = personal_end
+
         now = timezone.now()
-        rem = int((end_time - now).total_seconds())
+        rem = int((effective_end - now).total_seconds())
         return max(0, rem)
 
 

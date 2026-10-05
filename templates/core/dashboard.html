@@ -200,9 +200,14 @@
                     {{ schedule.class_room.name|default:'Semua Kelas' }}
                   </span>
                   <span>&bull;</span>
-                  <span class="inline-flex items-center gap-1">
+                  <span class="inline-flex items-center gap-1 font-semibold text-stone-800 dark:text-stone-200">
                     <i data-lucide="clock" class="w-3.5 h-3.5 text-stone-400"></i>
                     {{ schedule.start_time|date:"H:i" }} - {{ schedule.end_time|date:"H:i" }} WIB
+                  </span>
+                  <span>&bull;</span>
+                  <span class="inline-flex items-center gap-1 font-medium text-orange-600 dark:text-orange-400">
+                    <i data-lucide="timer" class="w-3.5 h-3.5"></i>
+                    Durasi {{ schedule.exam.duration|default:60 }} Menit
                   </span>
                   <span>&bull;</span>
                   <span class="inline-flex items-center gap-1">
@@ -212,13 +217,21 @@
                 </div>
               </div>
 
-              <!-- Action & Token Area -->
-              <div class="flex items-center gap-3 shrink-0">
+              <!-- Action & Token Area with Copy to Clipboard (Anti-Slop C-2) -->
+              <div class="flex items-center gap-3 shrink-0" x-data="{ copied: false }">
                 <div class="text-right">
-                  <span class="text-[10px] text-stone-400 block uppercase tracking-wider font-semibold">Token</span>
-                  <span class="px-3 py-1 rounded-full font-mono font-bold text-xs bg-orange-100 dark:bg-orange-950/80 text-orange-800 dark:text-orange-200 border border-orange-200 dark:border-orange-800/80 inline-block">
-                    {{ schedule.token|default:'------' }}
-                  </span>
+                  <span class="text-[10px] text-stone-400 block uppercase tracking-wider font-semibold">Token Ujian</span>
+                  <button
+                    type="button"
+                    @click="navigator.clipboard.writeText('{{ schedule.token|default:'' }}'); copied = true; setTimeout(() => copied = false, 2000)"
+                    class="px-3 py-1 rounded-full font-mono font-bold text-xs inline-flex items-center gap-1.5 transition-all cursor-pointer border shadow-xs"
+                    :class="copied 
+                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-200 dark:border-emerald-800' 
+                      : 'bg-orange-100 dark:bg-orange-950/80 text-orange-800 dark:text-orange-200 border-orange-200 dark:border-orange-800/80 hover:bg-orange-200 dark:hover:bg-orange-900/60'"
+                    :title="copied ? 'Token Berhasil Disalin!' : 'Klik untuk Menyalin Token'"
+                  >
+                    <span x-text="copied ? '✓ TERSALIN' : '{{ schedule.token|default:'------' }}'"></span>
+                  </button>
                 </div>
 
                 <a 
@@ -232,18 +245,25 @@
             </div>
           {% endfor %}
         {% else %}
-          <div class="py-12 px-4 rounded-2xl border border-dashed border-stone-200 dark:border-stone-800 text-center space-y-3">
-            <div class="w-12 h-12 rounded-full bg-orange-50 dark:bg-orange-950/40 text-orange-600 flex items-center justify-center mx-auto">
-              <i data-lucide="calendar" class="w-6 h-6"></i>
+          <div class="py-12 px-6 rounded-3xl border border-dashed border-stone-200 dark:border-stone-800 text-center space-y-3.5 bg-stone-50/50 dark:bg-stone-900/30">
+            <div class="w-14 h-14 rounded-2xl bg-orange-100/70 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 flex items-center justify-center mx-auto shadow-xs">
+              <i data-lucide="calendar" class="w-7 h-7"></i>
             </div>
-            <p class="text-sm font-medium text-stone-700 dark:text-stone-300">Belum ada jadwal ujian yang aktif saat ini.</p>
-            <a 
-              href="/jadwal-ujian/"
-              class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-600 text-white text-xs font-semibold hover:bg-orange-700 transition"
-            >
-              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-              <span>Buat Jadwal Ujian Baru</span>
-            </a>
+            <div class="space-y-1">
+              <h4 class="text-sm font-bold text-stone-800 dark:text-stone-200">Tidak ada jadwal ujian aktif hari ini</h4>
+              <p class="text-xs text-stone-500 dark:text-stone-400 max-w-sm mx-auto">
+                Belum ada sesi ujian yang dijadwalkan untuk hari ini. Guru dapat membuat Ulangan Harian, atau Admin dapat menjadwalkan PTS/PAS.
+              </p>
+            </div>
+            <div>
+              <a 
+                href="/jadwal-ujian/"
+                class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold shadow-sm transition active:scale-95"
+              >
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>+ Buat Jadwal Ujian Baru</span>
+              </a>
+            </div>
           </div>
         {% endif %}
       </div>
@@ -389,63 +409,14 @@
             <th class="py-3 px-4 font-semibold uppercase tracking-wider text-right">Nilai Akhir</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-stone-200/60 dark:divide-stone-800/60">
-          {% if recent_sessions %}
-            {% for session in recent_sessions %}
-              <tr class="hover:bg-stone-50/80 dark:hover:bg-stone-950/50 transition-colors">
-                <td class="py-3.5 px-4 font-semibold text-stone-900 dark:text-white">
-                  <div class="flex items-center gap-2.5">
-                    <div class="w-7 h-7 rounded-full bg-orange-600 text-white font-bold text-[10px] flex items-center justify-center uppercase shrink-0">
-                      {{ session.student.full_name|slice:':1'|default:'S' }}
-                    </div>
-                    <span class="truncate max-w-[180px]">{{ session.student.full_name }}</span>
-                  </div>
-                </td>
-                <td class="py-3.5 px-4 text-stone-600 dark:text-stone-400">
-                  <span class="font-mono font-medium">{{ session.student.nis }}</span>
-                  <span class="block text-[11px] text-stone-400">{{ session.student.class_room.name|default:'-' }}</span>
-                </td>
-                <td class="py-3.5 px-4 text-stone-800 dark:text-stone-200 font-medium">
-                  {{ session.schedule.exam.title|default:'Ujian CBT' }}
-                </td>
-                <td class="py-3.5 px-4 text-stone-500">
-                  {{ session.started_at|date:"H:i:s" }} WIB
-                </td>
-                <td class="py-3.5 px-4">
-                  {% if session.status == 'active' %}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300">
-                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse"></span>
-                      Mengerjakan
-                    </span>
-                  {% elif session.status == 'finished' %}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300">
-                      Selesai
-                    </span>
-                  {% elif session.status == 'locked' %}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-800 dark:bg-red-950/80 dark:text-red-300">
-                      <i data-lucide="lock" class="w-3 h-3 mr-1"></i>
-                      Terkunci
-                    </span>
-                  {% endif %}
-                </td>
-                <td class="py-3.5 px-4 text-right font-mono font-bold text-sm">
-                  {% if session.status == 'finished' %}
-                    <span class="{% if session.score >= 75 %}text-emerald-600 dark:text-emerald-400{% else %}text-orange-600 dark:text-orange-400{% endif %}">
-                      {{ session.score|floatformat:1 }}
-                    </span>
-                  {% else %}
-                    <span class="text-stone-400 font-normal text-xs">-</span>
-                  {% endif %}
-                </td>
-              </tr>
-            {% endfor %}
-          {% else %}
-            <tr>
-              <td colspan="6" class="py-8 text-center text-stone-400 dark:text-stone-500">
-                Belum ada aktivitas sesi pengerjaan ujian pada hari ini.
-              </td>
-            </tr>
-          {% endif %}
+        <tbody 
+          id="recent-sessions-tbody"
+          hx-get="/dashboard/?partial=recent_sessions"
+          hx-trigger="every 15s"
+          hx-swap="innerHTML"
+          class="divide-y divide-stone-200/60 dark:divide-stone-800/60"
+        >
+          {% include 'core/partials/recent_sessions_rows.html' %}
         </tbody>
       </table>
     </div>

@@ -205,6 +205,9 @@ class ScheduleCreateModalView(View):
         current_teacher = _get_current_teacher(user)
         is_admin = _is_staff_admin(user)
 
+        if not is_admin and request.POST.get('exam_type', '') != 'UH':
+            return HttpResponse("Guru hanya memiliki wewenang untuk menjadwalkan Ulangan Harian (UH).", status=403)
+
         form = ScheduleForm(request.POST, user=user)
         if form.is_valid():
             created_schedules = form.save(creator_teacher=current_teacher)

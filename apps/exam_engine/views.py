@@ -94,6 +94,7 @@ class StudentDashboardView(View):
             for sess in ExamSession.objects.filter(student=student):
                 my_sessions_map[str(sess.schedule_id)] = sess
 
+        now = timezone.now()
         available_exams = []
         for sch in eligible_schedules:
             sess = my_sessions_map.get(str(sch.id))
@@ -101,12 +102,17 @@ class StudentDashboardView(View):
             score = sess.score if sess else None
             session_id = sess.id if sess else None
 
+            is_time_ended = bool(sch.end_time and now > sch.end_time)
+            is_not_started = bool(sch.start_time and now < sch.start_time)
+
             if student_status != 'finished':
                 available_exams.append({
                     'schedule': sch,
                     'student_status': student_status,
                     'score': score,
                     'session_id': session_id,
+                    'is_time_ended': is_time_ended,
+                    'is_not_started': is_not_started,
                 })
 
         # Ambil seluruh riwayat ujian selesai milik siswa
@@ -176,6 +182,24 @@ class ConfirmTokenView(View):
             return redirect('/student/dashboard/')
 
         schedule = get_object_or_404(Schedule.objects.select_related('exam'), id=schedule_id)
+
+        # Validasi Jendela Waktu Pelaksanaan Ujian (Gate Control Opsi A)
+        now = timezone.now()
+        if schedule.end_time and now > schedule.end_time:
+            end_time_str = timezone.localtime(schedule.end_time).strftime('%H:%M')
+            err_msg = f"Waktu sesi ujian ini telah berakhir (pukul {end_time_str} WIB). Akses telah ditutup kecuali dibuka kembali oleh Admin/Proktor."
+            if request.headers.get('HX-Request'):
+                return HttpResponse(f'<div class="p-3 bg-red-100 dark:bg-red-950/40 text-red-600 rounded-xl text-xs font-bold border border-red-200 dark:border-red-900">{err_msg}</div>', status=400)
+            messages.error(request, err_msg)
+            return redirect('/student/dashboard/')
+
+        if schedule.start_time and now < schedule.start_time:
+            start_time_str = timezone.localtime(schedule.start_time).strftime('%H:%M')
+            warn_msg = f"Sesi ujian belum dibuka. Akses akan dibuka pada pukul {start_time_str} WIB."
+            if request.headers.get('HX-Request'):
+                return HttpResponse(f'<div class="p-3 bg-amber-100 dark:bg-amber-950/40 text-amber-700 rounded-xl text-xs font-bold border border-amber-200 dark:border-amber-900">{warn_msg}</div>', status=400)
+            messages.warning(request, warn_msg)
+            return redirect('/student/dashboard/')
 
         # Validasi Token
         if schedule.token.strip().upper() != entered_token:

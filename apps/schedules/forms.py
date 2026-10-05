@@ -138,9 +138,13 @@ class ScheduleForm(forms.Form):
         if exam_type in ['UH', 'PTS'] and not class_room and not self.schedule_instance:
             self.add_error('class_room', 'Kelas wajib dipilih untuk UH dan PTS.')
 
+        if self.user and getattr(self.user, 'role', '') == 'guru':
+            if exam_type != 'UH':
+                self.add_error('exam_type', 'Guru hanya memiliki wewenang untuk menjadwalkan Ulangan Harian (UH).')
+
         duration = cleaned_data.get('duration')
-        if duration is not None and duration < 15:
-            self.add_error('duration', 'Durasi pelaksanaan ujian minimal 15 menit.')
+        if duration is not None and duration < 1:
+            self.add_error('duration', 'Durasi pelaksanaan ujian minimal 1 menit.')
 
         return cleaned_data
 

@@ -297,3 +297,25 @@ def test_custom_error_pages_render():
     assert 'Muat Ulang Halaman' in rendered_500
 
 
+@pytest.mark.django_db
+def test_dashboard_caching_and_partial_recent_sessions(client):
+    """Verify DashboardView caching and HTMX partial recent_sessions response."""
+    admin_user = User.objects.create_superuser(username='admin_dash_test', email='adm_d@test.com', password='password123')
+    client.force_login(admin_user)
+
+    # 1. Full page request
+    res = client.get('/dashboard/')
+    assert res.status_code == 200
+    content = res.content.decode()
+    assert 'Aktivitas Sesi Peserta Terkini' in content
+    assert 'recent-sessions-tbody' in content
+
+    # 2. HTMX partial recent_sessions request
+    res_partial = client.get('/dashboard/?partial=recent_sessions')
+    assert res_partial.status_code == 200
+    partial_content = res_partial.content.decode()
+    assert 'Aktivitas Sesi Peserta Terkini' not in partial_content  # Only tbody rows
+    assert '<tr' in partial_content or 'Belum ada aktivitas sesi' in partial_content
+
+
+

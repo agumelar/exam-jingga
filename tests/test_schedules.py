@@ -606,19 +606,48 @@ def test_schedule_model_clean_validation():
 
 @pytest.mark.django_db
 def test_schedule_form_duration_validation():
-    """Ensure ScheduleForm rejects duration less than 15 minutes."""
+    """Ensure ScheduleForm rejects duration less than 1 minute and accepts 10 minutes."""
     form_data = {
         'exam_type': 'UH',
         'title': 'UH Durasi Singkat',
         'level': 10,
         'subject': '',
         'start_time': '2026-10-02T08:00',
-        'duration': 5,  # Too short (< 15 mins)
+        'duration': 0,  # Invalid (< 1 min)
         'target_question_count': 10,
         'session_no': '0'
     }
     form = ScheduleForm(data=form_data)
     assert form.is_valid() is False
     assert 'duration' in form.errors
-    assert 'minimal 15 menit' in form.errors['duration'][0]
+    assert 'minimal 1 menit' in form.errors['duration'][0]
+
+
+@pytest.mark.django_db
+def test_schedule_form_teacher_role_scoping():
+    """Ensure teacher cannot submit non-UH assessments (PTS/PAS/SAJ)."""
+    teacher_user = User.objects.create_user(
+        username='guru_budi',
+        email='budi@smkn1rongga.sch.id',
+        role=Role.GURU,
+        password='password123'
+    )
+    classroom = ClassRoom.objects.create(name='XII RPL 1', level=12)
+    subject = Subject.objects.create(name='Pemrograman Web')
+
+    form_data = {
+        'exam_type': 'PTS',  # Prohibited for guru
+        'title': 'PTS RPL',
+        'level': 12,
+        'subject': subject.id,
+        'class_room': classroom.id,
+        'start_time': '2026-10-05T08:00',
+        'duration': 60,
+        'target_question_count': 40,
+        'session_no': '0'
+    }
+    form = ScheduleForm(data=form_data, user=teacher_user)
+    assert form.is_valid() is False
+    assert 'exam_type' in form.errors
+
 
