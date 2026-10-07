@@ -69,7 +69,29 @@ class StudentDashboardView(View):
             .order_by('start_time')
         )
 
-        # Filter jadwal sesuai kelas / jenjang siswa
+        # Penugasan guru untuk rombel kelas siswa (Source of truth: ketentuan.md)
+        my_teachers_by_subject = {}
+        if student and student.class_room:
+            from apps.master_data.models import TeacherAssignment
+            assignments = TeacherAssignment.objects.filter(
+                class_room=student.class_room
+            ).values_list('subject_id', 'teacher_id')
+            for subj_id, t_id in assignments:
+                subj_key = str(subj_id)
+                if subj_key not in my_teachers_by_subject:
+                    my_teachers_by_subject[subj_key] = set()
+                if t_id:
+                    my_teachers_by_subject[subj_key].add(str(t_id))
+
+        # Petakan jadwal per exam_id untuk evaluasi kolaborasi & pengelompokan guru
+        exam_schedules_map = {}
+        for sch in schedules_qs:
+            eid = str(sch.exam_id)
+            if eid not in exam_schedules_map:
+                exam_schedules_map[eid] = []
+            exam_schedules_map[eid].append(sch)
+
+        # Filter jadwal sesuai kelas dan guru yang bersangkutan
         eligible_schedules = []
         for sch in schedules_qs:
             if sch.exam.exam_type in ['UH', 'PTS']:
@@ -77,15 +99,34 @@ class StudentDashboardView(View):
                 if student and student.class_room:
                     if sch.class_room_id == student.class_room_id:
                         eligible_schedules.append(sch)
+                    elif not sch.class_room_id and sch.exam.level == student_level:
+                        subj_teachers = my_teachers_by_subject.get(str(sch.exam.subject_id), set())
+                        if not subj_teachers or str(sch.teacher_id) in subj_teachers:
+                            eligible_schedules.append(sch)
                 else:
                     eligible_schedules.append(sch)
             else:
-                # Collaborative (PAS, PAT, SAJ): cocok jenjang tingkat atau kelas
-                if sch.exam.level and sch.exam.level == student_level:
-                    eligible_schedules.append(sch)
-                elif sch.class_room_id and student and student.class_room_id == sch.class_room_id:
-                    eligible_schedules.append(sch)
+                # Collaborative (PAS, PAT, SAJ):
+                is_level_ok = bool(sch.exam.level and sch.exam.level == student_level)
+                if not is_level_ok and sch.class_room_id and student and student.class_room_id == sch.class_room_id:
+                    is_level_ok = True
                 elif not sch.class_room_id and not sch.exam.level:
+                    is_level_ok = True
+
+                if not is_level_ok:
+                    continue
+
+                subj_id = str(sch.exam.subject_id)
+                class_teachers = my_teachers_by_subject.get(subj_id, set())
+
+                if class_teachers:
+                    exam_teachers = {
+                        str(s.teacher_id) for s in exam_schedules_map.get(str(sch.exam_id), [])
+                        if s.teacher_id
+                    }
+                    if class_teachers == exam_teachers or bool(class_teachers & exam_teachers):
+                        eligible_schedules.append(sch)
+                else:
                     eligible_schedules.append(sch)
 
         # Ambil sesi siswa yang sudah ada
@@ -94,9 +135,24 @@ class StudentDashboardView(View):
             for sess in ExamSession.objects.filter(student=student):
                 my_sessions_map[str(sess.schedule_id)] = sess
 
+        # Deduplikasi per Exam: siswa hanya melihat 1 kartu bersih per paket ujian
+        seen_exam_ids = set()
+        deduped_eligible_schedules = []
+        for sch in eligible_schedules:
+            if sch.exam_id in seen_exam_ids:
+                continue
+            group_schedules = exam_schedules_map.get(str(sch.exam_id), [sch])
+            matched_sch = sch
+            for gs in group_schedules:
+                if str(gs.id) in my_sessions_map:
+                    matched_sch = gs
+                    break
+            seen_exam_ids.add(sch.exam_id)
+            deduped_eligible_schedules.append(matched_sch)
+
         now = timezone.now()
         available_exams = []
-        for sch in eligible_schedules:
+        for sch in deduped_eligible_schedules:
             sess = my_sessions_map.get(str(sch.id))
             student_status = sess.status if sess else 'not_started'
             score = sess.score if sess else None
@@ -448,29 +504,42 @@ class SaveAnswerView(View):
 class ViolationHandlerView(View):
     """
     HTMX Endpoint untuk Mencatat Pelanggaran Pindah Layar / Tab Blur.
-    Jika violation_count >= 2, kunci sesi ujian dan tampilkan Red Screen Lock Overlay.
+    Sesuai ketentuan.md:
+    - UH dan PTS: Hanya peringatan (toast warning), tidak pernah dikunci.
+    - PAS/PAT dan SAJ: Jika violation_count >= 2, kunci sesi ujian dan tampilkan Red Screen Lock Overlay.
     Endpoint: POST /exam/session/<uuid:session_id>/violation/
     """
     def post(self, request, session_id, *args, **kwargs):
-        session = get_object_or_404(ExamSession, id=session_id)
+        session = get_object_or_404(
+            ExamSession.objects.select_related('schedule', 'schedule__exam'),
+            id=session_id
+        )
         if session.status == 'finished':
             return HttpResponseForbidden("Sesi selesai.")
 
         session.violation_count += 1
-        if session.violation_count >= 2:
+        exam = session.schedule.exam if session.schedule else None
+        exam_type = (exam.exam_type or 'UH').upper() if exam else 'UH'
+        is_official_exam = exam_type in ['PAS', 'PAT', 'SAJ', 'PAS/PAT']
+
+        if is_official_exam and session.violation_count >= 2:
             session.status = 'locked'
             session.save(update_fields=['violation_count', 'status'])
             # Render red lock overlay
             return render(request, 'exam_engine/partials/lock_overlay.html', {'session': session})
 
         session.save(update_fields=['violation_count'])
+        
+        warn_title = f"Peringatan Anti-Cheat ({session.violation_count}/2)" if is_official_exam else f"Peringatan Anti-Cheat ({session.violation_count})"
+        warn_desc = "Dilarang berpindah aplikasi atau tab selama ujian!" if is_official_exam else "Fokus pada lembar ujian Anda!"
+
         return HttpResponse(
             f"""
             <div id="toast-warning" class="fixed top-20 right-6 z-50 p-4 rounded-2xl bg-amber-500 text-slate-950 font-black shadow-2xl flex items-center gap-3 animate-in slide-in-from-top duration-300">
               <i data-lucide="alert-triangle" class="w-5 h-5"></i>
               <div>
-                <p class="text-xs uppercase">Peringatan Anti-Cheat ({session.violation_count}/2)</p>
-                <p class="text-[10px] font-bold">Dilarang berpindah aplikasi atau tab selama ujian!</p>
+                <p class="text-xs uppercase">{warn_title}</p>
+                <p class="text-[10px] font-bold">{warn_desc}</p>
               </div>
             </div>
             <script>

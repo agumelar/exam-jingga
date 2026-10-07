@@ -21,6 +21,9 @@ from apps.schedules.utils import (
     resolve_status_after_question_save,
     can_transition_status,
     calculate_collaborative_quotas,
+    build_teacher_set_key,
+    build_teacher_set_groups,
+    build_teacher_quota_map,
     TOKEN_ALPHABET,
 )
 
@@ -202,6 +205,68 @@ def test_calculate_collaborative_quotas():
     assert sum(quotas.values()) == 40
 
 
+def test_build_teacher_set_key_and_grouping():
+    """Verify build_teacher_set_key and build_teacher_set_groups (source of truth: ketentuan.md)."""
+    assert build_teacher_set_key(['t2', 't1']) == 't1|t2'
+    assert build_teacher_set_key([]) == ''
+
+    class DummyClass:
+        def __init__(self, cid): self.id = cid
+
+    class DummyTeacher:
+        def __init__(self, tid): self.id = tid
+
+    class DummyAssignment:
+        def __init__(self, tid, cid):
+            self.teacher_id = tid
+            self.class_room_id = cid
+            self.teacher = DummyTeacher(tid)
+            self.class_room = DummyClass(cid)
+
+    # c1 and c2 taught by t1 and t2 together; c3 taught only by t3
+    assignments = [
+        DummyAssignment('t1', 'c1'),
+        DummyAssignment('t2', 'c1'),
+        DummyAssignment('t1', 'c2'),
+        DummyAssignment('t2', 'c2'),
+        DummyAssignment('t3', 'c3'),
+    ]
+
+    groups = build_teacher_set_groups(assignments)
+    assert len(groups) == 2
+
+    # Group 1: t1, t2 -> classes c1, c2
+    team_group = [g for g in groups if 't1' in g['teacher_ids']][0]
+    assert sorted(team_group['teacher_ids']) == ['t1', 't2']
+    assert sorted(team_group['class_ids']) == ['c1', 'c2']
+
+    # Group 2: t3 -> class c3
+    solo_group = [g for g in groups if 't3' in g['teacher_ids']][0]
+    assert solo_group['teacher_ids'] == ['t3']
+    assert solo_group['class_ids'] == ['c3']
+
+
+def test_build_teacher_quota_map():
+    """Verify build_teacher_quota_map calculates proportional quotas based on team teaching."""
+    class DummyAssignment:
+        def __init__(self, tid, cid):
+            self.teacher_id = tid
+            self.class_room_id = cid
+
+    # 4 teachers in same class -> 40 / 4 = 10 each
+    assignments = [
+        DummyAssignment('diman', 'c1'),
+        DummyAssignment('lucky', 'c1'),
+        DummyAssignment('husam', 'c1'),
+        DummyAssignment('janjan', 'c1'),
+    ]
+    quota_map = build_teacher_quota_map(assignments, total_target=40)
+    assert quota_map['diman'] == 10
+    assert quota_map['lucky'] == 10
+    assert quota_map['husam'] == 10
+    assert quota_map['janjan'] == 10
+
+
 # ==============================================================================
 # 3. ScheduleForm Tests
 # ==============================================================================
@@ -241,7 +306,7 @@ def test_schedule_form_create_single_uh():
 
 @pytest.mark.django_db
 def test_schedule_form_create_collaborative_pas():
-    """Verify ScheduleForm creates collaborative PAS schedules for assigned teachers."""
+    """Verify ScheduleForm creates collaborative PAS schedules for team teaching teachers."""
     subject = Subject.objects.create(name='Fisika')
     c1 = ClassRoom.objects.create(name='X TBSM 1', level=10)
     c2 = ClassRoom.objects.create(name='X TBSM 2', level=10)
@@ -249,7 +314,10 @@ def test_schedule_form_create_collaborative_pas():
     t1 = Teacher.objects.create(full_name='Guru Fisika A')
     t2 = Teacher.objects.create(full_name='Guru Fisika B')
 
+    # Team teaching: t1 and t2 teach together in c1 and c2
     TeacherAssignment.objects.create(teacher=t1, subject=subject, class_room=c1)
+    TeacherAssignment.objects.create(teacher=t2, subject=subject, class_room=c1)
+    TeacherAssignment.objects.create(teacher=t1, subject=subject, class_room=c2)
     TeacherAssignment.objects.create(teacher=t2, subject=subject, class_room=c2)
 
     form_data = {
@@ -276,6 +344,52 @@ def test_schedule_form_create_collaborative_pas():
     # Quota should be distributed (40 / 2 = 20 each)
     quotas = [s.teacher_quota for s in schedules]
     assert quotas == [20, 20]
+
+
+@pytest.mark.django_db
+def test_schedule_form_separate_classes_per_teacher():
+    """
+    Sesuai ketentuan.md:
+    Pengisian soal dan jadwal berdasarkan masing-masing guru jika rombel kelas berbeda (Ade di 10 RPL 1-2, Beni di 10 TSM 1).
+    """
+    subject = Subject.objects.create(name='Matematika Wajib')
+    c1 = ClassRoom.objects.create(name='10 RPL 1', level=10)
+    c2 = ClassRoom.objects.create(name='10 TSM 1', level=10)
+
+    t_ade = Teacher.objects.create(full_name='Ade Sandi')
+    t_beni = Teacher.objects.create(full_name='Beni Gumilar')
+
+    # Ade mengajar 10 RPL 1, Beni mengajar 10 TSM 1 (kelas terpisah)
+    TeacherAssignment.objects.create(teacher=t_ade, subject=subject, class_room=c1)
+    TeacherAssignment.objects.create(teacher=t_beni, subject=subject, class_room=c2)
+
+    form_data = {
+        'exam_type': 'PAS',
+        'sub_type': 'Penilaian Akhir Semester',
+        'level': 10,
+        'subject': str(subject.id),
+        'start_time': '2026-12-01T08:00',
+        'duration': 90,
+        'target_question_count': 40,
+        'session_no': '0',
+        'token': 'PASMAT',
+    }
+
+    form = ScheduleForm(data=form_data)
+    assert form.is_valid(), form.errors
+    schedules = form.save()
+
+    assert len(schedules) == 2
+    # Terbentuk 2 jadwal terpisah dengan 2 paket ujian berbeda
+    exams = {s.exam_id for s in schedules}
+    assert len(exams) == 2
+
+    # Masing-masing guru mendapatkan kuota penuh 40 butir untuk rombel kelasnya
+    ade_sch = [s for s in schedules if s.teacher == t_ade][0]
+    beni_sch = [s for s in schedules if s.teacher == t_beni][0]
+
+    assert ade_sch.teacher_quota == 40
+    assert beni_sch.teacher_quota == 40
 
 
 # ==============================================================================

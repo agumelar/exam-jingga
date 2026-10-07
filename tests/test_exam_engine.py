@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import Role
-from apps.master_data.models import Subject, Teacher, ClassRoom, Major, Student
+from apps.master_data.models import Subject, Teacher, ClassRoom, Major, Student, TeacherAssignment
 from apps.questions.models import Question
 from apps.schedules.models import Exam, ExamQuestion, Schedule
 from apps.exam_engine.models import ExamSession, StudentAnswer
@@ -353,13 +353,13 @@ def test_save_answer_view_with_oob_updates(client):
 
 @pytest.mark.django_db
 def test_violation_handler_and_status_check(client):
-    """Test anti-cheat violation count increments, 2+ violations lock, and proctor unlock polling."""
+    """Test anti-cheat violation count increments, 2+ violations lock on official exam (PAS), and proctor unlock polling."""
     subject = Subject.objects.create(name='Biologi')
     teacher = Teacher.objects.create(full_name='Guru Biologi')
     student_user = User.objects.create_user(username='siswa_bio', role=Role.SISWA)
     student = Student.objects.create(user=student_user, nis='12121212', full_name='Siswa Biologi')
 
-    exam = Exam.objects.create(teacher=teacher, subject=subject, title='UH Genetika', duration=60, status='ready')
+    exam = Exam.objects.create(teacher=teacher, subject=subject, title='PAS Biologi', exam_type='PAS', duration=60, status='ready')
     schedule = Schedule.objects.create(
         exam=exam,
         teacher=teacher,
@@ -404,6 +404,47 @@ def test_violation_handler_and_status_check(client):
     assert res_check_unlocked.status_code == 200
     assert 'lock-container' in res_check_unlocked.content.decode('utf-8')
     assert 'window.location.reload()' in res_check_unlocked.content.decode('utf-8')
+
+
+@pytest.mark.django_db
+def test_violation_handler_uh_warning_only(client):
+    """
+    Sesuai ketentuan.md:
+    Untuk UH dan PTS hanya ada peringatan saja (tidak pernah dikunci).
+    """
+    subject = Subject.objects.create(name='Kimia')
+    teacher = Teacher.objects.create(full_name='Guru Kimia')
+    student_user = User.objects.create_user(username='siswa_kimia', role=Role.SISWA)
+    student = Student.objects.create(user=student_user, nis='33333333', full_name='Siswa Kimia')
+
+    exam = Exam.objects.create(teacher=teacher, subject=subject, title='UH Larutan Asam', exam_type='UH', duration=60, status='ready')
+    schedule = Schedule.objects.create(
+        exam=exam,
+        teacher=teacher,
+        start_time=timezone.now(),
+        end_time=timezone.now() + timedelta(hours=1),
+        token='KIMIA1',
+        status='active'
+    )
+    session = ExamSession.objects.create(student=student, schedule=schedule, status='active', violation_count=0)
+    client.force_login(student_user)
+
+    # 1. First violation
+    res1 = client.post(reverse('exam_engine:violation_handler', kwargs={'session_id': session.id}))
+    assert res1.status_code == 200
+    assert 'Peringatan Anti-Cheat (1)' in res1.content.decode('utf-8')
+    session.refresh_from_db()
+    assert session.violation_count == 1
+    assert session.status == 'active'
+
+    # 2. Second violation: still active! Never locked!
+    res2 = client.post(reverse('exam_engine:violation_handler', kwargs={'session_id': session.id}))
+    assert res2.status_code == 200
+    assert 'Peringatan Anti-Cheat (2)' in res2.content.decode('utf-8')
+    assert 'lock-screen-overlay' not in res2.content.decode('utf-8')
+    session.refresh_from_db()
+    assert session.violation_count == 2
+    assert session.status == 'active'
 
 
 # ==============================================================================
@@ -514,6 +555,68 @@ def test_student_dashboard_view(client):
     assert 'UH Sistem Starter' in content
     assert 'Bengkel Otomotif' in content
     assert ('88.5' in content or '88,5' in content)
+
+
+@pytest.mark.django_db
+def test_student_dashboard_teacher_assignment_isolation(client):
+    """
+    Sesuai ketentuan.md:
+    Siswa hanya melihat dan mengerjakan soal sesuai kelas dan guru yang bersangkutan.
+    Contoh: Siswa 10 RPL 1 hanya melihat ujian dari Pak Ade, bukan Pak Beni.
+    """
+    major = Major.objects.create(code='RPL', name='Rekayasa Perangkat Lunak')
+    c_rpl1 = ClassRoom.objects.create(name='10 RPL 1', level=10, major=major)
+    c_rpl4 = ClassRoom.objects.create(name='10 RPL 4', level=10, major=major)
+
+    subject = Subject.objects.create(name='Matematika')
+    t_ade = Teacher.objects.create(full_name='Ade Sandi')
+    t_beni = Teacher.objects.create(full_name='Beni Gumilar')
+
+    TeacherAssignment.objects.create(teacher=t_ade, subject=subject, class_room=c_rpl1)
+    TeacherAssignment.objects.create(teacher=t_beni, subject=subject, class_room=c_rpl4)
+
+    student_user = User.objects.create_user(username='siswa_rpl1', role=Role.SISWA, full_name='Siswa RPL 1')
+    student = Student.objects.create(
+        user=student_user,
+        nis='10101010',
+        full_name='Siswa RPL 1',
+        class_room=c_rpl1,
+        major=major
+    )
+
+    now = timezone.now()
+    # Exam Pak Ade
+    exam_ade = Exam.objects.create(teacher=t_ade, subject=subject, title='PAS Matematika Ade', exam_type='PAS', level=10, status='validated')
+    sch_ade = Schedule.objects.create(
+        exam=exam_ade,
+        teacher=t_ade,
+        start_time=now - timedelta(minutes=10),
+        end_time=now + timedelta(hours=1),
+        token='ADE123',
+        status='active'
+    )
+
+    # Exam Pak Beni
+    exam_beni = Exam.objects.create(teacher=t_beni, subject=subject, title='PAS Matematika Beni', exam_type='PAS', level=10, status='validated')
+    sch_beni = Schedule.objects.create(
+        exam=exam_beni,
+        teacher=t_beni,
+        start_time=now - timedelta(minutes=10),
+        end_time=now + timedelta(hours=1),
+        token='BEN123',
+        status='active'
+    )
+
+    client.force_login(student_user)
+    res = client.get(reverse('exam_engine:student_dashboard'))
+    assert res.status_code == 200
+
+    available_exams = res.context['available_exams']
+    available_sched_ids = [item['schedule'].id for item in available_exams]
+
+    # Siswa 10 RPL 1 hanya melihat ujian Pak Ade!
+    assert sch_ade.id in available_sched_ids
+    assert sch_beni.id not in available_sched_ids
 
 
 @pytest.mark.django_db

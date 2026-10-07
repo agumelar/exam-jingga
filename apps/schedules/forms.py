@@ -7,6 +7,9 @@ from apps.schedules.utils import (
     resolve_exam_title,
     build_schedule_date_range,
     calculate_collaborative_quotas,
+    build_teacher_set_groups,
+    build_teacher_quota_map,
+    build_teacher_set_key,
 )
 
 
@@ -216,38 +219,77 @@ class ScheduleForm(forms.Form):
             return [schedule]
 
         # Collaborative Exam (PAS / PAT / SAJ)
-        # Find all assigned teachers for this subject and level
-        assignments = TeacherAssignment.objects.filter(
+        # Sesuai ketentuan.md:
+        # - Pengisian soal dan jadwal berdasarkan masing-masing guru
+        # - Untuk 1 mapel dengan beda guru di kelas yang sama (mapel produktif/team teaching), soal dibagi rata
+        assignments = list(TeacherAssignment.objects.filter(
             subject=subject,
             class_room__level=level
-        ).select_related('teacher', 'class_room')
+        ).select_related('teacher', 'class_room'))
 
-        unique_teachers = list({a.teacher for a in assignments if a.teacher})
-        if not unique_teachers and teacher:
-            unique_teachers = [teacher]
+        if not assignments:
+            # Fallback jika belum ada penugasan guru di master data
+            exam = Exam.objects.create(
+                teacher=creator_teacher or teacher,
+                subject=subject,
+                title=final_title,
+                exam_type=exam_type,
+                duration=duration,
+                target_question_count=target_count,
+                level=level,
+                status='pending_selection',
+                token=token_val,
+                start_time=start_dt
+            )
+            sch = Schedule.objects.create(
+                exam=exam,
+                class_room=None,
+                teacher=creator_teacher or teacher,
+                start_time=start_dt,
+                end_time=end_dt,
+                token=token_val,
+                session_no=session_no,
+                status='active',
+                teacher_quota=target_count
+            )
+            return [sch]
 
-        quota_map = calculate_collaborative_quotas(unique_teachers, target_count)
-
-        exam = Exam.objects.create(
-            teacher=creator_teacher or (unique_teachers[0] if unique_teachers else None),
-            subject=subject,
-            title=final_title,
-            exam_type=exam_type,
-            duration=duration,
-            target_question_count=target_count,
-            level=level,
-            status='pending_selection',
-            token=token_val,
-            start_time=start_dt
-        )
-
+        # Kelompokkan kelas berdasarkan himpunan guru pengampu
+        teacher_set_groups = build_teacher_set_groups(assignments)
         schedules = []
-        if unique_teachers:
-            for t in unique_teachers:
+
+        for group in teacher_set_groups:
+            group_teachers = group.get('teachers', [])
+            if not group_teachers:
+                continue
+
+            group_assignments = [
+                a for a in assignments
+                if str(getattr(a, 'class_room_id', '')) in group['class_ids']
+            ]
+            quota_map = build_teacher_quota_map(group_assignments, target_count)
+
+            exam = Exam.objects.create(
+                teacher=creator_teacher or group_teachers[0],
+                subject=subject,
+                title=final_title,
+                exam_type=exam_type,
+                duration=duration,
+                target_question_count=target_count,
+                level=level,
+                status='pending_selection',
+                token=token_val,
+                start_time=start_dt
+            )
+
+            # Jika grup hanya mencakup 1 rombel kelas, tautkan langsung ke class_room tersebut
+            group_class_obj = group['classes'][0] if len(group.get('classes', [])) == 1 else None
+
+            for t in group_teachers:
                 quota = quota_map.get(str(t.id), target_count)
                 sch = Schedule.objects.create(
                     exam=exam,
-                    class_room=None,  # All classes in level
+                    class_room=group_class_obj,
                     teacher=t,
                     start_time=start_dt,
                     end_time=end_dt,
@@ -257,18 +299,5 @@ class ScheduleForm(forms.Form):
                     teacher_quota=quota
                 )
                 schedules.append(sch)
-        else:
-            sch = Schedule.objects.create(
-                exam=exam,
-                class_room=None,
-                teacher=creator_teacher,
-                start_time=start_dt,
-                end_time=end_dt,
-                token=token_val,
-                session_no=session_no,
-                status='active',
-                teacher_quota=target_count
-            )
-            schedules.append(sch)
 
         return schedules
