@@ -1,132 +1,219 @@
 {% load static %}
 
 <!-- M3 QUESTION FORM MODAL (CREATE / EDIT) -->
+<script id="modal-subjects-data" type="application/json">{{ subjects_json|safe }}</script>
 <script id="modal-teachers-data" type="application/json">{{ teachers_json|safe }}</script>
 <script>
-if (typeof window.questionModalData !== 'function') {
-  window.questionModalData = function(initial) {
-    var teachers = window.BANK_SOAL_TEACHERS || [];
-    if (!teachers || teachers.length === 0) {
-      try {
-        var modalRaw = document.getElementById('modal-teachers-data');
-        if (modalRaw && modalRaw.textContent) {
-          teachers = JSON.parse(modalRaw.textContent);
+window.questionModalData = function(initial) {
+  var teachers = window.BANK_SOAL_TEACHERS || [];
+  if (!teachers || teachers.length === 0) {
+    try {
+      var modalRaw = document.getElementById('modal-teachers-data') || document.getElementById('bank-soal-teachers-data');
+      if (modalRaw && modalRaw.textContent) {
+        teachers = JSON.parse(modalRaw.textContent);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  var subjects = window.BANK_SOAL_SUBJECTS || [];
+  if (!subjects || subjects.length === 0) {
+    try {
+      var subjRaw = document.getElementById('modal-subjects-data') || document.getElementById('bank-soal-subjects-data');
+      if (subjRaw && subjRaw.textContent) {
+        subjects = JSON.parse(subjRaw.textContent);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  return {
+    showModal: true,
+    isSubmitting: false,
+    correctAnswer: (initial && initial.correctAnswer) || 'A',
+    selectAnswer: function(ans) {
+      this.correctAnswer = ans;
+    },
+    previewQuestionImg: (initial && initial.previewQuestionImg) || '',
+    previewA: (initial && initial.previewA) || '',
+    previewB: (initial && initial.previewB) || '',
+    previewC: (initial && initial.previewC) || '',
+    previewD: (initial && initial.previewD) || '',
+    previewE: (initial && initial.previewE) || '',
+    modalLevel: (initial && initial.modalLevel) || '',
+    modalSubject: (initial && initial.modalSubject) || '',
+    modalTeacher: (initial && initial.modalTeacher) || '',
+    allSubjects: subjects,
+    allTeachers: teachers,
+
+    clearImage: function(field) {
+      if (field === 'question') {
+        this.previewQuestionImg = '';
+        if (this.$refs.clearQuestionImg) this.$refs.clearQuestionImg.value = '1';
+        if (this.$refs.inputQuestionImg) this.$refs.inputQuestionImg.value = '';
+      }
+      if (field === 'a') {
+        this.previewA = '';
+        if (this.$refs.clearImgA) this.$refs.clearImgA.value = '1';
+        if (this.$refs.inputImgA) this.$refs.inputImgA.value = '';
+      }
+      if (field === 'b') {
+        this.previewB = '';
+        if (this.$refs.clearImgB) this.$refs.clearImgB.value = '1';
+        if (this.$refs.inputImgB) this.$refs.inputImgB.value = '';
+      }
+      if (field === 'c') {
+        this.previewC = '';
+        if (this.$refs.clearImgC) this.$refs.clearImgC.value = '1';
+        if (this.$refs.inputImgC) this.$refs.inputImgC.value = '';
+      }
+      if (field === 'd') {
+        this.previewD = '';
+        if (this.$refs.clearImgD) this.$refs.clearImgD.value = '1';
+        if (this.$refs.inputImgD) this.$refs.inputImgD.value = '';
+      }
+      if (field === 'e') {
+        this.previewE = '';
+        if (this.$refs.clearImgE) this.$refs.clearImgE.value = '1';
+        if (this.$refs.inputImgE) this.$refs.inputImgE.value = '';
+      }
+    },
+
+    previewFile: function(event, field) {
+      var file = event.target.files[0];
+      if (!file) return;
+      var self = this;
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        if (field === 'question') self.previewQuestionImg = e.target.result;
+        if (field === 'a') self.previewA = e.target.result;
+        if (field === 'b') self.previewB = e.target.result;
+        if (field === 'c') self.previewC = e.target.result;
+        if (field === 'd') self.previewD = e.target.result;
+        if (field === 'e') self.previewE = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    },
+
+    initModal: function() {
+      if (!this.allSubjects || this.allSubjects.length === 0) {
+        var sRaw = document.getElementById('modal-subjects-data') || document.getElementById('bank-soal-subjects-data');
+        if (sRaw && sRaw.textContent) {
+          try { this.allSubjects = JSON.parse(sRaw.textContent); } catch(e){}
         }
-      } catch (e) {
-        console.error(e);
+      }
+      if (!this.allTeachers || this.allTeachers.length === 0) {
+        var tRaw = document.getElementById('modal-teachers-data') || document.getElementById('bank-soal-teachers-data');
+        if (tRaw && tRaw.textContent) {
+          try { this.allTeachers = JSON.parse(tRaw.textContent); } catch(e){}
+        }
+      }
+      this.updateModalSubjectOptions(true);
+      this.updateModalTeacherOptions(true);
+    },
+
+    onLevelChange: function() {
+      this.updateModalSubjectOptions(false);
+      this.updateModalTeacherOptions(false);
+    },
+
+    onSubjectChange: function() {
+      this.updateModalTeacherOptions(false);
+    },
+
+    updateModalSubjectOptions: function(isInit) {
+      var sel = document.getElementById('modal-subject-select');
+      if (!sel) return;
+      var prevVal = this.modalSubject;
+      var lvl = this.modalLevel ? parseInt(this.modalLevel, 10) : null;
+
+      var filtered = this.allSubjects || [];
+      if (lvl && filtered.length > 0) {
+        filtered = filtered.filter(function(s) {
+          if (!s.levels || s.levels.length === 0) return true;
+          return s.levels.indexOf(lvl) !== -1;
+        });
+      }
+
+      sel.innerHTML = '';
+      var def = document.createElement('option');
+      def.value = '';
+      def.textContent = lvl ? '-- Pilih Mata Pelajaran (Kelas ' + lvl + ') --' : '-- Pilih Mata Pelajaran --';
+      sel.appendChild(def);
+
+      var found = false;
+      filtered.forEach(function(s) {
+        var opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.name;
+        if (String(s.id) === String(prevVal)) {
+          opt.selected = true;
+          found = true;
+        }
+        sel.appendChild(opt);
+      });
+
+      if (!isInit && prevVal && !found) {
+        this.modalSubject = '';
+        sel.value = '';
+      }
+    },
+
+    updateModalTeacherOptions: function(isInit) {
+      var sel = document.getElementById('modal-teacher-select');
+      if (!sel) return;
+      var prevVal = this.modalTeacher;
+      var subjId = this.modalSubject;
+      var lvl = this.modalLevel ? parseInt(this.modalLevel, 10) : null;
+
+      var filtered = this.allTeachers || [];
+      if (subjId) {
+        filtered = filtered.filter(function(t) {
+          if (!t.subject_ids || t.subject_ids.indexOf(subjId) === -1) {
+            return false;
+          }
+          if (lvl && t.subject_levels && t.subject_levels[subjId]) {
+            var assignedLevels = t.subject_levels[subjId];
+            if (assignedLevels.length > 0 && assignedLevels.indexOf(lvl) === -1) {
+              return false;
+            }
+          }
+          return true;
+        });
+      } else if (lvl) {
+        filtered = filtered.filter(function(t) {
+          if (!t.levels || t.levels.length === 0) return true;
+          return t.levels.indexOf(lvl) !== -1;
+        });
+      }
+
+      sel.innerHTML = '';
+      var def = document.createElement('option');
+      def.value = '';
+      def.textContent = subjId ? '-- Pilih Guru Pengampu Mapel Ini --' : '-- Pilih Guru Pembuat --';
+      sel.appendChild(def);
+
+      var found = false;
+      filtered.forEach(function(t) {
+        var opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = t.name;
+        if (String(t.id) === String(prevVal)) {
+          opt.selected = true;
+          found = true;
+        }
+        sel.appendChild(opt);
+      });
+
+      if (!isInit && prevVal && !found) {
+        this.modalTeacher = '';
+        sel.value = '';
       }
     }
-    return {
-      showModal: true,
-      isSubmitting: false,
-      correctAnswer: (initial && initial.correctAnswer) || 'A',
-      selectAnswer: function(ans) {
-        this.correctAnswer = ans;
-      },
-      previewQuestionImg: (initial && initial.previewQuestionImg) || '',
-      previewA: (initial && initial.previewA) || '',
-      previewB: (initial && initial.previewB) || '',
-      previewC: (initial && initial.previewC) || '',
-      previewD: (initial && initial.previewD) || '',
-      previewE: (initial && initial.previewE) || '',
-      modalSubject: (initial && initial.modalSubject) || '',
-      modalTeacher: (initial && initial.modalTeacher) || '',
-      allTeachers: teachers,
-
-      clearImage: function(field) {
-        if (field === 'question') {
-          this.previewQuestionImg = '';
-          if (this.$refs.clearQuestionImg) this.$refs.clearQuestionImg.value = '1';
-          if (this.$refs.inputQuestionImg) this.$refs.inputQuestionImg.value = '';
-        }
-        if (field === 'a') {
-          this.previewA = '';
-          if (this.$refs.clearImgA) this.$refs.clearImgA.value = '1';
-          if (this.$refs.inputImgA) this.$refs.inputImgA.value = '';
-        }
-        if (field === 'b') {
-          this.previewB = '';
-          if (this.$refs.clearImgB) this.$refs.clearImgB.value = '1';
-          if (this.$refs.inputImgB) this.$refs.inputImgB.value = '';
-        }
-        if (field === 'c') {
-          this.previewC = '';
-          if (this.$refs.clearImgC) this.$refs.clearImgC.value = '1';
-          if (this.$refs.inputImgC) this.$refs.inputImgC.value = '';
-        }
-        if (field === 'd') {
-          this.previewD = '';
-          if (this.$refs.clearImgD) this.$refs.clearImgD.value = '1';
-          if (this.$refs.inputImgD) this.$refs.inputImgD.value = '';
-        }
-        if (field === 'e') {
-          this.previewE = '';
-          if (this.$refs.clearImgE) this.$refs.clearImgE.value = '1';
-          if (this.$refs.inputImgE) this.$refs.inputImgE.value = '';
-        }
-      },
-
-      previewFile: function(event, field) {
-        var file = event.target.files[0];
-        if (!file) return;
-        var self = this;
-        var reader = new FileReader();
-        reader.onload = function(e) {
-          if (field === 'question') self.previewQuestionImg = e.target.result;
-          if (field === 'a') self.previewA = e.target.result;
-          if (field === 'b') self.previewB = e.target.result;
-          if (field === 'c') self.previewC = e.target.result;
-          if (field === 'd') self.previewD = e.target.result;
-          if (field === 'e') self.previewE = e.target.result;
-        };
-        reader.readAsDataURL(file);
-      },
-
-      initModal: function() {
-        if (this.modalSubject) {
-          this.updateModalTeacherOptions();
-        }
-      },
-
-      updateModalTeacherOptions: function() {
-        var sel = document.getElementById('modal-teacher-select');
-        if (!sel) return;
-        var prevVal = this.modalTeacher;
-        var subjId = this.modalSubject;
-
-        var filtered = this.allTeachers;
-        if (subjId) {
-          filtered = this.allTeachers.filter(function(t) {
-            return t.subject_ids && t.subject_ids.indexOf(subjId) !== -1;
-          });
-        }
-
-        sel.innerHTML = '';
-        var def = document.createElement('option');
-        def.value = '';
-        def.textContent = subjId ? '-- Pilih Guru Pengampu Mapel Ini --' : '-- Pilih Guru Pembuat --';
-        sel.appendChild(def);
-
-        var found = false;
-        filtered.forEach(function(t) {
-          var opt = document.createElement('option');
-          opt.value = t.id;
-          opt.textContent = t.name;
-          if (t.id === prevVal) {
-            opt.selected = true;
-            found = true;
-          }
-          sel.appendChild(opt);
-        });
-
-        if (prevVal && !found) {
-          this.modalTeacher = '';
-          sel.value = '';
-        }
-      }
-    };
   };
-}
+};
 </script>
 
 <div 
@@ -138,6 +225,7 @@ if (typeof window.questionModalData !== 'function') {
     previewC: '{% if question.image_c_url %}{{ question.image_c_url }}{% endif %}',
     previewD: '{% if question.image_d_url %}{{ question.image_d_url }}{% endif %}',
     previewE: '{% if question.image_e_url %}{{ question.image_e_url }}{% endif %}',
+    modalLevel: '{% if question.level %}{{ question.level }}{% else %}{{ preselected_level|default:'' }}{% endif %}',
     modalSubject: '{% if question.subject_id %}{{ question.subject_id }}{% else %}{{ preselected_subject|default:'' }}{% endif %}',
     modalTeacher: '{% if question.created_by_id %}{{ question.created_by_id }}{% else %}{{ preselected_teacher|default:'' }}{% endif %}'
   })"
@@ -227,6 +315,8 @@ if (typeof window.questionModalData !== 'function') {
           </label>
           <select 
             name="level" 
+            x-model="modalLevel"
+            @change="onLevelChange()"
             required
             class="w-full bg-white dark:bg-stone-900 p-3.5 rounded-2xl text-xs font-medium text-stone-900 dark:text-white border border-stone-200 dark:border-stone-700 outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer shadow-xs"
           >
@@ -248,7 +338,7 @@ if (typeof window.questionModalData !== 'function') {
             id="modal-subject-select" 
             name="subject" 
             x-model="modalSubject"
-            @change="updateModalTeacherOptions()"
+            @change="onSubjectChange()"
             required
             class="w-full bg-white dark:bg-stone-900 p-3.5 rounded-2xl text-xs font-medium text-stone-900 dark:text-white border border-stone-200 dark:border-stone-700 outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer shadow-xs"
           >

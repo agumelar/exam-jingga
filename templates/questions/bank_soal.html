@@ -42,8 +42,18 @@
 {% endblock %}
 
 {% block app_content %}
+<script id="bank-soal-subjects-data" type="application/json">{{ subjects_json|safe }}</script>
 <script id="bank-soal-teachers-data" type="application/json">{{ teachers_json|safe }}</script>
 <script>
+window.BANK_SOAL_SUBJECTS = (function() {
+  try {
+    var raw = document.getElementById('bank-soal-subjects-data');
+    return raw && raw.textContent ? JSON.parse(raw.textContent) : [];
+  } catch (e) {
+    console.error('Error parsing subjects data:', e);
+    return [];
+  }
+})();
 window.BANK_SOAL_TEACHERS = (function() {
   try {
     var raw = document.getElementById('bank-soal-teachers-data');
@@ -62,11 +72,53 @@ function bankSoalFilter() {
     selectedTeacher: '{{ selected_teacher|default:"" }}',
     selectedCp: '{{ selected_cp|default:"" }}',
     searchKeyword: '{{ search_query|default:"" }}',
+    allSubjects: window.BANK_SOAL_SUBJECTS || [],
     allTeachers: window.BANK_SOAL_TEACHERS || [],
 
     init: function() {
+      if (this.selectedLevel) {
+        this.updateSubjectOptions();
+      }
       if (this.selectedSubject) {
         this.updateTeacherOptions();
+      }
+    },
+
+    updateSubjectOptions: function() {
+      var selectEl = document.getElementById('subject-select');
+      if (!selectEl) return;
+      var prevVal = this.selectedSubject;
+      var lvl = this.selectedLevel ? parseInt(this.selectedLevel, 10) : null;
+      var filtered = this.allSubjects;
+
+      if (lvl && filtered && filtered.length > 0) {
+        filtered = filtered.filter(function(s) {
+          if (!s.levels || s.levels.length === 0) return true;
+          return s.levels.indexOf(lvl) !== -1;
+        });
+      }
+
+      selectEl.innerHTML = '';
+      var defaultOpt = document.createElement('option');
+      defaultOpt.value = '';
+      defaultOpt.textContent = lvl ? 'Semua Mata Pelajaran (Kelas ' + lvl + ')' : 'Semua Mata Pelajaran';
+      selectEl.appendChild(defaultOpt);
+
+      var foundPrev = false;
+      filtered.forEach(function(s) {
+        var opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.name;
+        if (String(s.id) === String(prevVal)) {
+          opt.selected = true;
+          foundPrev = true;
+        }
+        selectEl.appendChild(opt);
+      });
+
+      if (prevVal && !foundPrev) {
+        this.selectedSubject = '';
+        selectEl.value = '';
       }
     },
 
@@ -76,11 +128,26 @@ function bankSoalFilter() {
       
       var prevVal = this.selectedTeacher;
       var subjId = this.selectedSubject;
+      var lvl = this.selectedLevel ? parseInt(this.selectedLevel, 10) : null;
       
       var filtered = this.allTeachers;
       if (subjId) {
         filtered = this.allTeachers.filter(function(t) {
-          return t.subject_ids && t.subject_ids.indexOf(subjId) !== -1;
+          if (!t.subject_ids || t.subject_ids.indexOf(subjId) === -1) {
+            return false;
+          }
+          if (lvl && t.subject_levels && t.subject_levels[subjId]) {
+            var assignedLevels = t.subject_levels[subjId];
+            if (assignedLevels.length > 0 && assignedLevels.indexOf(lvl) === -1) {
+              return false;
+            }
+          }
+          return true;
+        });
+      } else if (lvl) {
+        filtered = this.allTeachers.filter(function(t) {
+          if (!t.levels || t.levels.length === 0) return true;
+          return t.levels.indexOf(lvl) !== -1;
         });
       }
 
@@ -96,7 +163,7 @@ function bankSoalFilter() {
         var opt = document.createElement('option');
         opt.value = t.id;
         opt.textContent = t.name;
-        if (t.id === prevVal) {
+        if (String(t.id) === String(prevVal)) {
           opt.selected = true;
           foundPrev = true;
         }
@@ -120,6 +187,8 @@ function bankSoalFilter() {
       if (inputEl) {
         inputEl.value = this.selectedLevel;
       }
+      this.updateSubjectOptions();
+      this.updateTeacherOptions();
       this.triggerFilter();
     },
 
@@ -131,11 +200,11 @@ function bankSoalFilter() {
   };
 }
 
-function questionModalData(initial) {
+window.questionModalData = function(initial) {
   var teachers = window.BANK_SOAL_TEACHERS || [];
   if (!teachers || teachers.length === 0) {
     try {
-      var modalRaw = document.getElementById('modal-teachers-data');
+      var modalRaw = document.getElementById('modal-teachers-data') || document.getElementById('bank-soal-teachers-data');
       if (modalRaw && modalRaw.textContent) {
         teachers = JSON.parse(modalRaw.textContent);
       }
@@ -143,6 +212,19 @@ function questionModalData(initial) {
       console.error(e);
     }
   }
+
+  var subjects = window.BANK_SOAL_SUBJECTS || [];
+  if (!subjects || subjects.length === 0) {
+    try {
+      var subjRaw = document.getElementById('modal-subjects-data') || document.getElementById('bank-soal-subjects-data');
+      if (subjRaw && subjRaw.textContent) {
+        subjects = JSON.parse(subjRaw.textContent);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
   return {
     showModal: true,
     isSubmitting: false,
@@ -156,8 +238,10 @@ function questionModalData(initial) {
     previewC: (initial && initial.previewC) || '',
     previewD: (initial && initial.previewD) || '',
     previewE: (initial && initial.previewE) || '',
+    modalLevel: (initial && initial.modalLevel) || '',
     modalSubject: (initial && initial.modalSubject) || '',
     modalTeacher: (initial && initial.modalTeacher) || '',
+    allSubjects: subjects,
     allTeachers: teachers,
 
     clearImage: function(field) {
@@ -210,21 +294,94 @@ function questionModalData(initial) {
     },
 
     initModal: function() {
-      if (this.modalSubject) {
-        this.updateModalTeacherOptions();
+      if (!this.allSubjects || this.allSubjects.length === 0) {
+        var sRaw = document.getElementById('modal-subjects-data') || document.getElementById('bank-soal-subjects-data');
+        if (sRaw && sRaw.textContent) {
+          try { this.allSubjects = JSON.parse(sRaw.textContent); } catch(e){}
+        }
+      }
+      if (!this.allTeachers || this.allTeachers.length === 0) {
+        var tRaw = document.getElementById('modal-teachers-data') || document.getElementById('bank-soal-teachers-data');
+        if (tRaw && tRaw.textContent) {
+          try { this.allTeachers = JSON.parse(tRaw.textContent); } catch(e){}
+        }
+      }
+      this.updateModalSubjectOptions(true);
+      this.updateModalTeacherOptions(true);
+    },
+
+    onLevelChange: function() {
+      this.updateModalSubjectOptions(false);
+      this.updateModalTeacherOptions(false);
+    },
+
+    onSubjectChange: function() {
+      this.updateModalTeacherOptions(false);
+    },
+
+    updateModalSubjectOptions: function(isInit) {
+      var sel = document.getElementById('modal-subject-select');
+      if (!sel) return;
+      var prevVal = this.modalSubject;
+      var lvl = this.modalLevel ? parseInt(this.modalLevel, 10) : null;
+
+      var filtered = this.allSubjects || [];
+      if (lvl && filtered.length > 0) {
+        filtered = filtered.filter(function(s) {
+          if (!s.levels || s.levels.length === 0) return true;
+          return s.levels.indexOf(lvl) !== -1;
+        });
+      }
+
+      sel.innerHTML = '';
+      var def = document.createElement('option');
+      def.value = '';
+      def.textContent = lvl ? '-- Pilih Mata Pelajaran (Kelas ' + lvl + ') --' : '-- Pilih Mata Pelajaran --';
+      sel.appendChild(def);
+
+      var found = false;
+      filtered.forEach(function(s) {
+        var opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.name;
+        if (String(s.id) === String(prevVal)) {
+          opt.selected = true;
+          found = true;
+        }
+        sel.appendChild(opt);
+      });
+
+      if (!isInit && prevVal && !found) {
+        this.modalSubject = '';
+        sel.value = '';
       }
     },
 
-    updateModalTeacherOptions: function() {
+    updateModalTeacherOptions: function(isInit) {
       var sel = document.getElementById('modal-teacher-select');
       if (!sel) return;
       var prevVal = this.modalTeacher;
       var subjId = this.modalSubject;
+      var lvl = this.modalLevel ? parseInt(this.modalLevel, 10) : null;
 
-      var filtered = this.allTeachers;
+      var filtered = this.allTeachers || [];
       if (subjId) {
-        filtered = this.allTeachers.filter(function(t) {
-          return t.subject_ids && t.subject_ids.indexOf(subjId) !== -1;
+        filtered = filtered.filter(function(t) {
+          if (!t.subject_ids || t.subject_ids.indexOf(subjId) === -1) {
+            return false;
+          }
+          if (lvl && t.subject_levels && t.subject_levels[subjId]) {
+            var assignedLevels = t.subject_levels[subjId];
+            if (assignedLevels.length > 0 && assignedLevels.indexOf(lvl) === -1) {
+              return false;
+            }
+          }
+          return true;
+        });
+      } else if (lvl) {
+        filtered = filtered.filter(function(t) {
+          if (!t.levels || t.levels.length === 0) return true;
+          return t.levels.indexOf(lvl) !== -1;
         });
       }
 
@@ -239,20 +396,20 @@ function questionModalData(initial) {
         var opt = document.createElement('option');
         opt.value = t.id;
         opt.textContent = t.name;
-        if (t.id === prevVal) {
+        if (String(t.id) === String(prevVal)) {
           opt.selected = true;
           found = true;
         }
         sel.appendChild(opt);
       });
 
-      if (prevVal && !found) {
+      if (!isInit && prevVal && !found) {
         this.modalTeacher = '';
         sel.value = '';
       }
     }
   };
-}
+};
 </script>
 
 <div 

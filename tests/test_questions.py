@@ -603,3 +603,78 @@ def test_question_cp_tagging_and_filtering(client):
     assert 'CREATE TABLE' not in select_content
 
 
+@pytest.mark.django_db
+def test_3tier_cascading_metadata_and_filtering(client):
+    """Verify 3-tier cascading metadata (Level -> Subject -> Teacher) in Bank Soal & Create Modal."""
+    import json
+    from apps.master_data.models import Subject, Teacher, ClassRoom, Major, TeacherAssignment
+
+    admin_user = User.objects.create_superuser(
+        username='admin_cascade_test',
+        email='admin_cascade@test.com',
+        password='password123',
+        role=Role.ADMIN
+    )
+    client.force_login(admin_user)
+
+    major = Major.objects.create(code='RPL', name='Rekayasa Perangkat Lunak')
+    c10 = ClassRoom.objects.create(name='X RPL 1', level=10, major=major)
+    c11 = ClassRoom.objects.create(name='XI RPL 1', level=11, major=major)
+
+    s_dasar = Subject.objects.create(name='Dasar Kejuruan RPL')
+    s_konsentrasi = Subject.objects.create(name='Konsentrasi Keahlian RPL')
+    s_mtk = Subject.objects.create(name='Matematika')
+
+    t_ade = Teacher.objects.create(full_name='Ade (Guru Kelas 10)', email='ade@test.com')
+    t_beni = Teacher.objects.create(full_name='Beni (Guru Kelas 11)', email='beni@test.com')
+
+    # Ade teaches Dasar in Kelas 10, and Matematika in Kelas 10
+    TeacherAssignment.objects.create(teacher=t_ade, subject=s_dasar, class_room=c10)
+    TeacherAssignment.objects.create(teacher=t_ade, subject=s_mtk, class_room=c10)
+
+    # Beni teaches Konsentrasi in Kelas 11, and Matematika in Kelas 11
+    TeacherAssignment.objects.create(teacher=t_beni, subject=s_konsentrasi, class_room=c11)
+    TeacherAssignment.objects.create(teacher=t_beni, subject=s_mtk, class_room=c11)
+
+    # 1. Test GET QuestionCreateView with level=11
+    res = client.get(reverse('questions:create') + '?level=11')
+    assert res.status_code == 200
+    assert 'subjects_json' in res.context
+    assert 'teachers_json' in res.context
+
+    subjects_data = json.loads(res.context['subjects_json'])
+    teachers_data = json.loads(res.context['teachers_json'])
+
+    # Dasar Kejuruan RPL has level [10]
+    entry_dasar = next(s for s in subjects_data if s['id'] == str(s_dasar.id))
+    assert 10 in entry_dasar['levels']
+    assert 11 not in entry_dasar['levels']
+
+    # Konsentrasi Keahlian RPL has level [11]
+    entry_konsentrasi = next(s for s in subjects_data if s['id'] == str(s_konsentrasi.id))
+    assert 11 in entry_konsentrasi['levels']
+    assert 10 not in entry_konsentrasi['levels']
+
+    # Matematika has levels [10, 11]
+    entry_mtk = next(s for s in subjects_data if s['id'] == str(s_mtk.id))
+    assert 10 in entry_mtk['levels']
+    assert 11 in entry_mtk['levels']
+
+    # Ade has subject_levels for MTK = [10]
+    entry_ade = next(t for t in teachers_data if t['id'] == str(t_ade.id))
+    assert entry_ade['subject_levels'][str(s_mtk.id)] == [10]
+
+    # Beni has subject_levels for MTK = [11]
+    entry_beni = next(t for t in teachers_data if t['id'] == str(t_beni.id))
+    assert entry_beni['subject_levels'][str(s_mtk.id)] == [11]
+
+    # 2. Test GET QuestionCreateView with both subject_id=s_mtk.id and level=11
+    # Only Beni should be in context['teachers']!
+    res_filtered = client.get(reverse('questions:create') + f'?subject_id={s_mtk.id}&level=11')
+    assert res_filtered.status_code == 200
+    teachers_in_context = list(res_filtered.context['teachers'])
+    assert t_beni in teachers_in_context
+    assert t_ade not in teachers_in_context
+
+
+
