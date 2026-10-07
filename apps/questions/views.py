@@ -41,15 +41,10 @@ def get_scoped_questions_queryset(request):
     )
 
     if not is_staff_admin:
-        # User is Guru / Pengawas
+        # User is Guru / Pengawas - Strict Author Ownership (Opsi 1 / SSOT)
         teacher = get_current_teacher(user)
         if teacher:
-            assigned_subject_ids = TeacherAssignment.objects.filter(
-                teacher=teacher
-            ).values_list('subject_id', flat=True)
-            qs = qs.filter(
-                Q(created_by=teacher) | Q(subject_id__in=assigned_subject_ids)
-            )
+            qs = qs.filter(created_by=teacher)
         else:
             qs = qs.filter(created_by__user=user)
 
@@ -200,10 +195,15 @@ def _render_question_list_partial(request, toast_message=None, status_code=200):
     except EmptyPage:
         page_obj = paginator.page(paginator.num_pages)
 
+    total_questions_count = Question.objects.count() if is_staff_admin else (
+        Question.objects.filter(created_by=teacher).count() if teacher else 0
+    )
+
     context = {
         'page_obj': page_obj,
         'questions': page_obj.object_list,
         'questions_count': filtered_count,
+        'total_questions_count': total_questions_count,
         'selected_subject': request.GET.get('subject_id', '').strip() or request.POST.get('filter_subject_id', '').strip(),
         'selected_level': request.GET.get('level', '').strip() or request.POST.get('filter_level', '').strip(),
         'selected_teacher': request.GET.get('teacher_id', '').strip() or request.POST.get('filter_teacher_id', '').strip(),
@@ -487,13 +487,7 @@ class QuestionEditView(View):
         
         teacher = get_current_teacher(user)
         if teacher:
-            assigned_subject_ids = TeacherAssignment.objects.filter(teacher=teacher).values_list('subject_id', flat=True)
-            return get_object_or_404(
-                Question.objects.filter(
-                    Q(created_by=teacher) | Q(subject_id__in=assigned_subject_ids)
-                ),
-                pk=pk
-            )
+            return get_object_or_404(Question, pk=pk, created_by=teacher)
         return get_object_or_404(Question, pk=pk, created_by__user=user)
 
     def get(self, request, pk, *args, **kwargs):
@@ -648,13 +642,7 @@ class QuestionDeleteView(View):
         
         teacher = get_current_teacher(user)
         if teacher:
-            assigned_subject_ids = TeacherAssignment.objects.filter(teacher=teacher).values_list('subject_id', flat=True)
-            return get_object_or_404(
-                Question.objects.filter(
-                    Q(created_by=teacher) | Q(subject_id__in=assigned_subject_ids)
-                ),
-                pk=pk
-            )
+            return get_object_or_404(Question, pk=pk, created_by=teacher)
         return get_object_or_404(Question, pk=pk, created_by__user=user)
 
     def get(self, request, pk, *args, **kwargs):
@@ -720,11 +708,8 @@ class QuestionDetailView(View):
         else:
             teacher = get_current_teacher(user)
             if teacher:
-                assigned_subject_ids = TeacherAssignment.objects.filter(teacher=teacher).values_list('subject_id', flat=True)
                 question = get_object_or_404(
-                    Question.objects.filter(
-                        Q(created_by=teacher) | Q(subject_id__in=assigned_subject_ids)
-                    ),
+                    Question.objects.filter(created_by=teacher),
                     pk=pk
                 )
             else:

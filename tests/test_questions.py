@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 from django.urls import reverse
 
 from apps.accounts.models import Role
-from apps.master_data.models import Subject, Teacher, ClassRoom, TeacherAssignment
+from apps.master_data.models import Subject, Teacher, ClassRoom, TeacherAssignment, Major
 from apps.questions.models import Question
 from apps.questions.forms import QuestionForm
 
@@ -675,6 +675,100 @@ def test_3tier_cascading_metadata_and_filtering(client):
     teachers_in_context = list(res_filtered.context['teachers'])
     assert t_beni in teachers_in_context
     assert t_ade not in teachers_in_context
+
+
+@pytest.mark.django_db
+def test_teacher_strict_author_ownership_and_edit_delete_protection(client):
+    """
+    Verify SSOT Opsi 1 (Strict Author Ownership):
+    Two teachers teach the exact same subject.
+    Teacher A only sees Teacher A's questions and cannot view, edit, or delete Teacher B's questions.
+    """
+    major = Major.objects.create(code='RPL', name='Rekayasa Perangkat Lunak')
+    c10 = ClassRoom.objects.create(name='X RPL 1', level=10, major=major)
+    s_dasar = Subject.objects.create(name='Dasar-Dasar Kejuruan RPL')
+
+    # Teacher A: Diki
+    user_diki = User.objects.create_user(
+        username='guru_diki',
+        email='diki@smkn1rongga.sch.id',
+        full_name='DIKI ABDUL AZIZ, S.Kom',
+        role=Role.GURU,
+        password='password123'
+    )
+    t_diki = Teacher.objects.create(user=user_diki, full_name='DIKI ABDUL AZIZ, S.Kom', email='diki@smkn1rongga.sch.id')
+    TeacherAssignment.objects.create(teacher=t_diki, subject=s_dasar, class_room=c10)
+
+    # Teacher B: Devia
+    user_devia = User.objects.create_user(
+        username='guru_devia',
+        email='devia@smkn1rongga.sch.id',
+        full_name='DEVIA PUTRI, S.Kom',
+        role=Role.GURU,
+        password='password123'
+    )
+    t_devia = Teacher.objects.create(user=user_devia, full_name='DEVIA PUTRI, S.Kom', email='devia@smkn1rongga.sch.id')
+    TeacherAssignment.objects.create(teacher=t_devia, subject=s_dasar, class_room=c10)
+
+    # Questions created by Diki
+    q_diki = Question.objects.create(
+        subject=s_dasar,
+        created_by=t_diki,
+        level=10,
+        question_text='Pertanyaan Diki: Apa itu Flowchart?',
+        option_a='A', option_b='B', option_c='C', option_d='D', option_e='E',
+        correct_answer='A'
+    )
+
+    # Questions created by Devia
+    q_devia = Question.objects.create(
+        subject=s_dasar,
+        created_by=t_devia,
+        level=10,
+        question_text='Pertanyaan Devia: Apa itu Algoritma Pemrograman?',
+        option_a='A', option_b='B', option_c='C', option_d='D', option_e='E',
+        correct_answer='B'
+    )
+
+    # 1. Login as Diki
+    client.force_login(user_diki)
+
+    # 1a. Bank Soal View
+    res_diki_bank = client.get(reverse('questions:bank_soal'))
+    assert res_diki_bank.status_code == 200
+    content_diki = res_diki_bank.content.decode()
+    assert 'Pertanyaan Diki' in content_diki
+    assert 'Pertanyaan Devia' not in content_diki
+    assert 'Kepemilikan Bank Soal' in content_diki
+    assert 'MANDIRI' in content_diki
+
+    # 1b. Search query: Searching for 'Algoritma' (which only exists in Devia's question) yields 0 results for Diki
+    res_search = client.get(reverse('questions:filter') + '?q=Algoritma')
+    assert res_search.status_code == 200
+    search_content = res_search.content.decode()
+    assert 'Pertanyaan Devia' not in search_content
+
+    # 1c. Diki attempts to view Detail of Devia's question -> 404 Not Found
+    res_devia_detail = client.get(reverse('questions:detail', kwargs={'pk': q_devia.id}))
+    assert res_devia_detail.status_code == 404
+
+    # 1d. Diki attempts to Edit Devia's question -> 404 Not Found
+    res_devia_edit = client.get(reverse('questions:edit', kwargs={'pk': q_devia.id}))
+    assert res_devia_edit.status_code == 404
+
+    # 1e. Diki attempts to Delete Devia's question -> 404 Not Found
+    res_devia_delete = client.post(reverse('questions:delete', kwargs={'pk': q_devia.id}))
+    assert res_devia_delete.status_code == 404
+    # Ensure Devia's question was NOT deleted
+    assert Question.objects.filter(id=q_devia.id).exists()
+
+    # 1f. Diki CAN view, edit, and delete Diki's own question
+    res_diki_detail = client.get(reverse('questions:detail', kwargs={'pk': q_diki.id}))
+    assert res_diki_detail.status_code == 200
+
+    res_diki_edit = client.get(reverse('questions:edit', kwargs={'pk': q_diki.id}))
+    assert res_diki_edit.status_code == 200
+
 
 
 
