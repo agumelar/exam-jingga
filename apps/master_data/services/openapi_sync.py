@@ -226,7 +226,15 @@ class MasterDataSyncService:
             curr_class = s.get('currentClass')
             if isinstance(curr_class, dict):
                 c_name = curr_class.get('name') or curr_class.get('code')
-                c_level = curr_class.get('gradeLevel') or 10
+                c_level = curr_class.get('gradeLevel')
+                if not c_level:
+                    upper = str(c_name or '').upper().strip()
+                    if upper.startswith(('XII ', '12 ', 'XII-', 'XII_')) or upper.startswith('12') or upper.startswith('XII'):
+                        c_level = 12
+                    elif upper.startswith(('XI ', '11 ', 'XI-', 'XI_')) or upper.startswith('11') or upper.startswith('XI'):
+                        c_level = 11
+                    else:
+                        c_level = 10
                 c_id = curr_class.get('id')
                 if c_name:
                     class_entries[str(c_name).strip()] = {

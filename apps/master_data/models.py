@@ -44,6 +44,17 @@ class ClassRoom(models.Model):
         verbose_name = 'Kelas / Rombel'
         verbose_name_plural = 'Daftar Kelas / Rombel'
 
+    def save(self, *args, **kwargs):
+        if self.name:
+            upper = self.name.strip().upper()
+            if upper.startswith(('XII ', '12 ', 'XII-', 'XII_')) or upper.startswith('12') or upper.startswith('XII'):
+                self.level = 12
+            elif upper.startswith(('XI ', '11 ', 'XI-', 'XI_')) or upper.startswith('11') or upper.startswith('XI'):
+                self.level = 11
+            elif upper.startswith(('X ', '10 ', 'X-', 'X_')) or upper.startswith('10') or upper.startswith('X'):
+                self.level = 10
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.name
 
