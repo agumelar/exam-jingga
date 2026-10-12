@@ -87,6 +87,44 @@ Pasang sekali per halaman.
       }
     };
 
+    // Form jadwal ujian: pilihan bertingkat dari data penugasan (lihat schedule_form_modal.html)
+    window.scheduleForm = function (initial) {
+      const options = JSON.parse(document.getElementById('schedule-assignment-data').textContent || '[]');
+      const unique = (rows, idKey, nameKey) => {
+        const seen = new Map();
+        rows.forEach((r) => { if (!seen.has(r[idKey])) seen.set(r[idKey], { id: r[idKey], name: r[nameKey] }); });
+        return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+      };
+      return {
+        ...initial,
+        init() {
+          window.__modalReturnFocusId = null;
+          this.$nextTick(() => {
+            if (window.initIcons) window.initIcons();
+            const first = this.$refs.panel.querySelector('select:not([disabled]), input:not([type=hidden]):not([readonly])');
+            if (first) first.focus();
+          });
+        },
+        close() { window.closeHtmxModal ? window.closeHtmxModal() : (document.getElementById('modal-container').innerHTML = ''); },
+        typeLabel() { return { UH: 'Ulangan Harian', PTS: 'PTS', PAS: 'PAS / PAT', PAT: 'PAS / PAT', SAJ: 'SAJ' }[this.examType] || ''; },
+        rowsAtLevel() { return options.filter((o) => String(o.level) === String(this.level)); },
+        subjects() { return unique(this.rowsAtLevel(), 'subject_id', 'subject_name'); },
+        teachers() { return unique(this.rowsAtLevel().filter((o) => o.subject_id === this.subject), 'teacher_id', 'teacher_name'); },
+        classes() {
+          return unique(this.rowsAtLevel().filter((o) => o.subject_id === this.subject && (!this.isAdmin || o.teacher_id === this.teacher)), 'class_id', 'class_name');
+        },
+        resetFrom(step) {
+          if (step === 'subject') { this.subject = ''; this.teacher = ''; this.classRoom = ''; }
+          if (step === 'teacher') { this.teacher = ''; this.classRoom = ''; }
+          if (step === 'class') { this.classRoom = ''; }
+        },
+        generateToken() {
+          const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+          this.token = Array.from({ length: 6 }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
+        },
+      };
+    };
+
     window.reasonModal = function (returnFocusId) {
       return {
         open() {

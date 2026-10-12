@@ -115,14 +115,14 @@
     <div class="flex items-center gap-1.5 mt-4 pt-4 border-t border-stone-100 dark:border-stone-800/80 overflow-x-auto pb-1 text-xs no-scrollbar">
       <span class="text-stone-400 dark:text-stone-500 text-[11px] font-medium mr-1 shrink-0">Filter Cepat:</span>
       <a 
-        href="{% url 'schedules:select_questions' exam_id=exam.id %}{% if search_query %}?q={{ search_query }}{% endif %}"
+        href="{% url 'schedules:select_questions' exam_id=exam.id %}{% if search_query %}?q={{ search_query|urlencode }}{% endif %}"
         class="px-3 py-1 rounded-full text-xs font-medium transition shrink-0 {% if not selected_cp %}bg-orange-600 text-white font-semibold{% else %}bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700{% endif %}"
       >
         Semua
       </a>
       {% for val, label in cp_choices %}
         <a 
-          href="{% url 'schedules:select_questions' exam_id=exam.id %}?cp_code={{ val }}{% if search_query %}&q={{ search_query }}{% endif %}"
+          href="{% url 'schedules:select_questions' exam_id=exam.id %}?cp_code={{ val }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
           class="px-3 py-1 rounded-full text-xs font-medium transition shrink-0 {% if selected_cp == val %}bg-orange-600 text-white font-semibold{% else %}bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200 dark:hover:bg-stone-700{% endif %}"
         >
           {{ label }}
@@ -137,9 +137,9 @@
       {% for q in bank_questions %}
         {% with q_id_str=q.id|stringformat:"s" %}
           {% if q_id_str in selected_ids %}
-            {% include 'schedules/partials/question_selection_row.html' with q=q idx=forloop.counter is_selected=True exam=exam collab_info=collab_info %}
+            {% include 'schedules/partials/question_selection_row.html' with q=q idx=forloop.counter0|add:page_obj.start_index is_selected=True exam=exam collab_info=None %}
           {% else %}
-            {% include 'schedules/partials/question_selection_row.html' with q=q idx=forloop.counter is_selected=False exam=exam collab_info=collab_info %}
+            {% include 'schedules/partials/question_selection_row.html' with q=q idx=forloop.counter0|add:page_obj.start_index is_selected=False exam=exam collab_info=None %}
           {% endif %}
         {% endwith %}
       {% endfor %}
@@ -151,12 +151,26 @@
           <p class="text-xs text-stone-400 mt-1 font-normal">Coba ubah filter Capaian Pembelajaran (CP) atau kata kunci pencarian Anda.</p>
           <a href="{% url 'schedules:select_questions' exam_id=exam.id %}" class="inline-block mt-4 px-4 py-2 bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 rounded-xl font-medium text-xs hover:bg-orange-100 transition">Reset Filter</a>
         {% else %}
-          <p class="text-base font-semibold text-stone-700 dark:text-stone-300">Belum ada butir soal di Bank Soal untuk mata pelajaran dan jenjang ini.</p>
+          <p class="text-base font-semibold text-stone-700 dark:text-stone-300">{% if is_admin %}Belum ada butir soal untuk mata pelajaran dan jenjang ini.{% else %}Belum ada soal buatan Anda untuk mata pelajaran dan jenjang ini.{% endif %}</p>
           <p class="text-xs text-stone-400 mt-1 font-normal">Silakan tambahkan butir soal terlebih dahulu di menu <strong>Bank Soal</strong>.</p>
         {% endif %}
       </div>
     {% endif %}
   </div>
+
+  {% if page_obj.has_other_pages %}
+    <nav aria-label="Halaman bank soal" class="flex items-center justify-between gap-3 text-sm">
+      {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}{% if selected_cp %}&cp_code={{ selected_cp|urlencode }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
+          class="min-h-11 inline-flex items-center px-4 rounded-2xl border border-stone-300 dark:border-stone-600 text-stone-800 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 focus-visible:outline-2 focus-visible:outline-orange-600">Sebelumnya</a>
+      {% else %}<span></span>{% endif %}
+      <span class="text-stone-700 dark:text-stone-300">Halaman {{ page_obj.number }} dari {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} soal)</span>
+      {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if selected_cp %}&cp_code={{ selected_cp|urlencode }}{% endif %}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
+          class="min-h-11 inline-flex items-center px-4 rounded-2xl border border-stone-300 dark:border-stone-600 text-stone-800 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 focus-visible:outline-2 focus-visible:outline-orange-600">Berikutnya</a>
+      {% else %}<span></span>{% endif %}
+    </nav>
+  {% endif %}
 
 </div>
 {% include 'components/m3/toast_region.html' %}

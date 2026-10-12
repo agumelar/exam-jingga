@@ -23,9 +23,10 @@ class ExamSession(models.Model):
         db_column='student_id',
         help_text="Siswa Peserta Ujian"
     )
+    # PROTECT: menghapus jadwal tidak boleh ikut menghapus nilai dan lembar jawaban siswa
     schedule = models.ForeignKey(
         'schedules.Schedule',
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='exam_sessions',
         db_column='schedule_id',
         help_text="Jadwal Ujian Terkait"

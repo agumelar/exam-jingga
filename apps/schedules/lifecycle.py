@@ -124,6 +124,7 @@ def submit_questions(exam_id, actor):
     with transaction.atomic():
         exam = _locked_exam(exam_id)
         ensure_questions_editable(exam, actor)
+        renumber_questions(exam)
         complete = is_question_set_complete(exam)
         next_status = resolve_status_after_question_save(exam.exam_type, complete)
         if next_status != exam.status:
@@ -218,3 +219,70 @@ def regenerate_token(exam_id, actor):
         exam.save(update_fields=['token', 'updated_at'])
         Schedule.objects.filter(exam=exam).update(token=new_token, updated_at=timezone.now())
         return exam
+
+
+def is_multi_teacher(exam):
+    return Schedule.objects.filter(exam=exam).exclude(teacher=None).values('teacher').distinct().count() > 1
+
+
+def teacher_quota_for(exam, teacher):
+    """Kuota soal guru di paket ini; untuk paket satu guru sama dengan target paket."""
+    if teacher is not None:
+        sch = Schedule.objects.filter(exam=exam, teacher=teacher).exclude(teacher_quota=0).first()
+        if sch:
+            return sch.teacher_quota
+    return exam.target_question_count
+
+
+def _question_problem(exam, question, actor):
+    """Alasan soal tidak boleh masuk paket ini, atau None."""
+    if question.subject_id != exam.subject_id or (exam.level and question.level != exam.level):
+        return "Soal ini bukan untuk mapel dan jenjang paket ujian ini.", 403
+    if not actor.is_admin and question.created_by_id != getattr(actor.teacher, 'id', None):
+        return "Guru hanya bisa memilih soal dari bank soalnya sendiri.", 403
+    if question.has_empty_option_e:
+        return "Soal ini belum punya opsi E. Lengkapi dulu di Bank Soal (standar SMK 5 opsi).", 409
+    return None
+
+
+def toggle_question(exam_id, question, actor):
+    """Pilih atau lepas satu soal. Kembalikan True bila soal sekarang terpilih."""
+    from django.db.models import Max
+    from apps.schedules.models import ExamQuestion
+
+    with transaction.atomic():
+        exam = _locked_exam(exam_id)
+        ensure_questions_editable(exam, actor)
+
+        existing = ExamQuestion.objects.filter(exam=exam, question=question).first()
+        if existing:
+            if not actor.is_admin and question.created_by_id != getattr(actor.teacher, 'id', None):
+                raise LifecycleError("Soal ini dipilih guru lain dan hanya bisa dilepas olehnya.", status=403)
+            existing.delete()
+            return False
+
+        problem = _question_problem(exam, question, actor)
+        if problem:
+            raise LifecycleError(*problem)
+        if exam.exam_questions.count() >= exam.target_question_count:
+            raise LifecycleError(
+                f"Target {exam.target_question_count} soal sudah terpenuhi. Lepas satu soal dulu untuk menggantinya.", status=400
+            )
+        if not actor.is_admin and is_multi_teacher(exam):
+            quota = teacher_quota_for(exam, actor.teacher)
+            mine = exam.exam_questions.filter(question__created_by=actor.teacher).count()
+            if mine >= quota:
+                raise LifecycleError(f"Kuota Anda di paket ini {quota} soal dan sudah terpenuhi.", status=409)
+
+        next_number = (exam.exam_questions.aggregate(m=Max('order_number'))['m'] or 0) + 1
+        ExamQuestion.objects.create(exam=exam, question=question, order_number=next_number)
+        return True
+
+
+def renumber_questions(exam):
+    """Nomor urut naskah dirapikan menjadi 1..N mengikuti urutan pilih."""
+    from apps.schedules.models import ExamQuestion
+    rows = list(ExamQuestion.objects.filter(exam=exam).order_by('order_number', 'created_at'))
+    for position, eq in enumerate(rows, start=1):
+        eq.order_number = position
+    ExamQuestion.objects.bulk_update(rows, ['order_number'])

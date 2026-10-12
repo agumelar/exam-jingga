@@ -1,7 +1,8 @@
 import json
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views import View
-from django.http import HttpResponse, JsonResponse
+from django.core.paginator import Paginator
+from django.http import Http404, HttpResponse, JsonResponse
 from django.contrib import messages
 from django.urls import reverse
 from django.utils import timezone
@@ -218,188 +219,152 @@ class ScheduleListView(View):
         return render(request, 'schedules/schedule_list.html', context)
 
 
+def _assignment_options(actor):
+    """Data penugasan untuk pilihan bertingkat jenjang, mapel, guru, kelas di form jadwal."""
+    qs = TeacherAssignment.objects.select_related('teacher', 'subject', 'class_room')
+    if not actor.is_admin:
+        qs = qs.filter(teacher=actor.teacher) if actor.teacher else qs.none()
+    return [
+        {
+            'teacher_id': str(a.teacher_id), 'teacher_name': a.teacher.full_name,
+            'subject_id': str(a.subject_id), 'subject_name': a.subject.name,
+            'class_id': str(a.class_room_id), 'class_name': a.class_room.name,
+            'level': a.class_room.level,
+        }
+        for a in qs.order_by('subject__name', 'class_room__name') if a.teacher_id and a.subject_id and a.class_room_id
+    ]
+
+
+def _render_form_modal(request, form, actor, schedule=None):
+    context = {
+        'form': form,
+        'values': form.form_values(),
+        'editing': schedule is not None,
+        'schedule': schedule,
+        'is_admin': actor.is_admin,
+        'content_locked': bool(schedule and schedule.exam.status != 'pending_selection'),
+        'available_levels': [10, 11, 12],
+        'assignment_options': _assignment_options(actor),
+    }
+    res = render(request, 'schedules/partials/schedule_form_modal.html', context)
+    if form.is_bound:
+        # Form gagal validasi: tampilkan ulang di modal (htmx tidak men-swap respons 4xx)
+        res['HX-Retarget'] = '#modal-container'
+        res['HX-Reswap'] = 'innerHTML'
+    return res
+
+
+def _can_edit_schedule(actor, schedule):
+    """UH: guru pembuat paket atau admin. Ujian resmi: hanya admin/kurikulum."""
+    if actor.is_admin:
+        return True
+    exam = schedule.exam
+    return exam.exam_type == 'UH' and actor.teacher is not None and exam.teacher_id == actor.teacher.id
+
+
 @method_decorator(teacher_required, name='dispatch')
 class ScheduleCreateModalView(View):
-    """
-    Renders HTMX modal form for creating a new Schedule/Exam and processes POST submission.
-    """
+    """Modal buat jadwal (GET) dan simpan (POST)."""
+
     def get(self, request):
-        user = request.user
-        current_teacher = _get_current_teacher(user)
-        is_admin = _is_staff_admin(user)
-
-        exam_type = request.GET.get('type', 'PTS' if is_admin else 'UH')
-        token = generate_exam_token(6)
-
-        form = ScheduleForm(
-            user=user,
-            initial={
-                'exam_type': exam_type,
-                'token': token,
-                'duration': 60,
-                'target_question_count': 40,
-                'session_no': '0',
-            }
-        )
-
-        context = {
-            'form': form,
-            'editing': False,
-            'is_admin': is_admin,
-            'user_role': 'admin' if is_admin else 'guru',
-            'current_teacher': current_teacher,
-            'available_levels': [10, 11, 12],
-            'available_classes': ClassRoom.objects.all().order_by('name'),
-            'available_subjects': Subject.objects.all().order_by('name'),
-            'available_teachers': Teacher.objects.all().order_by('full_name'),
-            'generated_token': token,
-        }
-        return render(request, 'schedules/partials/schedule_form_modal.html', context)
+        actor = _actor(request)
+        exam_type = request.GET.get('type', 'PTS' if actor.is_admin else 'UH')
+        form = ScheduleForm(is_admin=actor.is_admin, creator_teacher=actor.teacher, initial={
+            'exam_type': exam_type if actor.is_admin else 'UH',
+            'duration': 60, 'target_question_count': 40, 'session_no': 0,
+        })
+        return _render_form_modal(request, form, actor)
 
     def post(self, request):
-        user = request.user
-        current_teacher = _get_current_teacher(user)
-        is_admin = _is_staff_admin(user)
-
-        if not is_admin and request.POST.get('exam_type', '') != 'UH':
-            return HttpResponse("Guru hanya memiliki wewenang untuk menjadwalkan Ulangan Harian (UH).", status=403)
-
-        form = ScheduleForm(request.POST, user=user)
-        if form.is_valid():
-            created_schedules = form.save(creator_teacher=current_teacher)
-            return _render_schedule_grid(
-                request,
-                toast=f"Jadwal ujian tersimpan ({len(created_schedules)} jadwal).",
-                close_modal=True,
-            )
-
-        context = {
-            'form': form,
-            'editing': False,
-            'is_admin': is_admin,
-            'user_role': 'admin' if is_admin else 'guru',
-            'current_teacher': current_teacher,
-            'available_levels': [10, 11, 12],
-            'available_classes': ClassRoom.objects.all().order_by('name'),
-            'available_subjects': Subject.objects.all().order_by('name'),
-            'available_teachers': Teacher.objects.all().order_by('full_name'),
-            'generated_token': request.POST.get('token', generate_exam_token(6)),
-        }
-        return render(request, 'schedules/partials/schedule_form_modal.html', context, status=422)
+        actor = _actor(request)
+        form = ScheduleForm(request.POST, is_admin=actor.is_admin, creator_teacher=actor.teacher)
+        if not form.is_valid():
+            return _render_form_modal(request, form, actor)
+        created = form.save()
+        return _render_schedule_grid(request, toast=f"Jadwal ujian tersimpan ({len(created)} jadwal).", close_modal=True)
 
 
 @method_decorator(teacher_required, name='dispatch')
 class ScheduleEditModalView(View):
-    """
-    Renders HTMX modal form for editing an existing Schedule and processes POST update.
-    """
-    def get(self, request, pk):
+    """Modal edit jadwal (GET) dan simpan (POST)."""
+
+    def _load(self, request, pk):
         schedule = get_object_or_404(Schedule.objects.select_related('exam', 'class_room', 'teacher'), pk=pk)
-        user = request.user
-        current_teacher = _get_current_teacher(user)
-        is_admin = _is_staff_admin(user)
+        actor = _actor(request)
+        return schedule, actor
 
-        # Check edit permission
-        if not is_admin and schedule.exam.exam_type != 'UH':
-            return HttpResponse("<script>alert('Anda tidak memiliki izin mengedit jadwal ini');</script>", status=403)
-
-        form = ScheduleForm(user=user, schedule_instance=schedule)
-        context = {
-            'form': form,
-            'editing': True,
-            'schedule': schedule,
-            'is_admin': is_admin,
-            'user_role': 'admin' if is_admin else 'guru',
-            'current_teacher': current_teacher,
-            'available_levels': [10, 11, 12],
-            'available_classes': ClassRoom.objects.all().order_by('name'),
-            'available_subjects': Subject.objects.all().order_by('name'),
-            'available_teachers': Teacher.objects.all().order_by('full_name'),
-            'generated_token': schedule.token,
-        }
-        return render(request, 'schedules/partials/schedule_form_modal.html', context)
+    def get(self, request, pk):
+        schedule, actor = self._load(request, pk)
+        if not _can_edit_schedule(actor, schedule):
+            return _error_toast_response("Anda tidak berwenang mengubah jadwal ini.", 403)
+        form = ScheduleForm(schedule_instance=schedule, is_admin=actor.is_admin, creator_teacher=actor.teacher)
+        return _render_form_modal(request, form, actor, schedule)
 
     def post(self, request, pk):
-        schedule = get_object_or_404(Schedule.objects.select_related('exam'), pk=pk)
-        user = request.user
-        current_teacher = _get_current_teacher(user)
-        is_admin = _is_staff_admin(user)
+        schedule, actor = self._load(request, pk)
+        if not _can_edit_schedule(actor, schedule):
+            return _error_toast_response("Anda tidak berwenang mengubah jadwal ini.", 403)
+        form = ScheduleForm(request.POST, schedule_instance=schedule, is_admin=actor.is_admin,
+                            creator_teacher=actor.teacher)
+        if not form.is_valid():
+            return _render_form_modal(request, form, actor, schedule)
+        form.save()
+        return _render_schedule_grid(request, toast="Jadwal ujian diperbarui.", close_modal=True)
 
-        if not is_admin and schedule.exam.exam_type != 'UH':
-            return HttpResponse("Unauthorized", status=403)
 
-        form = ScheduleForm(request.POST, user=user, schedule_instance=schedule)
-        if form.is_valid():
-            form.save(creator_teacher=current_teacher)
-            return _render_schedule_grid(request, toast="Jadwal ujian diperbarui.", close_modal=True)
-
-        context = {
-            'form': form,
-            'editing': True,
-            'schedule': schedule,
-            'is_admin': is_admin,
-            'user_role': 'admin' if is_admin else 'guru',
-            'current_teacher': current_teacher,
-            'available_levels': [10, 11, 12],
-            'available_classes': ClassRoom.objects.all().order_by('name'),
-            'available_subjects': Subject.objects.all().order_by('name'),
-            'available_teachers': Teacher.objects.all().order_by('full_name'),
-            'generated_token': request.POST.get('token', schedule.token),
-        }
-        return render(request, 'schedules/partials/schedule_form_modal.html', context, status=422)
+def _delete_schedule(schedule):
+    """Hapus jadwal (dan paketnya bila jadwal terakhir). Ditolak bila sudah ada sesi siswa."""
+    if schedule.exam_sessions.exists():
+        raise LifecycleError("Jadwal ini sudah dikerjakan siswa, jadi tidak bisa dihapus. Hasilnya tetap tersimpan.")
+    exam = schedule.exam
+    with transaction.atomic():
+        schedule.delete()
+        if exam and not exam.schedules.exists():
+            exam.delete()
 
 
 @method_decorator(teacher_required, name='dispatch')
 class ScheduleDeleteView(View):
-    """
-    Menampilkan konfirmasi hapus jadwal (GET) dan mengeksekusi penghapusan (POST).
-    """
+    """Konfirmasi hapus jadwal (GET) dan hapus (POST)."""
+
     def get(self, request, pk):
         schedule = get_object_or_404(Schedule.objects.select_related('exam', 'class_room'), pk=pk)
+        if not _can_edit_schedule(_actor(request), schedule):
+            return _error_toast_response("Anda tidak berwenang menghapus jadwal ini.", 403)
         return render(request, 'schedules/partials/schedule_delete_modal.html', {'schedule': schedule})
 
     def post(self, request, pk):
         schedule = get_object_or_404(Schedule.objects.select_related('exam'), pk=pk)
-        user = request.user
-        current_teacher = _get_current_teacher(user)
-        is_admin = _is_staff_admin(user)
-
-        if not is_admin and schedule.exam.exam_type != 'UH':
-            return HttpResponse("Unauthorized", status=403)
-
-        exam = schedule.exam
-        schedule.delete()
-
-        # If exam has no more schedules left, clean up exam as well
-        if exam and exam.schedules.count() == 0:
-            exam.delete()
-
+        if not _can_edit_schedule(_actor(request), schedule):
+            return _error_toast_response("Anda tidak berwenang menghapus jadwal ini.", 403)
+        try:
+            _delete_schedule(schedule)
+        except LifecycleError as exc:
+            return _error_toast_response(exc.message, exc.status)
         return _render_schedule_grid(request, toast="Jadwal ujian dihapus.", close_modal=True)
 
 
 @method_decorator(admin_required, name='dispatch')
 class BulkDeleteSchedulesView(View):
-    """
-    Menghapus beberapa jadwal terpilih sekaligus (Admin only).
-    """
+    """Hapus beberapa jadwal sekaligus (admin). Jadwal yang sudah dikerjakan siswa dilewati."""
+
     def post(self, request):
         try:
-            body = json.loads(request.body)
-            schedule_ids = body.get('schedule_ids', [])
-        except (ValueError, json.JSONDecodeError):
+            schedule_ids = json.loads(request.body).get('schedule_ids', [])
+        except (ValueError, AttributeError):
             schedule_ids = request.POST.getlist('schedule_ids')
 
-        if schedule_ids:
-            schedules = Schedule.objects.filter(id__in=schedule_ids).select_related('exam')
-            exam_ids = [s.exam_id for s in schedules if s.exam_id]
-            schedules.delete()
-
-            # Clean up orphaned exams
-            for eid in set(exam_ids):
-                if not Schedule.objects.filter(exam_id=eid).exists():
-                    Exam.objects.filter(id=eid).delete()
-
-        return _render_schedule_grid(request, toast=f"{len(schedule_ids)} jadwal dihapus.")
+        deleted, skipped = 0, 0
+        for schedule in Schedule.objects.filter(id__in=schedule_ids).select_related('exam'):
+            try:
+                _delete_schedule(schedule)
+                deleted += 1
+            except LifecycleError:
+                skipped += 1
+        toast = f"{deleted} jadwal dihapus."
+        if skipped:
+            toast += f" {skipped} jadwal dilewati karena sudah dikerjakan siswa."
+        return _render_schedule_grid(request, toast=toast)
 
 
 REASON_MODAL_ACTIONS = {
@@ -481,90 +446,80 @@ class ScheduleActionView(View):
         return _render_schedule_grid(request, toast=message.format(title=exam.title, token=exam.token))
 
 
+QUESTIONS_PER_PAGE = 25
+
+
+def _resolve_exam(exam_id):
+    """exam_id bisa id paket atau id jadwal (tautan lama dari kartu jadwal)."""
+    exam = Exam.objects.filter(id=exam_id).select_related('subject', 'teacher').first()
+    if exam:
+        return exam
+    schedule = Schedule.objects.filter(id=exam_id).select_related('exam__subject', 'exam__teacher').first()
+    return schedule.exam if schedule else None
+
+
+def _require_member_exam(request, exam_id):
+    exam = _resolve_exam(exam_id)
+    actor = _actor(request)
+    if exam is None or not (actor.is_admin or lifecycle.is_exam_member(exam, actor.teacher)):
+        raise Http404
+    return exam, actor
+
+
+def _collab_info(exam, actor):
+    selected_authors = list(exam.exam_questions.values_list('question__created_by_id', flat=True))
+    total = len(selected_authors)
+    teacher = actor.teacher
+    mine = sum(1 for a in selected_authors if teacher and a == teacher.id) if teacher else total
+    return {
+        'is_collab': lifecycle.is_multi_teacher(exam),
+        'quota': lifecycle.teacher_quota_for(exam, teacher),
+        'my_count': mine,
+        'total_selected': total,
+        'target_count': exam.target_question_count,
+        'is_full': total >= exam.target_question_count,
+    }
+
+
 @method_decorator(teacher_required, name='dispatch')
 class SelectQuestionsView(View):
     """
-    Antarmuka pemilihan butir naskah soal dari Bank Soal (SelectQuestions.jsx).
-    Mendukung seleksi soal real-time dengan HTMX, kuota per-guru, dan indikator kolaborasi.
+    Pilih butir soal untuk paket ujian. Guru hanya melihat dan memilih soal buatannya sendiri
+    (bank soal milik guru); admin melihat semua soal pada mapel dan jenjang paket.
     """
+
     def get(self, request, exam_id):
-        # Resolve exam: exam_id can be Exam UUID or Schedule UUID
-        exam = Exam.objects.filter(id=exam_id).select_related('subject', 'teacher').first()
-        schedule = None
-        if not exam:
-            schedule = Schedule.objects.filter(id=exam_id).select_related('exam__subject', 'exam__teacher').first()
-            if schedule:
-                exam = schedule.exam
+        exam, actor = _require_member_exam(request, exam_id)
 
-        if not exam:
-            messages.error(request, "Paket ujian tidak ditemukan.")
-            return redirect('schedules:list')
-
-        user = request.user
-        current_teacher = _get_current_teacher(user)
-        is_admin = _is_staff_admin(user)
-
-        # Questions from Question Bank matching subject and level
         q_filter = Q(subject=exam.subject)
         if exam.level:
             q_filter &= Q(level=exam.level)
-        
+        if not actor.is_admin:
+            q_filter &= Q(created_by=actor.teacher)
         selected_cp = request.GET.get('cp_code', '').strip()
         if selected_cp:
             q_filter &= Q(cp_code=selected_cp)
-
         search_query = request.GET.get('q', '').strip()
         if search_query:
             q_filter &= (Q(question_text__icontains=search_query) | Q(cp_name__icontains=search_query))
 
-        # If teacher, show questions created by teacher or available in subject
-        bank_questions = Question.objects.filter(q_filter).select_related('created_by', 'subject').order_by('created_at')
+        bank_qs = Question.objects.filter(q_filter).select_related('created_by', 'subject').order_by('created_at', 'id')
+        page = Paginator(bank_qs, QUESTIONS_PER_PAGE).get_page(request.GET.get('page'))
 
-        # Selected questions
-        selected_links = list(exam.exam_questions.select_related('question__created_by').all())
-        all_selected_ids = [eq.question_id for eq in selected_links]
-
-        if current_teacher:
-            my_selected_ids = [eq.question_id for eq in selected_links if eq.question.created_by_id == current_teacher.id]
-            others_selected_ids = [eq.question_id for eq in selected_links if eq.question.created_by_id != current_teacher.id]
-        else:
-            my_selected_ids = all_selected_ids
-            others_selected_ids = []
-
-        is_collab = exam.exam_type in ['PAS', 'PAT', 'PAS/PAT', 'SAJ']
-        
-        # Determine quota
-        if schedule and schedule.teacher_quota > 0:
-            quota = schedule.teacher_quota
-        elif current_teacher and is_collab:
-            teacher_sched = Schedule.objects.filter(exam=exam, teacher=current_teacher).first()
-            quota = teacher_sched.teacher_quota if teacher_sched and teacher_sched.teacher_quota > 0 else exam.target_question_count
-        else:
-            quota = exam.target_question_count
-
-        total_selected = len(all_selected_ids)
-        my_count = len(my_selected_ids)
-
+        selected_ids = {str(qid) for qid in exam.exam_questions.values_list('question_id', flat=True)}
+        info = _collab_info(exam, actor)
         context = {
             'exam': exam,
-            'schedule': schedule,
-            'bank_questions': bank_questions,
-            'selected_ids': [str(qid) for qid in my_selected_ids],
-            'all_selected_ids': [str(qid) for qid in all_selected_ids],
-            'others_selected_count': len(others_selected_ids),
+            'bank_questions': page.object_list,
+            'page_obj': page,
+            'selected_ids': selected_ids,
+            'others_selected_count': info['total_selected'] - info['my_count'],
             'cp_choices': Question.CP_CHOICES,
             'selected_cp': selected_cp,
             'search_query': search_query,
-            'collab_info': {
-                'is_collab': is_collab,
-                'quota': quota,
-                'my_count': my_count,
-                'total_selected': total_selected,
-                'target_count': exam.target_question_count,
-                'is_full': total_selected >= exam.target_question_count,
-            },
-            'current_teacher': current_teacher,
-            'is_admin': is_admin,
+            'collab_info': info,
+            'current_teacher': actor.teacher,
+            'is_admin': actor.is_admin,
             'is_locked': exam.is_locked(),
             'page_title': f'Pilih Soal: {exam.title}',
         }
@@ -573,86 +528,39 @@ class SelectQuestionsView(View):
 
 @method_decorator(teacher_required, name='dispatch')
 class ToggleQuestionView(View):
-    """
-    HTMX Endpoint untuk toggle seleksi 1 butir soal.
-    URL: POST /schedules/exam/<uuid:exam_id>/toggle-question/<uuid:question_id>/
-    """
+    """Pilih atau lepas satu soal. Semua aturan (kunci, pemilik, mapel, kuota, opsi E) dicek di lifecycle."""
+
     def post(self, request, exam_id, question_id):
-        exam = Exam.objects.filter(id=exam_id).first()
-        if not exam:
-            schedule = Schedule.objects.filter(id=exam_id).select_related('exam').first()
-            if schedule:
-                exam = schedule.exam
+        exam, actor = _require_member_exam(request, exam_id)
+        question = get_object_or_404(Question.objects.select_related('created_by'), id=question_id)
 
-        if not exam:
-            return HttpResponse("Paket ujian tidak ditemukan", status=404)
+        try:
+            is_selected = lifecycle.toggle_question(exam.id, question, actor)
+        except LifecycleError as exc:
+            return _error_toast_response(exc.message, exc.status)
 
-        question = get_object_or_404(Question, id=question_id)
-        actor = _actor(request)
-        current_teacher = actor.teacher
-
-        with transaction.atomic():
-            exam = Exam.objects.select_for_update().get(pk=exam.pk)
-            try:
-                lifecycle.ensure_questions_editable(exam, actor)
-            except LifecycleError as exc:
-                return _error_toast_response(exc.message, exc.status)
-
-            existing_eq = ExamQuestion.objects.filter(exam=exam, question=question).first()
-            if existing_eq:
-                existing_eq.delete()
-                is_selected = False
-            else:
-                current_count = exam.exam_questions.count()
-                if current_count >= exam.target_question_count:
-                    return _error_toast_response(
-                        f"Target {exam.target_question_count} soal sudah terpenuhi. Lepas satu soal dulu untuk menggantinya.",
-                        400,
-                    )
-                ExamQuestion.objects.create(exam=exam, question=question, order_number=current_count + 1)
-                is_selected = True
-
-        # Recalculate counts
-        all_eq = list(exam.exam_questions.select_related('question').all())
-        total_selected = len(all_eq)
-        if current_teacher:
-            my_count = sum(1 for eq in all_eq if eq.question.created_by_id == current_teacher.id)
-        else:
-            my_count = total_selected
-
-        is_collab = exam.exam_type in ['PAS', 'PAT', 'PAS/PAT', 'SAJ']
-        quota = exam.target_question_count
-
+        exam.refresh_from_db()
+        try:
+            idx = int(request.POST.get('idx', 0))
+        except ValueError:
+            idx = 0
         context = {
             'q': question,
-            'idx': int(request.POST.get('idx', 0)),
+            'idx': idx,
             'is_selected': is_selected,
             'exam': exam,
-            'collab_info': {
-                'is_collab': is_collab,
-                'quota': quota,
-                'my_count': my_count,
-                'total_selected': total_selected,
-                'target_count': exam.target_question_count,
-                'is_full': total_selected >= exam.target_question_count,
-            }
+            'is_locked': exam.is_locked(),
+            'collab_info': _collab_info(exam, actor),
         }
         return render(request, 'schedules/partials/question_selection_row.html', context)
 
 
 @method_decorator(teacher_required, name='dispatch')
 class SaveQuestionsView(View):
-    """
-    Menyimpan & mengunci pilihan butir soal ujian.
-    Jika soal sudah lengkap -> update status paket ujian (validated untuk UH, waiting_validation untuk PTS/PAS/PAT/SAJ).
-    """
-    def post(self, request, exam_id):
-        exam = Exam.objects.filter(id=exam_id).first()
-        if not exam:
-            schedule = Schedule.objects.filter(id=exam_id).select_related('exam').first()
-            if schedule:
-                exam = schedule.exam
+    """Simpan pilihan soal; bila lengkap, naskah diajukan (resmi) atau langsung terverifikasi (UH)."""
 
+    def post(self, request, exam_id):
+        exam = _resolve_exam(exam_id)
         if not exam:
             messages.error(request, "Paket ujian tidak ditemukan.")
             return redirect('schedules:list')
@@ -673,5 +581,4 @@ class SaveQuestionsView(View):
             messages.info(request, f"Pilihan soal tersimpan ({progress}). Masih ada guru yang belum memenuhi kuotanya; naskah diajukan ke admin saat guru terakhir menyimpan kuotanya.")
         else:
             messages.info(request, f"Pilihan soal tersimpan sementara ({progress} soal).")
-
         return redirect('schedules:list')

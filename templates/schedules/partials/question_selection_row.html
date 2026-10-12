@@ -3,13 +3,20 @@
 Single Question Selection Card partial for SelectQuestions.jsx matching
 {% endcomment %}
 
-<div 
+<div
   id="question-row-{{ q.id }}"
+  {% if not is_locked %}
   hx-post="{% url 'schedules:toggle_question' exam_id=exam.id question_id=q.id %}"
   hx-target="#question-row-{{ q.id }}"
   hx-swap="outerHTML"
   hx-vals='{"idx": "{{ idx }}"}'
-  class="p-6 sm:p-8 rounded-[3rem] border-2 transition-all cursor-pointer flex gap-6 sm:gap-8 items-start relative group select-none {% if is_selected %}border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20 shadow-sm{% else %}border-stone-200/80 dark:border-stone-800 bg-white dark:bg-stone-900 hover:border-orange-300 dark:hover:border-stone-700 shadow-xs{% endif %}"
+  hx-trigger="click, keydown[key=='Enter'||key==' ']"
+  role="button"
+  tabindex="0"
+  aria-pressed="{% if is_selected %}true{% else %}false{% endif %}"
+  aria-label="{% if is_selected %}Lepas{% else %}Pilih{% endif %} soal {{ idx }}"
+  {% endif %}
+  class="p-6 sm:p-8 rounded-[3rem] border-2 transition-all {% if is_locked %}cursor-default{% else %}cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600{% endif %} flex gap-6 sm:gap-8 items-start relative group select-none {% if is_selected %}border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20 shadow-sm{% else %}border-stone-200/80 dark:border-stone-800 bg-white dark:bg-stone-900 hover:border-orange-300 dark:hover:border-stone-700 shadow-xs{% endif %}"
 >
   <!-- Check Circle Indicator -->
   <div class="mt-1 shrink-0">
@@ -34,8 +41,8 @@ Single Question Selection Card partial for SelectQuestions.jsx matching
           </span>
         {% endif %}
         {% if q.has_empty_option_e %}
-          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-200 dark:border-amber-800" title="Soal legacy ini belum memiliki Opsi E">
-            ⚠️ Opsi E Kosong
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200 border border-amber-300 dark:border-amber-800">
+            Opsi E kosong, lengkapi di Bank Soal
           </span>
         {% endif %}
       </div>

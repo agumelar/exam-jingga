@@ -211,7 +211,8 @@ def test_toggle_question_blocked_for_non_member_teacher(client):
     res = client.post(reverse('schedules:toggle_question', kwargs={'exam_id': exam.id, 'question_id': q.id}),
                       {'idx': '1'}, HTTP_HX_REQUEST='true')
 
-    assert res.status_code == 403
+    # Paket guru lain tidak terlihat sama sekali
+    assert res.status_code == 404
     assert not ExamQuestion.objects.filter(exam=exam).exists()
 
 

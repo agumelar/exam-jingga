@@ -276,6 +276,7 @@ def test_schedule_form_create_single_uh():
     subject = Subject.objects.create(name='Pemrograman Web')
     classroom = ClassRoom.objects.create(name='XI RPL 1', level=11)
     teacher = Teacher.objects.create(full_name='Pak Budi, S.Kom')
+    TeacherAssignment.objects.create(teacher=teacher, subject=subject, class_room=classroom)
 
     form_data = {
         'exam_type': 'UH',
@@ -290,9 +291,9 @@ def test_schedule_form_create_single_uh():
         'token': 'JS1234',
     }
 
-    form = ScheduleForm(data=form_data)
+    form = ScheduleForm(data=form_data, creator_teacher=teacher)
     assert form.is_valid(), form.errors
-    schedules = form.save(creator_teacher=teacher)
+    schedules = form.save()
 
     assert len(schedules) == 1
     sched = schedules[0]
@@ -331,7 +332,7 @@ def test_schedule_form_create_collaborative_pas():
         'token': 'PASFIS',
     }
 
-    form = ScheduleForm(data=form_data)
+    form = ScheduleForm(data=form_data, is_admin=True)
     assert form.is_valid(), form.errors
     schedules = form.save()
 
@@ -374,7 +375,7 @@ def test_schedule_form_separate_classes_per_teacher():
         'token': 'PASMAT',
     }
 
-    form = ScheduleForm(data=form_data)
+    form = ScheduleForm(data=form_data, is_admin=True)
     assert form.is_valid(), form.errors
     schedules = form.save()
 
@@ -453,11 +454,12 @@ def test_schedule_create_modal_get_and_post_htmx(client):
     subject = Subject.objects.create(name='Kimia')
     classroom = ClassRoom.objects.create(name='X ATPH 1', level=10)
     teacher = Teacher.objects.create(full_name='Guru Kimia')
+    TeacherAssignment.objects.create(teacher=teacher, subject=subject, class_room=classroom)
 
     # 1. GET Modal Form
     get_res = client.get(reverse('schedules:create') + '?type=UH')
     assert get_res.status_code == 200
-    assert 'Konfigurasi' in get_res.content.decode()
+    assert 'Buat Jadwal' in get_res.content.decode()
 
     # 2. POST Create via HTMX
     post_data = {
@@ -492,6 +494,7 @@ def test_schedule_edit_modal_get_and_post_htmx(client):
     subject = Subject.objects.create(name='Fisika')
     classroom = ClassRoom.objects.create(name='XI TKRO 1', level=11)
     teacher = Teacher.objects.create(full_name='Guru Fisika')
+    TeacherAssignment.objects.create(teacher=teacher, subject=subject, class_room=classroom)
 
     exam = Exam.objects.create(subject=subject, teacher=teacher, title='PTS Fisika Awal', exam_type='PTS', level=11)
     schedule = Schedule.objects.create(exam=exam, class_room=classroom, teacher=teacher, start_time=timezone.now(), end_time=timezone.now() + timedelta(hours=1), token='FIS111')
@@ -620,9 +623,10 @@ def test_select_questions_view_and_toggle_htmx(client):
         teacher_quota=2
     )
 
-    q1 = Question.objects.create(subject=subject, created_by=teacher, level=11, question_text='Soal nomor satu RPL', correct_answer='A')
-    q2 = Question.objects.create(subject=subject, created_by=teacher, level=11, question_text='Soal nomor dua RPL', correct_answer='B')
-    q3 = Question.objects.create(subject=subject, created_by=teacher, level=11, question_text='Soal nomor tiga RPL', correct_answer='C')
+    five = dict(option_a='a', option_b='b', option_c='c', option_d='d', option_e='e')
+    q1 = Question.objects.create(subject=subject, created_by=teacher, level=11, question_text='Soal nomor satu RPL', correct_answer='A', **five)
+    q2 = Question.objects.create(subject=subject, created_by=teacher, level=11, question_text='Soal nomor dua RPL', correct_answer='B', **five)
+    q3 = Question.objects.create(subject=subject, created_by=teacher, level=11, question_text='Soal nomor tiga RPL', correct_answer='C', **five)
 
     client.force_login(guru_user)
 
