@@ -55,7 +55,7 @@ def test_exam_session_model_creation_and_properties():
         duration=90,
         target_question_count=40,
         level=12,
-        status='ready',
+        status='validated',
         token='PASRPL'
     )
 
@@ -179,7 +179,7 @@ def test_confirm_token_view_valid_and_invalid(client):
         title='UH Vektor',
         exam_type='UH',
         duration=60,
-        status='ready',
+        status='validated',
         token='VEKTOR'
     )
     schedule = Schedule.objects.create(
@@ -235,7 +235,7 @@ def test_exam_interface_view_and_question_swap(client):
     student_user = User.objects.create_user(username='siswa_fisika', role=Role.SISWA)
     student = Student.objects.create(user=student_user, nis='444555666', full_name='Siswa Fisika')
 
-    exam = Exam.objects.create(teacher=teacher, subject=subject, title='PAT Fisika Terapan', duration=90, status='ready')
+    exam = Exam.objects.create(teacher=teacher, subject=subject, title='PAT Fisika Terapan', duration=90, status='validated')
     schedule = Schedule.objects.create(
         exam=exam,
         teacher=teacher,
@@ -283,7 +283,7 @@ def test_save_answer_view_with_oob_updates(client):
     student_user = User.objects.create_user(username='siswa_kimia', role=Role.SISWA)
     student = Student.objects.create(user=student_user, nis='777888999', full_name='Siswa Kimia')
 
-    exam = Exam.objects.create(teacher=teacher, subject=subject, title='UH Larutan Asam Basa', duration=60, status='ready')
+    exam = Exam.objects.create(teacher=teacher, subject=subject, title='UH Larutan Asam Basa', duration=60, status='validated')
     schedule = Schedule.objects.create(
         exam=exam,
         teacher=teacher,
@@ -359,7 +359,7 @@ def test_violation_handler_and_status_check(client):
     student_user = User.objects.create_user(username='siswa_bio', role=Role.SISWA)
     student = Student.objects.create(user=student_user, nis='12121212', full_name='Siswa Biologi')
 
-    exam = Exam.objects.create(teacher=teacher, subject=subject, title='PAS Biologi', exam_type='PAS', duration=60, status='ready')
+    exam = Exam.objects.create(teacher=teacher, subject=subject, title='PAS Biologi', exam_type='PAS', duration=60, status='validated')
     schedule = Schedule.objects.create(
         exam=exam,
         teacher=teacher,
@@ -417,7 +417,7 @@ def test_violation_handler_uh_warning_only(client):
     student_user = User.objects.create_user(username='siswa_kimia', role=Role.SISWA)
     student = Student.objects.create(user=student_user, nis='33333333', full_name='Siswa Kimia')
 
-    exam = Exam.objects.create(teacher=teacher, subject=subject, title='UH Larutan Asam', exam_type='UH', duration=60, status='ready')
+    exam = Exam.objects.create(teacher=teacher, subject=subject, title='UH Larutan Asam', exam_type='UH', duration=60, status='validated')
     schedule = Schedule.objects.create(
         exam=exam,
         teacher=teacher,
@@ -459,7 +459,7 @@ def test_finish_exam_view_and_score_calculation(client):
     student_user = User.objects.create_user(username='siswa_sejarah', role=Role.SISWA)
     student = Student.objects.create(user=student_user, nis='333222111', full_name='Siswa Sejarah')
 
-    exam = Exam.objects.create(teacher=teacher, subject=subject, title='PAS Sejarah Indonesia', duration=60, status='ready')
+    exam = Exam.objects.create(teacher=teacher, subject=subject, title='PAS Sejarah Indonesia', duration=60, status='validated')
     schedule = Schedule.objects.create(
         exam=exam,
         teacher=teacher,
@@ -519,7 +519,7 @@ def test_student_dashboard_view(client):
         major=major
     )
 
-    exam1 = Exam.objects.create(teacher=teacher, subject=subject, title='UH Sistem Starter', exam_type='UH', duration=45, level=11, status='ready')
+    exam1 = Exam.objects.create(teacher=teacher, subject=subject, title='UH Sistem Starter', exam_type='UH', duration=45, level=11, status='validated')
     schedule1 = Schedule.objects.create(
         exam=exam1,
         class_room=classroom,
@@ -533,7 +533,7 @@ def test_student_dashboard_view(client):
     )
 
     # Finished exam
-    exam2 = Exam.objects.create(teacher=teacher, subject=subject, title='UH Pengisian', exam_type='UH', duration=45, level=11, status='ready')
+    exam2 = Exam.objects.create(teacher=teacher, subject=subject, title='UH Pengisian', exam_type='UH', duration=45, level=11, status='validated')
     schedule2 = Schedule.objects.create(
         exam=exam2,
         class_room=classroom,
@@ -624,7 +624,7 @@ def test_opsi_a_hard_stop_remaining_seconds():
     """Verify calculate_remaining_seconds caps remaining duration by schedule.end_time (Opsi A)."""
     now = timezone.now()
     subject = Subject.objects.create(name='Bahasa Indonesia')
-    exam = Exam.objects.create(subject=subject, title='PTS B.Indo', duration=60, status='ready')
+    exam = Exam.objects.create(subject=subject, title='PTS B.Indo', duration=60, status='validated')
     # Schedule closes in 20 minutes
     schedule = Schedule.objects.create(
         exam=exam,
@@ -653,7 +653,7 @@ def test_confirm_token_time_gates(client):
     """Verify ConfirmTokenView rejects token submission if outside schedule start_time/end_time window."""
     now = timezone.now()
     subject = Subject.objects.create(name='IPAS')
-    exam = Exam.objects.create(subject=subject, title='PTS IPAS', duration=60, status='ready')
+    exam = Exam.objects.create(subject=subject, title='PTS IPAS', duration=60, status='validated')
     student_user = User.objects.create_user(username='siswa_gate', role=Role.SISWA)
     Student.objects.create(user=student_user, nis='999333444', full_name='Siswa Gate')
     client.force_login(student_user)

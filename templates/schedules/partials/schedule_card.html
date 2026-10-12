@@ -4,8 +4,11 @@ M3 Elevated Schedule Card with 100% UI fidelity matching React ScheduleCard.jsx
 {% endcomment %}
 
 <div 
-  class="bg-white dark:bg-stone-900 p-8 rounded-[2.5rem] shadow-xs border border-stone-200/80 dark:border-stone-800 relative group transition-all hover:border-orange-500 overflow-hidden text-left"
+  class="bg-white dark:bg-stone-900 p-8 rounded-[2.5rem] shadow-xs border border-stone-200/80 dark:border-stone-800 relative group transition-all hover:border-orange-500 overflow-hidden text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
   id="schedule-card-{{ s.id }}"
+  tabindex="-1"
+  role="group"
+  aria-label="{{ s.exam.title }}, {{ s.phase_label }}"
 >
   <!-- Bulk Select Checkbox for Admin -->
   {% if is_admin %}
@@ -26,7 +29,7 @@ M3 Elevated Schedule Card with 100% UI fidelity matching React ScheduleCard.jsx
   </div>
 
   <!-- Hover Action Menu (Edit / Delete) -->
-  <div class="absolute top-10 right-8 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+  <div class="absolute top-10 right-8 flex items-center gap-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity z-10">
     {% if is_admin or s.exam.exam_type == 'UH' %}
       <button
         type="button"
@@ -35,6 +38,7 @@ M3 Elevated Schedule Card with 100% UI fidelity matching React ScheduleCard.jsx
         hx-swap="innerHTML"
         class="p-2 bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 rounded-xl hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors cursor-pointer shadow-xs"
         title="Edit Jadwal"
+        aria-label="Edit jadwal {{ s.exam.title }}"
       >
         <i data-lucide="edit-3" class="w-4 h-4"></i>
       </button>
@@ -45,6 +49,7 @@ M3 Elevated Schedule Card with 100% UI fidelity matching React ScheduleCard.jsx
         hx-swap="innerHTML"
         class="p-2 bg-red-50 dark:bg-red-950/50 text-red-500 dark:text-red-400 rounded-xl hover:bg-red-100 dark:hover:bg-red-900 transition-colors cursor-pointer shadow-xs"
         title="Hapus Jadwal"
+        aria-label="Hapus jadwal {{ s.exam.title }}"
       >
         <i data-lucide="trash-2" class="w-4 h-4"></i>
       </button>
@@ -53,33 +58,9 @@ M3 Elevated Schedule Card with 100% UI fidelity matching React ScheduleCard.jsx
 
   <!-- Status & Session Badge Header -->
   <div class="flex justify-between items-start mb-6 pt-2">
-    <!-- Status Badge -->
+    <!-- Fase jadwal: status naskah + jam -->
     <div>
-      {% if s.exam.status == 'pending_selection' %}
-        <span class="bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 border border-amber-200/80 dark:border-amber-800/60">
-          <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
-          <span>Tunggu Soal</span>
-        </span>
-      {% elif s.exam.status == 'waiting_validation' %}
-        <span class="bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 border border-blue-200/80 dark:border-blue-800/60">
-          <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
-          <span>Tunggu Verifikasi</span>
-        </span>
-      {% elif s.exam.status == 'validated' or s.exam.status == 'ready' %}
-        <span class="bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 border border-emerald-200/80 dark:border-emerald-800/60">
-          <i data-lucide="check" class="w-3.5 h-3.5"></i>
-          <span>Siap Ujian</span>
-        </span>
-      {% elif s.exam.status == 'active' %}
-        <span class="bg-green-100 dark:bg-green-950/60 text-green-700 dark:text-green-300 px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 border border-green-200/80 dark:border-green-800/60">
-          <i data-lucide="play-circle" class="w-3.5 h-3.5"></i>
-          <span>Sedang Aktif</span>
-        </span>
-      {% else %}
-        <span class="bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 px-3 py-1 rounded-full text-xs font-medium">
-          {{ s.exam.get_status_display|default:s.exam.status }}
-        </span>
-      {% endif %}
+      {% include 'schedules/partials/phase_badge.html' with s=s %}
     </div>
 
     <!-- Session Badge for PAS/PAT/SAJ -->
@@ -122,10 +103,26 @@ M3 Elevated Schedule Card with 100% UI fidelity matching React ScheduleCard.jsx
         @click="navigator.clipboard.writeText('{{ s.token }}'); copied = true; setTimeout(() => copied = false, 2000)"
         class="text-stone-400 hover:text-orange-600 dark:hover:text-orange-400 transition cursor-pointer"
         title="Salin Token"
+        aria-label="Salin token {{ s.token }}"
       >
         <i data-lucide="copy" class="w-3.5 h-3.5" x-show="!copied"></i>
         <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-500" x-show="copied"></i>
       </button>
+      {% if s.can_regenerate_token %}
+        <button
+          type="button"
+          id="regenerate-token-btn-{{ s.id }}"
+          hx-post="{% url 'schedules:action' pk=s.id action='regenerate-token' %}"
+          hx-target="#schedule-list-grid-container"
+          hx-swap="outerHTML"
+          hx-confirm="Buat token baru untuk paket ini? Token lama langsung tidak berlaku di semua jadwal paket."
+          class="text-stone-500 hover:text-orange-700 dark:text-stone-400 dark:hover:text-orange-400 transition cursor-pointer p-1 -m-1 rounded focus-visible:outline-2 focus-visible:outline-orange-600"
+          title="Perbarui Token"
+          aria-label="Perbarui token {{ s.exam.title }}"
+        >
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5" aria-hidden="true"></i>
+        </button>
+      {% endif %}
     </div>
 
     <!-- Guru Penanggung Jawab -->
@@ -175,13 +172,24 @@ M3 Elevated Schedule Card with 100% UI fidelity matching React ScheduleCard.jsx
       </div>
     {% endif %}
 
-    <!-- Button: Pilih Soal (Guru View when pending_selection) -->
-    {% if not is_admin and s.exam.status == 'pending_selection' %}
-      <a 
+    <!-- Catatan terakhir saat naskah dikembalikan atau dibuka kuncinya -->
+    {% if s.exam.status == 'pending_selection' and s.exam.review_note %}
+      <div class="w-full rounded-2xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-4 text-sm text-amber-900 dark:text-amber-100 mb-1">
+        <p class="font-semibold flex items-center gap-1.5">
+          <i data-lucide="message-square-warning" class="w-4 h-4 shrink-0" aria-hidden="true"></i>
+          Catatan{% if s.exam.reviewed_by %} dari {{ s.exam.reviewed_by.get_full_name|default:s.exam.reviewed_by.username }}{% endif %}
+        </p>
+        <p class="mt-1 leading-snug break-words">{{ s.exam.review_note }}</p>
+      </div>
+    {% endif %}
+
+    <!-- Guru: pilih soal selama naskah belum diajukan -->
+    {% if not is_admin and s.can_select_questions %}
+      <a
         href="{% url 'schedules:select_questions' exam_id=s.id %}"
-        class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-2xl font-semibold text-xs tracking-wide shadow-md shadow-blue-600/20 flex items-center justify-center gap-2 transition-all active:scale-98"
+        class="w-full min-h-11 bg-blue-700 hover:bg-blue-800 text-white py-3.5 rounded-2xl font-semibold text-xs tracking-wide flex items-center justify-center gap-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"
       >
-        <i data-lucide="book-open" class="w-4 h-4"></i>
+        <i data-lucide="book-open" class="w-4 h-4" aria-hidden="true"></i>
         <span>
           {% if s.my_question_count > 0 %}
             Lanjutkan Pilih Soal ({{ s.my_question_count }}/{{ s.final_quota }})
@@ -192,34 +200,80 @@ M3 Elevated Schedule Card with 100% UI fidelity matching React ScheduleCard.jsx
       </a>
     {% endif %}
 
-    <!-- Button: Verifikasi Ujian (Admin View when waiting_validation) -->
-    {% if is_admin and s.exam.status == 'waiting_validation' %}
-      <button 
+    <!-- Guru: tarik pengajuan yang belum diverifikasi -->
+    {% if s.can_withdraw %}
+      <button
         type="button"
-        hx-post="{% url 'schedules:action' pk=s.id action='verify' %}"
+        id="withdraw-btn-{{ s.id }}"
+        hx-post="{% url 'schedules:action' pk=s.id action='withdraw' %}"
         hx-target="#schedule-list-grid-container"
         hx-swap="outerHTML"
-        hx-confirm="Verifikasi paket ujian ini? Setelah diverifikasi, soal siap diakses oleh siswa saat jadwal mulai."
-        class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3.5 rounded-2xl font-semibold text-xs tracking-wide shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer"
+        hx-confirm="Tarik pengajuan naskah ini? Status kembali ke Tunggu Soal dan naskah keluar dari antrean verifikasi admin."
+        class="w-full min-h-11 bg-white dark:bg-stone-900 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-800 dark:text-stone-100 border border-stone-400 dark:border-stone-500 py-3.5 rounded-2xl font-semibold text-xs tracking-wide flex items-center justify-center gap-2 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
       >
-        <i data-lucide="shield-check" class="w-4 h-4"></i>
-        <span>Verifikasi Ujian</span>
+        <i data-lucide="undo-2" class="w-4 h-4" aria-hidden="true"></i>
+        <span>Tarik Pengajuan</span>
       </button>
     {% endif %}
 
-    <!-- Button: Buka Kunci & Edit Soal (Guru View for validated UH) -->
-    {% if not is_admin and s.exam.exam_type == 'UH' and s.exam.status in 'validated ready' %}
-      <button 
+    <!-- Admin: verifikasi atau kembalikan naskah yang diajukan -->
+    {% if s.can_verify %}
+      <button
         type="button"
-        hx-post="{% url 'schedules:action' pk=s.id action='unlock' %}"
+        id="verify-btn-{{ s.id }}"
+        hx-post="{% url 'schedules:action' pk=s.id action='verify' %}"
         hx-target="#schedule-list-grid-container"
         hx-swap="outerHTML"
-        hx-confirm="Buka kunci ujian? Status akan kembali menjadi 'Tunggu Soal' sehingga siswa tidak dapat mengakses sebelum disimpan ulang."
-        class="w-full bg-amber-500 hover:bg-amber-600 text-white py-3.5 rounded-2xl font-semibold text-xs tracking-wide shadow-sm flex items-center justify-center gap-2 mb-1 transition-all active:scale-98 cursor-pointer"
+        hx-confirm="Verifikasi naskah ini? Soal terkunci dan siswa bisa mengerjakan begitu jam jadwal dimulai."
+        class="w-full min-h-11 bg-emerald-700 hover:bg-emerald-800 text-white py-3.5 rounded-2xl font-semibold text-xs tracking-wide flex items-center justify-center gap-2 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
       >
-        <i data-lucide="unlock" class="w-4 h-4"></i>
-        <span>Buka Kunci & Edit Soal</span>
+        <i data-lucide="shield-check" class="w-4 h-4" aria-hidden="true"></i>
+        <span>Verifikasi Naskah</span>
       </button>
+    {% endif %}
+    {% if s.can_reject %}
+      <button
+        type="button"
+        id="reject-btn-{{ s.id }}"
+        hx-get="{% url 'schedules:action' pk=s.id action='reject' %}"
+        hx-target="#modal-container"
+        hx-swap="innerHTML"
+        class="w-full min-h-11 bg-white dark:bg-stone-900 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-800 dark:text-stone-100 border border-stone-400 dark:border-stone-500 py-3.5 rounded-2xl font-semibold text-xs tracking-wide flex items-center justify-center gap-2 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+      >
+        <i data-lucide="rotate-ccw" class="w-4 h-4" aria-hidden="true"></i>
+        <span>Kembalikan ke Guru</span>
+      </button>
+    {% endif %}
+
+    <!-- Buka kunci naskah tervalidasi: admin (semua jenis) atau guru pemilik (UH) -->
+    {% if s.show_unlock %}
+      {% if s.unlock_blocked_reason %}
+        <button
+          type="button"
+          id="unlock-btn-{{ s.id }}"
+          aria-disabled="true"
+          aria-describedby="unlock-reason-{{ s.id }}"
+          class="w-full min-h-11 bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-300 dark:border-stone-600 py-3.5 rounded-2xl font-semibold text-xs tracking-wide flex items-center justify-center gap-2 cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+        >
+          <i data-lucide="lock" class="w-4 h-4" aria-hidden="true"></i>
+          <span>Buka Kunci Naskah</span>
+        </button>
+        <p id="unlock-reason-{{ s.id }}" class="text-xs text-stone-700 dark:text-stone-300 -mt-1 mb-1 px-1">
+          {{ s.unlock_blocked_reason }}
+        </p>
+      {% else %}
+        <button
+          type="button"
+          id="unlock-btn-{{ s.id }}"
+          hx-get="{% url 'schedules:action' pk=s.id action='unlock' %}"
+          hx-target="#modal-container"
+          hx-swap="innerHTML"
+          class="w-full min-h-11 bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 text-amber-900 dark:text-amber-100 border border-amber-300 dark:border-amber-800 py-3.5 rounded-2xl font-semibold text-xs tracking-wide flex items-center justify-center gap-2 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+        >
+          <i data-lucide="unlock" class="w-4 h-4" aria-hidden="true"></i>
+          <span>Buka Kunci Naskah</span>
+        </button>
+      {% endif %}
     {% endif %}
 
     <!-- Button: Info Peserta -->

@@ -150,6 +150,7 @@
         <select 
           id="schedule-date-select"
           name="date_filter"
+          aria-label="Filter tanggal jadwal"
           x-model="dateFilter"
           class="w-full pl-12 pr-8 py-3.5 bg-stone-50 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 rounded-2xl outline-none focus:ring-2 focus:ring-orange-500 font-medium text-xs text-stone-900 dark:text-white cursor-pointer transition"
         >
@@ -166,13 +167,15 @@
         <select 
           id="schedule-status-select"
           name="status"
+          aria-label="Filter fase jadwal"
           x-model="statusFilter"
           class="w-full pl-12 pr-8 py-3.5 bg-stone-50 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 rounded-2xl outline-none focus:ring-2 focus:ring-orange-500 font-medium text-xs text-stone-900 dark:text-white cursor-pointer transition"
         >
-          <option value="all">Semua Status</option>
-          <option value="aktif">Aktif</option>
+          <option value="all">Semua Fase</option>
+          <option value="draft">Belum Siap (Tunggu Soal / Verifikasi)</option>
+          <option value="terjadwal">Terjadwal</option>
+          <option value="aktif">Berlangsung</option>
           <option value="selesai">Selesai</option>
-          <option value="draft">Draft</option>
         </select>
       </div>
     </form>
@@ -183,6 +186,8 @@
 
   <!-- HTMX MODAL CONTAINER -->
   <div id="modal-container"></div>
+
+  {% include 'components/m3/toast_region.html' %}
 
 </div>
 {% endblock %}

@@ -1,0 +1,119 @@
+{% comment %}
+Wilayah toast + penutup modal HTMX untuk halaman yang memakai #modal-container.
+- Event `showToast` dari header HX-Trigger: {"message": "...", "level": "success|error"}
+  atau string biasa.
+- Event `closeModal`: mengosongkan #modal-container dan mengembalikan fokus.
+- Django messages yang tertunda (setelah redirect) ikut ditampilkan sebagai toast.
+Pasang sekali per halaman.
+{% endcomment %}
+{% if messages %}
+  <template id="pending-toasts">
+    {% for message in messages %}<span data-level="{% if message.level_tag == 'error' %}error{% else %}success{% endif %}">{{ message }}</span>{% endfor %}
+  </template>
+{% endif %}
+<div
+  x-data="toastRegion()"
+  x-on:show-toast.camel.window="push($event.detail)"
+  x-on:close-modal.camel.window="window.closeHtmxModal()"
+  class="fixed inset-x-4 bottom-4 sm:inset-x-auto sm:right-6 sm:bottom-6 z-[60] flex flex-col gap-2 sm:w-96 pointer-events-none"
+>
+  <div role="status" aria-live="polite" class="sr-only" x-text="politeText"></div>
+  <div role="alert" aria-live="assertive" class="sr-only" x-text="assertiveText"></div>
+  <template x-for="t in toasts" :key="t.id">
+    <div
+      class="pointer-events-auto flex items-start gap-3 rounded-2xl px-4 py-3 shadow-lg text-sm"
+      :class="t.level === 'error'
+        ? 'bg-red-700 text-white'
+        : 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'"
+    >
+      <span class="shrink-0 mt-0.5 font-bold" aria-hidden="true" x-text="t.level === 'error' ? '!' : '✓'"></span>
+      <p class="flex-1 leading-snug" x-text="t.message"></p>
+      <button
+        type="button"
+        @click="dismiss(t.id)"
+        class="shrink-0 -m-1.5 p-1.5 min-w-8 min-h-8 rounded-lg hover:bg-white/15 dark:hover:bg-black/10 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-current"
+        aria-label="Tutup notifikasi"
+      >&times;</button>
+    </div>
+  </template>
+</div>
+
+<script>
+  (function () {
+    if (window.toastRegion) return;
+
+    window.toastRegion = function () {
+      return {
+        toasts: [],
+        politeText: '',
+        assertiveText: '',
+        nextId: 1,
+        init() {
+          const pending = document.getElementById('pending-toasts');
+          if (!pending) return;
+          pending.content.querySelectorAll('span').forEach((el) => {
+            this.push({ message: el.textContent.trim(), level: el.dataset.level });
+          });
+        },
+        push(detail) {
+          const payload = typeof detail === 'string' ? { message: detail } : (detail || {});
+          const message = payload.message || payload.value;
+          if (!message) return;
+          const level = payload.level === 'error' ? 'error' : 'success';
+          const id = this.nextId++;
+          this.toasts.push({ id, message, level });
+          if (level === 'error') { this.assertiveText = message; } else { this.politeText = message; }
+          setTimeout(() => this.dismiss(id), level === 'error' ? 9000 : 5000);
+        },
+        dismiss(id) {
+          this.toasts = this.toasts.filter((t) => t.id !== id);
+        },
+      };
+    };
+
+    window.closeHtmxModal = function () {
+      const container = document.getElementById('modal-container');
+      if (container) container.innerHTML = '';
+      const returnId = window.__modalReturnFocusId;
+      window.__modalReturnFocusId = null;
+      if (returnId) {
+        // Grid jadwal di-swap setelah aksi, jadi cari ulang tombol pemicunya lewat id
+        setTimeout(() => {
+          // Tombol pemicu bisa hilang bila fase kartu berubah; jatuhkan fokus ke kartunya
+          const cardId = returnId.replace(/^.*-btn-/, 'schedule-card-');
+          const target = document.getElementById(returnId) || document.getElementById(cardId);
+          if (target) target.focus();
+        }, 50);
+      }
+    };
+
+    window.reasonModal = function (returnFocusId) {
+      return {
+        open() {
+          window.__modalReturnFocusId = returnFocusId;
+          this.$nextTick(() => {
+            if (window.initIcons) window.initIcons();
+            const first = this.$refs.note || this.$refs.panel.querySelector('button');
+            if (first) first.focus();
+          });
+        },
+        close() {
+          window.closeHtmxModal();
+        },
+        trapFocus(event) {
+          const focusables = [...this.$refs.panel.querySelectorAll('button:not([disabled]), textarea, [href], input:not([type=hidden]), select')];
+          if (!focusables.length) return;
+          const first = focusables[0];
+          const last = focusables[focusables.length - 1];
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+          }
+        },
+      };
+    };
+  })();
+</script>

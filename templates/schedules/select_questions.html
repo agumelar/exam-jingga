@@ -30,6 +30,16 @@
 {% block app_content %}
 <div class="space-y-6">
 
+  {% if is_locked %}
+    <div class="p-4 sm:p-5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-3xl flex items-start gap-3 text-amber-900 dark:text-amber-100 text-sm" role="status">
+      <i data-lucide="lock" class="w-5 h-5 shrink-0 mt-0.5" aria-hidden="true"></i>
+      <span>
+        Naskah berstatus <strong>{{ exam.get_status_display }}</strong>, jadi pilihan soal terkunci.
+        {% if exam.status == 'waiting_validation' %}Tarik pengajuan dari halaman Jadwal Ujian bila perlu mengubah soal.{% else %}Soal hanya bisa diubah setelah kunci naskah dibuka.{% endif %}
+      </span>
+    </div>
+  {% endif %}
+
   <!-- Collaboration Notice (if multi-teacher exam) -->
   {% if collab_info.is_collab and others_selected_count > 0 %}
     <div class="p-4 sm:p-5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-800 rounded-3xl flex items-center gap-3 text-blue-700 dark:text-blue-300 text-xs font-medium shadow-xs">
@@ -149,4 +159,5 @@
   </div>
 
 </div>
+{% include 'components/m3/toast_region.html' %}
 {% endblock %}

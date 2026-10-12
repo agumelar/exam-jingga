@@ -55,7 +55,12 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 'total_majors': Major.objects.count(),
                 'total_questions': Question.objects.count(),
                 'total_exams': Exam.objects.count(),
-                'active_schedules_count': Schedule.objects.filter(status='active').count(),
+                # Sama dengan fase 'running' pada Schedule.phase
+                'active_schedules_count': Schedule.objects.filter(
+                    exam__status='validated',
+                    start_time__lte=timezone.now(),
+                    end_time__gte=timezone.now(),
+                ).count(),
                 'total_schedules_count': Schedule.objects.count(),
                 'active_sessions_count': ExamSession.objects.filter(status='active').count(),
                 'finished_sessions_count': ExamSession.objects.filter(status='finished').count(),

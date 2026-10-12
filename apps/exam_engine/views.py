@@ -63,7 +63,7 @@ class StudentDashboardView(View):
         schedules_qs = (
             Schedule.objects.filter(
                 status='active',
-                exam__status__in=['validated', 'ready', 'active']
+                exam__status='validated'
             )
             .select_related('exam', 'exam__subject', 'exam__teacher', 'class_room', 'teacher')
             .order_by('start_time')
@@ -238,6 +238,15 @@ class ConfirmTokenView(View):
             return redirect('/student/dashboard/')
 
         schedule = get_object_or_404(Schedule.objects.select_related('exam'), id=schedule_id)
+
+        # Token sudah terlihat oleh guru sejak jadwal dibuat, jadi gerbang ini
+        # wajib menolak naskah yang belum diverifikasi meski token dan jamnya cocok.
+        if not schedule.exam.is_ready_for_student:
+            err_msg = "Naskah ujian ini belum diverifikasi, jadi belum bisa dikerjakan. Hubungi pengawas ruangan."
+            if request.headers.get('HX-Request'):
+                return HttpResponse(f'<div class="p-3 bg-red-100 dark:bg-red-950/40 text-red-600 rounded-xl text-xs font-bold border border-red-200 dark:border-red-900">{err_msg}</div>', status=400)
+            messages.error(request, err_msg)
+            return redirect('/student/dashboard/')
 
         # Validasi Jendela Waktu Pelaksanaan Ujian (Gate Control Opsi A)
         now = timezone.now()

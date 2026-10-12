@@ -67,25 +67,37 @@ def resolve_status_after_question_save(exam_type, is_full):
     return 'waiting_validation'
 
 
+ADMIN_ROLES = {'admin', 'kurikulum', 'platform_admin', 'data_admin'}
+
+# (dari, ke) -> jenis ujian yang boleh, per kelompok peran.
+# Syarat di luar tabel ini (pemilik paket, kuota, alasan, sesi siswa) dicek di lifecycle.py.
+_ADMIN_TRANSITIONS = {
+    ('pending_selection', 'validated'): 'uh',
+    ('pending_selection', 'waiting_validation'): 'official',
+    ('waiting_validation', 'validated'): 'official',
+    ('waiting_validation', 'pending_selection'): 'official',
+    ('validated', 'pending_selection'): 'any',
+}
+_TEACHER_TRANSITIONS = {
+    ('pending_selection', 'validated'): 'uh',
+    ('pending_selection', 'waiting_validation'): 'official',
+    ('waiting_validation', 'pending_selection'): 'official',
+    ('validated', 'pending_selection'): 'uh',
+}
+
+
 def can_transition_status(role, exam_type, from_status, to_status):
-    """
-    Validasi izin transisi status ujian:
-    - Admin dapat memverifikasi dari 'waiting_validation' -> 'validated' / 'ready'.
-    - Guru dapat membuka kunci ujian UH dari 'validated'/'ready' -> 'pending_selection'.
-    """
+    """Validasi izin transisi status naskah berdasarkan peran dan jenis ujian."""
     norm_role = str(role or '').lower()
-    norm_type = str(exam_type or '').upper()
-    norm_from = str(from_status or '').lower()
-    norm_to = str(to_status or '').lower()
-
-    if norm_role in ['admin', 'kurikulum', 'platform_admin', 'data_admin']:
-        if norm_from == 'waiting_validation' and norm_to in ['validated', 'ready']:
-            return True
-
-    if norm_role == 'guru' and norm_type == 'UH':
-        if norm_from in ['validated', 'ready'] and norm_to == 'pending_selection':
-            return True
-
+    is_uh = str(exam_type or '').upper() == 'UH'
+    table = _ADMIN_TRANSITIONS if norm_role in ADMIN_ROLES else _TEACHER_TRANSITIONS
+    scope = table.get((str(from_status or '').lower(), str(to_status or '').lower()))
+    if scope == 'any':
+        return True
+    if scope == 'uh':
+        return is_uh
+    if scope == 'official':
+        return not is_uh
     return False
 
 

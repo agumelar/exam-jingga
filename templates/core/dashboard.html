@@ -178,20 +178,7 @@
                   <h4 class="font-semibold text-sm text-stone-900 dark:text-white truncate">
                     {{ schedule.exam.title }}
                   </h4>
-                  {% if schedule.status == 'active' %}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300">
-                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse"></span>
-                      Aktif
-                    </span>
-                  {% elif schedule.status == 'closed' %}
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-400">
-                      Selesai
-                    </span>
-                  {% else %}
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300">
-                      Draft
-                    </span>
-                  {% endif %}
+                  {% include 'schedules/partials/phase_badge.html' with s=schedule %}
                 </div>
 
                 <div class="flex flex-wrap items-center gap-y-1 gap-x-3 text-xs text-stone-500 dark:text-stone-400">

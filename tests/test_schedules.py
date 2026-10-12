@@ -124,7 +124,7 @@ def test_schedule_model_and_properties():
     assert schedule.is_token_active is False  # Exam is pending_selection
 
     # When exam is validated
-    exam.status = 'ready'
+    exam.status = 'validated'
     exam.save()
     assert schedule.is_token_active is True
 
@@ -184,12 +184,11 @@ def test_can_transition_status():
     """Verify can_transition_status validation rules for admin and guru."""
     # Admin verifying exam
     assert can_transition_status('admin', 'PAS', 'waiting_validation', 'validated') is True
-    assert can_transition_status('kurikulum', 'PTS', 'waiting_validation', 'ready') is True
+    assert can_transition_status('kurikulum', 'PTS', 'waiting_validation', 'validated') is True
     assert can_transition_status('guru', 'PTS', 'waiting_validation', 'validated') is False
 
     # Guru unlocking UH
     assert can_transition_status('guru', 'UH', 'validated', 'pending_selection') is True
-    assert can_transition_status('guru', 'UH', 'ready', 'pending_selection') is True
     assert can_transition_status('guru', 'PAS', 'validated', 'pending_selection') is False
 
 
@@ -570,8 +569,10 @@ def test_schedule_action_verify_and_unlock(client):
     subject = Subject.objects.create(name='Pancasila')
 
     # 1. Admin verifies PTS exam from waiting_validation to validated
-    exam_pts = Exam.objects.create(subject=subject, title='PTS Pancasila', exam_type='PTS', status='waiting_validation', level=10)
+    exam_pts = Exam.objects.create(subject=subject, title='PTS Pancasila', exam_type='PTS', status='waiting_validation', level=10, target_question_count=1)
     s_pts = Schedule.objects.create(exam=exam_pts, teacher=t_guru, start_time=timezone.now(), end_time=timezone.now() + timedelta(hours=1), token='PAN001')
+    q_pts = Question.objects.create(subject=subject, level=10, created_by=t_guru, question_text='Sila pertama?', correct_answer='A')
+    ExamQuestion.objects.create(exam=exam_pts, question=q_pts, order_number=1)
 
     client.force_login(admin_user)
     verify_res = client.post(reverse('schedules:action', kwargs={'pk': s_pts.id, 'action': 'verify'}))
@@ -584,7 +585,7 @@ def test_schedule_action_verify_and_unlock(client):
     s_uh = Schedule.objects.create(exam=exam_uh, teacher=t_guru, start_time=timezone.now(), end_time=timezone.now() + timedelta(hours=1), token='PAN002')
 
     client.force_login(guru_user)
-    unlock_res = client.post(reverse('schedules:action', kwargs={'pk': s_uh.id, 'action': 'unlock'}))
+    unlock_res = client.post(reverse('schedules:action', kwargs={'pk': s_uh.id, 'action': 'unlock'}), {'note': 'Revisi soal bab 1'})
     assert unlock_res.status_code == 200
     exam_uh.refresh_from_db()
     assert exam_uh.status == 'pending_selection'

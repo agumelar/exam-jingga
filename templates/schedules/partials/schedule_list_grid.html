@@ -50,8 +50,16 @@ HTMX Target Grid Container for Schedules
     {% else %}
       <div class="col-span-full py-16 text-center text-stone-400 dark:text-stone-500 font-medium bg-white dark:bg-stone-900 border-2 border-dashed border-stone-200 dark:border-stone-800 rounded-[2.5rem]">
         <i data-lucide="calendar-x" class="w-12 h-12 mx-auto mb-3 text-stone-300 dark:text-stone-700"></i>
-        <p class="text-base font-semibold text-stone-700 dark:text-stone-300">Tidak ada jadwal ujian yang ditemukan.</p>
-        <p class="text-xs text-stone-400 mt-1 font-normal">Coba sesuaikan kata kunci pencarian atau ubah filter tanggal.</p>
+        <p class="text-base font-semibold text-stone-700 dark:text-stone-300">
+          {% if status_filter == 'aktif' %}Tidak ada ujian yang sedang berlangsung.
+          {% elif status_filter == 'terjadwal' %}Belum ada naskah terverifikasi yang menunggu jam mulai.
+          {% elif status_filter == 'draft' %}Tidak ada naskah yang masih menunggu soal atau verifikasi.
+          {% elif status_filter == 'selesai' %}Belum ada jadwal yang selesai.
+          {% else %}Tidak ada jadwal ujian yang ditemukan.{% endif %}
+        </p>
+        <p class="text-sm text-stone-600 dark:text-stone-400 mt-1 font-normal">
+          {% if date_filter == 'Hari Ini' %}Filter tanggal sedang menampilkan jadwal hari ini saja. Pilih Semua Waktu untuk melihat jadwal lain.{% else %}Coba ubah kata kunci pencarian atau filter fase.{% endif %}
+        </p>
       </div>
     {% endif %}
   </div>

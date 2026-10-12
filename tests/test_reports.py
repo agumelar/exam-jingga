@@ -149,7 +149,7 @@ def test_setup():
         duration=60,
         target_question_count=2,
         level=12,
-        status='ready',
+        status='validated',
         token='PBOPAS'
     )
     ExamQuestion.objects.create(exam=exam, question=q1, order_number=1)

@@ -1,0 +1,96 @@
+{% comment %}
+Modal alasan untuk aksi Kembalikan ke Guru (reject) dan Buka Kunci Naskah (unlock).
+Dirender ulang oleh server dengan `error` bila aksi ditolak; saat berhasil server
+mengalihkan swap ke grid jadwal dan memicu closeModal.
+{% endcomment %}
+<div
+  x-data="reasonModal('{{ action }}-btn-{{ schedule.id }}')"
+  x-init="open()"
+  @keydown.escape.window="close()"
+  @keydown.tab="trapFocus($event)"
+  class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 font-sans"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="reason-modal-title"
+  aria-describedby="reason-modal-desc"
+>
+  <div
+    x-ref="panel"
+    @click.outside="close()"
+    class="bg-white dark:bg-stone-900 w-full max-w-md rounded-t-[2rem] sm:rounded-[2.5rem] p-6 sm:p-8 shadow-2xl text-left text-stone-900 dark:text-white border border-stone-200/80 dark:border-stone-800 max-h-[90vh] overflow-y-auto"
+  >
+    <h3 id="reason-modal-title" class="text-lg font-bold tracking-tight">{{ copy.title }}</h3>
+    <p class="text-sm text-stone-600 dark:text-stone-300 mt-1">
+      <strong class="text-stone-900 dark:text-white">{{ schedule.exam.title }}</strong>
+      &bull; {{ schedule.exam.subject.name|default:"Mapel belum diatur" }}
+    </p>
+    <p id="reason-modal-desc" class="text-sm text-stone-600 dark:text-stone-300 mt-3 leading-relaxed">
+      {{ copy.description }}
+    </p>
+
+    {% if block_reason %}
+      <div class="mt-5 p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-sm flex gap-3" role="alert">
+        <i data-lucide="lock" class="w-5 h-5 shrink-0" aria-hidden="true"></i>
+        <span>{{ block_reason }}</span>
+      </div>
+      <div class="mt-6">
+        <button
+          type="button"
+          @click="close()"
+          class="w-full min-h-11 bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-100 rounded-2xl font-semibold text-sm transition cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+        >
+          Tutup
+        </button>
+      </div>
+    {% else %}
+      <form
+        hx-post="{% url 'schedules:action' pk=schedule.id action=action %}"
+        hx-target="#modal-container"
+        hx-swap="innerHTML"
+        hx-disabled-elt="find button[type=submit]"
+        class="mt-5 space-y-4"
+        novalidate
+      >
+        {% csrf_token %}
+        <div>
+          <label for="reason-note" class="block text-sm font-semibold text-stone-800 dark:text-stone-100 mb-1.5">
+            Alasan <span class="font-normal text-stone-600 dark:text-stone-300">(wajib)</span>
+          </label>
+          <textarea
+            id="reason-note"
+            name="note"
+            rows="4"
+            maxlength="1000"
+            x-ref="note"
+            placeholder="{{ copy.placeholder }}"
+            {% if error %}aria-invalid="true" aria-describedby="reason-note-error"{% endif %}
+            class="w-full p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-800 border {% if error %}border-red-600 dark:border-red-400{% else %}border-stone-300 dark:border-stone-600{% endif %} text-sm text-stone-900 dark:text-white placeholder:text-stone-500 dark:placeholder:text-stone-400 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-orange-600 resize-y"
+          >{{ note }}</textarea>
+          {% if error %}
+            <p id="reason-note-error" class="mt-2 text-sm text-red-700 dark:text-red-300 flex gap-1.5" role="alert">
+              <i data-lucide="alert-circle" class="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true"></i>
+              <span>{{ error }}</span>
+            </p>
+          {% endif %}
+        </div>
+
+        <div class="flex flex-col-reverse sm:flex-row gap-3 pt-1">
+          <button
+            type="button"
+            @click="close()"
+            class="flex-1 min-h-11 bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-100 rounded-2xl font-semibold text-sm transition cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+          >
+            Batal
+          </button>
+          <button
+            type="submit"
+            class="group flex-1 min-h-11 bg-orange-700 hover:bg-orange-800 disabled:opacity-60 disabled:cursor-wait text-white rounded-2xl font-semibold text-sm transition cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+          >
+            <span class="group-disabled:hidden">{{ copy.submit_label }}</span>
+            <span class="hidden group-disabled:inline">Menyimpan...</span>
+          </button>
+        </div>
+      </form>
+    {% endif %}
+  </div>
+</div>

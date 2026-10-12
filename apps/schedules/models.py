@@ -1,4 +1,5 @@
 import uuid
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -16,13 +17,12 @@ class Exam(models.Model):
         ('SAJ', 'Sumatif Akhir Jenjang'),
     ]
 
+    # Fase tampilan (terjadwal, berlangsung, selesai) dihitung dari waktu jadwal,
+    # lihat Schedule.phase. Status yang disimpan hanya tiga tahap naskah ini.
     STATUS_CHOICES = [
         ('pending_selection', 'Tunggu Soal'),
         ('waiting_validation', 'Tunggu Verifikasi'),
-        ('validated', 'Tervalidasi'),
-        ('ready', 'Siap Ujian'),
-        ('active', 'Sedang Berlangsung'),
-        ('closed', 'Selesai'),
+        ('validated', 'Terverifikasi'),
     ]
 
     LEVEL_CHOICES = [
@@ -86,6 +86,20 @@ class Exam(models.Model):
         blank=True,
         help_text="Waktu Mulai Pelaksanaan Ujian"
     )
+    review_note = models.TextField(
+        blank=True,
+        default='',
+        help_text="Alasan terakhir naskah dikembalikan atau dibuka kuncinya"
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_exams',
+        help_text="Pengguna yang terakhir mengembalikan atau membuka kunci naskah"
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -105,11 +119,15 @@ class Exam(models.Model):
 
     @property
     def is_ready_for_student(self):
-        return self.status in ['validated', 'ready', 'active']
+        return self.status == 'validated'
 
     def is_locked(self):
-        """Memeriksa apakah naskah soal sudah dikunci (validated/ready/active)."""
-        return self.status in ['validated', 'ready', 'active']
+        """Naskah terkunci begitu diajukan atau diverifikasi; soal hanya bisa diubah saat pending_selection."""
+        return self.status != 'pending_selection'
+
+    def started_sessions_count(self):
+        from apps.exam_engine.models import ExamSession
+        return ExamSession.objects.filter(schedule__exam=self).count()
 
 
 class ExamQuestion(models.Model):
@@ -225,10 +243,38 @@ class Schedule(models.Model):
 
     @property
     def is_token_active(self):
-        """Token aktif jika paket ujian berstatus validated, ready, atau active."""
         if not self.exam:
             return False
         return self.exam.is_ready_for_student
+
+    PHASE_LABELS = {
+        'pending_selection': 'Tunggu Soal',
+        'waiting_validation': 'Tunggu Verifikasi',
+        'scheduled': 'Terjadwal',
+        'running': 'Berlangsung',
+        'finished': 'Selesai',
+        'missed': 'Terlewat',
+    }
+
+    @property
+    def phase(self):
+        """
+        Fase jadwal untuk tampilan dan filter, dihitung dari status naskah dan jam:
+        'missed' berarti jam ujian sudah lewat padahal naskah belum terverifikasi.
+        """
+        now = timezone.now()
+        validated = self.exam.status == 'validated'
+        if self.end_time and now > self.end_time:
+            return 'finished' if validated else 'missed'
+        if not validated:
+            return self.exam.status
+        if self.start_time and now < self.start_time:
+            return 'scheduled'
+        return 'running'
+
+    @property
+    def phase_label(self):
+        return self.PHASE_LABELS.get(self.phase, self.phase)
 
     @property
     def session_display(self):
