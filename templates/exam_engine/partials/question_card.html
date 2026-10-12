@@ -11,23 +11,22 @@
       </span>
       
       <!-- Doubt (Ragu-ragu) Toggle Button -->
-      <form 
-        hx-post="{% url 'exam_engine:save_answer' session.id %}" 
-        hx-swap="none"
+      <form
+        data-doubt-form
+        hx-post="{% url 'exam_engine:save_answer' session.id %}"
+        hx-target="#question-viewport"
+        hx-swap="innerHTML"
         class="inline-block"
       >
-        {% csrf_token %}
         <input type="hidden" name="question_id" value="{{ current_item.question.id }}">
-        <input type="hidden" name="order_num" value="{{ current_order }}">
-        <input type="hidden" name="chosen_answer" value="{{ current_item.chosen_answer|default:'' }}">
-        <input type="hidden" name="is_doubt" value="{% if current_item.is_doubt %}false{% else %}true{% endif %}">
-        
-        <button 
+        <input type="hidden" name="toggle_doubt" value="1">
+        <button
           type="submit"
-          class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all border cursor-pointer {% if current_item.is_doubt %}bg-amber-400 border-amber-400 text-slate-950 shadow-md shadow-amber-400/20{% else %}bg-transparent border-stone-200 dark:border-stone-800 text-stone-400 hover:border-amber-400{% endif %}"
+          aria-pressed="{% if current_item.is_doubt %}true{% else %}false{% endif %}"
+          class="min-h-11 flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-sm font-semibold transition-colors border cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 {% if current_item.is_doubt %}bg-amber-400 border-amber-500 text-stone-950{% else %}bg-white dark:bg-stone-900 border-stone-300 dark:border-stone-600 text-stone-700 dark:text-stone-200 hover:border-amber-500{% endif %}"
         >
-          <i data-lucide="help-circle" class="w-3.5 h-3.5"></i>
-          <span>{% if current_item.is_doubt %}Ragu-Ragu Aktif{% else %}Tandai Ragu{% endif %}</span>
+          <i data-lucide="help-circle" class="w-4 h-4" aria-hidden="true"></i>
+          <span>{% if current_item.is_doubt %}Ragu-ragu (ketuk untuk batal){% else %}Tandai Ragu{% endif %}</span>
         </button>
       </form>
     </div>
@@ -65,21 +64,18 @@
     {% endif %}
 
     <!-- Multiple Choice Options (M3RadioCard) -->
-    <form 
+    <form
       id="options-form-{{ current_order }}"
-      hx-post="{% url 'exam_engine:save_answer' session.id %}" 
-      hx-swap="none"
       class="grid grid-cols-1 gap-3.5"
+      role="radiogroup"
+      aria-label="Pilihan jawaban soal {{ current_order }}"
     >
-      {% csrf_token %}
       <input type="hidden" name="question_id" value="{{ current_item.question.id }}">
-      <input type="hidden" name="order_num" value="{{ current_order }}">
-      <input type="hidden" name="is_doubt" value="{% if current_item.is_doubt %}true{% else %}false{% endif %}">
 
       {% for opt in current_item.options %}
         {% if opt.text or opt.image_url %}
-          <label 
-            class="group relative flex items-start gap-4 p-4 lg:p-5 rounded-3xl cursor-pointer select-none transition-all duration-200 text-left
+          <label
+            class="group relative flex items-start gap-4 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-orange-600p-4 lg:p-5 rounded-3xl cursor-pointer select-none transition-all duration-200 text-left
               {% if opt.is_selected %}
                 {% if current_item.is_doubt %}bg-amber-100 dark:bg-amber-950/40 border-2 border-amber-500 shadow-sm
                 {% else %}bg-orange-50 dark:bg-orange-950/40 border-2 border-orange-600 dark:border-orange-500 shadow-md shadow-orange-500/10{% endif %}
@@ -92,11 +88,13 @@
               name="chosen_answer" 
               value="{{ opt.key }}"
               {% if opt.is_selected %}checked{% endif %}
-              class="sr-only"
+              class="sr-only peer"
               hx-post="{% url 'exam_engine:save_answer' session.id %}"
               hx-include="#options-form-{{ current_order }}"
-              hx-swap="none"
-              @change="activeAnswers['{{ current_item.question.id }}'] = '{{ opt.key }}'"
+              hx-trigger="change"
+              hx-target="#question-viewport"
+              hx-swap="innerHTML"
+              aria-label="Opsi {{ opt.display_key }}"
             />
 
             <!-- Option Key Avatar -->
@@ -111,7 +109,7 @@
               {% if opt.is_selected and not current_item.is_doubt %}
                 <i data-lucide="check" class="w-5 h-5 stroke-[3]"></i>
               {% else %}
-                <span>{{ opt.key }}</span>
+                <span>{{ opt.display_key }}</span>
               {% endif %}
             </div>
 
@@ -133,7 +131,7 @@
                   loading="lazy"
                   onerror="this.style.display='none'"
                   class="max-h-48 rounded-xl border border-stone-200 dark:border-stone-800 object-contain" 
-                  alt="Opsi {{ opt.key }}" 
+                  alt="Gambar opsi {{ opt.display_key }}" 
                   @click.stop="lightboxImg = '{{ opt.image_url }}'"
                 />
               {% endif %}

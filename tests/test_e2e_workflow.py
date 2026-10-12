@@ -172,6 +172,7 @@ def test_full_cbt_e2e_workflow_lifecycle():
     # STAGE 3: Create Exam & Schedule (Assign to Class, Select Questions, Verify)
     # =========================================================================
     exam = Exam.objects.create(
+        shuffle_questions=False, shuffle_options=False,
         title='Penilaian Akhir Semester TLJ XII',
         exam_type='PAS',
         subject=subject,
@@ -237,7 +238,7 @@ def test_full_cbt_e2e_workflow_lifecycle():
         {'schedule_id': str(schedule.id), 'token': 'WRONG9'},
         HTTP_HX_REQUEST='true'
     )
-    assert invalid_token_resp.status_code == 400
+    assert invalid_token_resp.status_code == 200
 
     # Valid token submission
     confirm_resp = student_client.post(
@@ -299,7 +300,7 @@ def test_full_cbt_e2e_workflow_lifecycle():
         HTTP_HX_REQUEST='true'
     )
     assert v1_resp.status_code == 200
-    assert 'Peringatan Anti-Cheat (1/2)' in v1_resp.content.decode('utf-8')
+    assert 'Peringatan pindah layar (1/2)' in v1_resp.content.decode('utf-8')
     exam_session.refresh_from_db()
     assert exam_session.violation_count == 1
     assert exam_session.status == 'active'
@@ -334,7 +335,7 @@ def test_full_cbt_e2e_workflow_lifecycle():
         HTTP_HX_REQUEST='true'
     )
     assert check_status_resp.status_code == 200
-    assert 'window.location.reload()' in check_status_resp.content.decode('utf-8')
+    assert check_status_resp.headers.get('HX-Refresh') == 'true'
 
     # =========================================================================
     # STAGE 8: Student Finishes Exam (Score Calculation and Grading)

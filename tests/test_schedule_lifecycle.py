@@ -480,14 +480,17 @@ def test_confirm_token_rejects_unvalidated_exam(client, status):
     _, t = _guru(f'gate_{status}')
     exam = _exam(t, status=status)
     s = _schedule(exam, t)
+    from apps.master_data.models import ClassRoom
+    gate_class = ClassRoom.objects.create(name=f'X GATE {status}', level=10)
+    Schedule.objects.filter(pk=s.pk).update(class_room=gate_class)
     student_user = User.objects.create_user(username=f'siswa_gate_{status}', role=Role.SISWA)
-    Student.objects.create(user=student_user, nis=f'99{len(status)}', full_name='Siswa Gerbang')
+    Student.objects.create(user=student_user, nis=f'99{len(status)}', full_name='Siswa Gerbang', class_room=gate_class)
     client.force_login(student_user)
 
     res = client.post(reverse('exam_engine:confirm_token'),
                       {'schedule_id': str(s.id), 'token': 'TKN001'}, HTTP_HX_REQUEST='true')
 
-    assert res.status_code == 400
+    assert res.status_code == 200
     assert 'belum diverifikasi' in res.content.decode()
     assert not ExamSession.objects.filter(schedule=s).exists()
 

@@ -88,31 +88,7 @@
       <!-- Question Numbers Grid (5-6 columns) -->
       <div class="flex-1 overflow-y-auto pr-1 py-1 grid grid-cols-5 sm:grid-cols-6 gap-2.5 max-h-[45vh]">
         {% for q in questions %}
-          <button
-            id="drawer-nav-btn-{{ q.order_num }}"
-            type="button"
-            x-show="filterType === 'all' || (filterType === 'answered' && {% if q.is_answered and not q.is_doubt %}true{% else %}false{% endif %}) || (filterType === 'doubt' && {% if q.is_doubt %}true{% else %}false{% endif %}) || (filterType === 'unanswered' && {% if not q.is_answered %}true{% else %}false{% endif %})"
-            hx-get="{% url 'exam_engine:question_swap' session.id q.order_num %}" 
-            hx-target="#question-viewport"
-            hx-swap="innerHTML"
-            @click="activeOrder = {{ q.order_num }}; isDrawerOpen = false"
-            :class="activeOrder === {{ q.order_num }} ? 'ring-3 ring-orange-600 ring-offset-2 dark:ring-offset-zinc-900 scale-105 shadow-xl z-10' : ''"
-            class="h-12 rounded-2xl text-xs font-bold transition-all flex flex-col items-center justify-center relative cursor-pointer active:scale-95 m3-state-layer
-              {% if q.is_doubt %}
-                bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20
-              {% elif q.is_answered %}
-                bg-emerald-500 text-white shadow-md shadow-emerald-500/20
-              {% else %}
-                bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400
-              {% endif %}"
-          >
-            <span>{{ q.order_num }}</span>
-            {% if q.is_answered %}
-              <span class="text-[8px] opacity-80 uppercase leading-none font-bold">
-                {{ q.chosen_answer }}
-              </span>
-            {% endif %}
-          </button>
+          {% include 'exam_engine/partials/nav_button.html' with q=q variant='drawer' %}
         {% endfor %}
       </div>
     </div>

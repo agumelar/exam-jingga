@@ -75,6 +75,10 @@ class Exam(models.Model):
         default=True,
         help_text="Acak Urutan Soal untuk Setiap Siswa"
     )
+    shuffle_options = models.BooleanField(
+        default=True,
+        help_text="Acak Urutan Opsi A-E untuk Setiap Siswa (soal berkunci urutan tidak diacak)"
+    )
     token = models.CharField(
         max_length=10,
         null=True,

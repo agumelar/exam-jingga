@@ -57,6 +57,11 @@ class ExamSession(models.Model):
         default=3600,
         help_text="Sisa Waktu Pengerjaan dalam Detik"
     )
+    last_seen_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Heartbeat terakhir dari browser siswa (untuk monitoring koneksi)"
+    )
 
     class Meta:
         db_table = 'exam_sessions'
@@ -171,6 +176,17 @@ class StudentAnswer(models.Model):
         blank=True,
         help_text="Hasil Koreksi Jawaban (True jika Benar)"
     )
+    order_number = models.IntegerField(
+        default=0,
+        help_text="Nomor urut soal di lembar siswa ini (1..N, bisa hasil acak)"
+    )
+    # Huruf asli soal dalam urutan tampil, mis. 'CAEBD' berarti posisi tampil A = opsi asli C.
+    # chosen_answer selalu disimpan dalam huruf asli, jadi penilaian dan analisis pengecoh tetap valid.
+    option_order = models.CharField(
+        max_length=5,
+        default='ABCDE',
+        help_text="Urutan tampil opsi dalam huruf asli soal"
+    )
     updated_at = models.DateTimeField(
         auto_now=True,
         help_text="Waktu Terakhir Jawaban Diperbarui"
@@ -178,7 +194,7 @@ class StudentAnswer(models.Model):
 
     class Meta:
         db_table = 'student_answers'
-        ordering = ['session', 'question']
+        ordering = ['session', 'order_number']
         verbose_name = 'Jawaban Siswa'
         verbose_name_plural = 'Daftar Jawaban Siswa'
         constraints = [

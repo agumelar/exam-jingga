@@ -94,13 +94,17 @@
         {% if not available_exams %}
           <!-- Empty State -->
           <div class="bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 rounded-[2.5rem] p-12 text-center shadow-xs">
-            <i data-lucide="clock" class="w-10 h-10 text-slate-300 dark:text-zinc-600 mx-auto mb-3"></i>
-            <h4 class="font-semibold text-slate-500 dark:text-zinc-400 text-sm">
-              Tidak ada jadwal ujian aktif saat ini.
-            </h4>
-            <p class="text-xs text-slate-400 dark:text-zinc-500 mt-1">
-              Ujian akan muncul otomatis sesuai jam pelaksanaan.
-            </p>
+            <i data-lucide="clock" class="w-10 h-10 text-slate-400 dark:text-zinc-500 mx-auto mb-3" aria-hidden="true"></i>
+            {% if student_block_reason %}
+              <h4 class="font-semibold text-stone-800 dark:text-zinc-200 text-sm" role="alert">{{ student_block_reason }}</h4>
+            {% else %}
+              <h4 class="font-semibold text-stone-700 dark:text-zinc-300 text-sm">
+                Tidak ada jadwal ujian untuk kelas Anda saat ini.
+              </h4>
+              <p class="text-sm text-stone-600 dark:text-zinc-400 mt-1">
+                Ujian muncul di sini setelah naskahnya diverifikasi.
+              </p>
+            {% endif %}
           </div>
         {% else %}
           <!-- Exam Schedules List -->
@@ -184,7 +188,7 @@
             </li>
             <li class="flex gap-2.5 items-start">
               <div class="w-1.5 h-1.5 bg-orange-500 rounded-full mt-1.5 shrink-0"></div>
-              <span>Minta token 6 karakter kepada pengawas ruangan.</span>
+              <span>Minta token 6 karakter kepada guru di ruang ujian.</span>
             </li>
             <li class="flex gap-2.5 items-start">
               <div class="w-1.5 h-1.5 bg-orange-500 rounded-full mt-1.5 shrink-0"></div>
@@ -261,12 +265,12 @@
         <p class="text-xs font-medium text-slate-500 dark:text-zinc-400 truncate max-w-xs mx-auto" x-text="selectedExamTitle">
         </p>
         <p class="text-xs font-normal text-slate-400 mt-2">
-          Minta 6 digit token (huruf/angka) kepada pengawas
+          Minta token 6 karakter (huruf/angka) kepada guru di ruang ujian
         </p>
       </div>
 
       <!-- Token Validation Error Container -->
-      <div id="token-error-container" class="mb-4"></div>
+      <div id="token-error-container" class="mb-4" aria-live="polite"></div>
 
       <!-- 6-Box OTP Form -->
       <form 
@@ -274,6 +278,7 @@
         hx-target="#token-error-container"
         hx-swap="innerHTML"
         @submit="submitting = true"
+        @htmx:after-request="submitting = false"
         class="space-y-6"
       >
         {% csrf_token %}
@@ -306,7 +311,7 @@
         <button
           type="submit"
           :disabled="tokenString.length !== 6 || submitting"
-          class="w-full bg-orange-600 hover:bg-orange-700 text-white py-4 rounded-2xl font-semibold text-xs tracking-wide shadow-xl shadow-orange-600/30 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+          class="w-full bg-orange-700 hover:bg-orange-800 text-white py-4 rounded-2xl font-semibold text-sm tracking-wide transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
         >
           <template x-if="submitting">
             <span class="flex items-center gap-2">
@@ -316,8 +321,8 @@
           </template>
           <template x-if="!submitting">
             <span class="flex items-center gap-2">
-              <i data-lucide="sparkles" class="w-4 h-4"></i>
-              <span>Mulai Ujian Sekarang</span>
+              <i data-lucide="log-in" class="w-4 h-4" aria-hidden="true"></i>
+              <span>Mulai Ujian</span>
             </span>
           </template>
         </button>

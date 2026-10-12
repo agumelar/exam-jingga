@@ -1,0 +1,23 @@
+{% comment %}
+Tombol nomor soal. variant='sidebar' (desktop) atau 'drawer' (mobile). oob=True untuk update setelah simpan jawaban.
+Huruf yang ditampilkan adalah huruf tampil siswa (q.chosen_display), bukan huruf asli soal.
+{% endcomment %}
+<button
+  id="{% if variant == 'drawer' %}drawer-nav-btn{% else %}nav-btn{% endif %}-{{ q.order_num }}"
+  type="button"
+  {% if oob %}hx-swap-oob="outerHTML"{% endif %}
+  {% if variant == 'drawer' %}x-show="filterType === 'all' || (filterType === 'answered' && {% if q.is_answered and not q.is_doubt %}true{% else %}false{% endif %}) || (filterType === 'doubt' && {% if q.is_doubt %}true{% else %}false{% endif %}) || (filterType === 'unanswered' && {% if not q.is_answered %}true{% else %}false{% endif %})"{% endif %}
+  hx-get="{% url 'exam_engine:question_swap' session.id q.order_num %}"
+  hx-target="#question-viewport"
+  hx-swap="innerHTML"
+  @click="activeOrder = {{ q.order_num }}{% if variant == 'drawer' %}; isDrawerOpen = false{% endif %}"
+  :class="activeOrder === {{ q.order_num }} ? 'ring-2 ring-orange-600 ring-offset-2 dark:ring-offset-zinc-950' : ''"
+  aria-label="Soal {{ q.order_num }}{% if q.is_doubt %}, ragu-ragu{% elif q.is_answered %}, terjawab {{ q.chosen_display }}{% else %}, belum dijawab{% endif %}"
+  class="{% if variant == 'drawer' %}h-12 rounded-2xl{% else %}h-11 rounded-xl{% endif %} text-xs font-bold transition-colors cursor-pointer flex flex-col items-center justify-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600
+    {% if q.is_doubt %}bg-amber-400 text-stone-950
+    {% elif q.is_answered %}bg-emerald-700 text-white
+    {% else %}bg-stone-100 dark:bg-zinc-800 text-stone-700 dark:text-zinc-300{% endif %}"
+>
+  <span>{{ q.order_num }}</span>
+  {% if q.is_answered %}<span class="text-[10px] leading-none font-bold">{{ q.chosen_display }}</span>{% endif %}
+</button>

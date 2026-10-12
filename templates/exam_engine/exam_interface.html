@@ -9,7 +9,7 @@
     sessionId: '{{ session.id }}',
     initialTimeLeft: {{ remaining_seconds|default:3600 }},
     isInitiallyLocked: {% if is_locked %}true{% else %}false{% endif %},
-    initialViolationCount: {{ violation_count|default:0 }},
+    isOfficial: {% if is_official_exam %}true{% else %}false{% endif %},
     totalCount: {{ total_count|default:1 }}
   })"
   x-init="init()"
@@ -95,6 +95,12 @@
     </div>
   </header>
 
+  <div x-show="saveFailed" x-cloak role="alert" class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pt-4">
+    <p class="p-3 rounded-2xl bg-red-700 text-white text-sm font-semibold">
+      Jawaban terakhir belum tersimpan. Periksa koneksi, lalu pilih ulang jawabannya.
+    </p>
+  </div>
+
   <!-- Main Exam Content Area -->
   <div class="flex-1 flex flex-col lg:flex-row max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 gap-6 sm:gap-8">
     
@@ -123,28 +129,7 @@
         <!-- Numbers Grid (5 columns) -->
         <div class="grid grid-cols-5 gap-2 max-h-[320px] overflow-y-auto pr-1">
           {% for q in questions %}
-            <button 
-              id="nav-btn-{{ q.order_num }}" 
-              type="button"
-              hx-get="{% url 'exam_engine:question_swap' session.id q.order_num %}" 
-              hx-target="#question-viewport"
-              hx-swap="innerHTML"
-              @click="activeOrder = {{ q.order_num }}"
-              :class="activeOrder === {{ q.order_num }} ? 'ring-2 ring-orange-600 ring-offset-2 dark:ring-offset-zinc-950 scale-105 shadow-md z-10' : ''"
-              class="h-11 rounded-xl text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center
-                {% if q.is_doubt %}
-                  bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20
-                {% elif q.is_answered %}
-                  bg-emerald-500 text-white shadow-md shadow-emerald-500/20
-                {% else %}
-                  bg-slate-50 dark:bg-zinc-800/80 text-slate-500 dark:text-zinc-400
-                {% endif %}"
-            >
-              <span>{{ q.order_num }}</span>
-              {% if q.is_answered %}
-                <span class="text-[8px] leading-none uppercase font-bold">{{ q.chosen_answer }}</span>
-              {% endif %}
-            </button>
+            {% include 'exam_engine/partials/nav_button.html' with q=q variant='sidebar' %}
           {% endfor %}
         </div>
         
@@ -324,7 +309,7 @@
 
 {% block extra_scripts %}
 <script>
-  // Anti-Cheat Protective Layer (Keyboard shortcuts prevention)
+  // Shortcut devtools dan simpan halaman dimatikan; ini penghalang ringan, bukan pengaman utama
   document.addEventListener('keydown', function(e) {
     if (
       e.key === 'F12' ||
@@ -336,20 +321,27 @@
     }
   });
 
+  // Halaman yang dipulihkan dari cache tombol Back bisa menampilkan soal dan timer basi
+  window.addEventListener('pageshow', function(e) {
+    if (e.persisted) window.location.reload();
+  });
+
   function examInterface(config) {
     return {
       sessionId: config.sessionId,
       timeLeft: config.initialTimeLeft,
+      deadline: Date.now() + config.initialTimeLeft * 1000,
       isLocked: config.isInitiallyLocked,
-      violationCount: config.initialViolationCount,
+      isOfficial: config.isOfficial,
       totalCount: config.totalCount,
       activeOrder: 1,
       fontSize: 'normal',
       isDrawerOpen: false,
       lightboxImg: null,
       showFinishModal: false,
-      activeAnswers: {},
+      saveFailed: false,
       lastCheatTime: 0,
+      blurTimer: null,
       timerInterval: null,
 
       get formattedTime() {
@@ -358,27 +350,69 @@
         const m = Math.floor((s % 3600) / 60);
         const sec = s % 60;
         const pad = (n) => String(n).padStart(2, '0');
-        if (h > 0) {
-          return `${h}:${pad(m)}:${pad(sec)}`;
-        }
-        return `${pad(m)}:${pad(sec)}`;
+        return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
+      },
+
+      csrfToken() {
+        const el = document.querySelector('#finish-exam-form [name=csrfmiddlewaretoken]');
+        return el ? el.value : '';
       },
 
       init() {
         this.initTimer();
         this.initAntiCheat();
+        this.initHeartbeat();
+        this.initSaveWatch();
       },
 
       initTimer() {
-        if (this.isLocked || this.timeLeft <= 0) return;
+        // Dihitung dari tenggat absolut supaya tidak melambat saat tab di-throttle browser
         this.timerInterval = setInterval(() => {
-          if (this.timeLeft > 0) {
-            this.timeLeft--;
-          } else {
+          this.timeLeft = Math.max(0, Math.round((this.deadline - Date.now()) / 1000));
+          if (this.timeLeft <= 0) {
             clearInterval(this.timerInterval);
             this.autoSubmitExam();
           }
         }, 1000);
+      },
+
+      syncDeadline(remainingSeconds) {
+        if (typeof remainingSeconds === 'number') {
+          this.deadline = Date.now() + remainingSeconds * 1000;
+        }
+      },
+
+      initHeartbeat() {
+        const beat = () => {
+          fetch(`/exam/session/${this.sessionId}/heartbeat/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': this.csrfToken() },
+            credentials: 'same-origin',
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data) => {
+              if (!data) return;
+              if (data.status === 'finished') { window.location.href = '/student/dashboard/'; return; }
+              if (data.status === 'locked' && !this.isLocked) { window.location.reload(); return; }
+              this.syncDeadline(data.remaining_seconds);
+            })
+            .catch(() => {});
+        };
+        setInterval(beat, 15000);
+      },
+
+      initSaveWatch() {
+        const isSave = (evt) => (evt.detail.pathInfo && evt.detail.pathInfo.requestPath || '').includes('/save-answer/');
+        document.body.addEventListener('htmx:responseError', (evt) => { if (isSave(evt)) this.saveFailed = true; });
+        document.body.addEventListener('htmx:sendError', (evt) => { if (isSave(evt)) this.saveFailed = true; });
+        document.body.addEventListener('htmx:afterRequest', (evt) => {
+          if (isSave(evt) && evt.detail.successful) this.saveFailed = false;
+        });
+        document.body.addEventListener('htmx:afterSwap', (evt) => {
+          if (evt.detail.target && evt.detail.target.id === 'lock-container' && document.getElementById('lock-screen-overlay')) {
+            this.isLocked = true;
+          }
+        });
       },
 
       initAntiCheat() {
@@ -387,62 +421,57 @@
           const now = Date.now();
           if (now - this.lastCheatTime > 3000) {
             this.lastCheatTime = now;
-            htmx.ajax('POST', `/exam/session/${this.sessionId}/violation/`, {
-              target: '#lock-container',
-              swap: 'innerHTML'
-            });
+            htmx.ajax('POST', `/exam/session/${this.sessionId}/violation/`, { target: '#lock-container', swap: 'innerHTML' });
           }
         };
 
         document.addEventListener('visibilitychange', () => {
-          if (document.hidden) {
-            reportViolation();
-          }
+          if (document.hidden) reportViolation();
         });
+
+        // Layar terbagi atau jendela mengambang di Android tidak menyembunyikan tab, tapi memindahkan fokus.
+        // Jeda 3 detik supaya sentuhan singkat di luar halaman tidak langsung dihitung.
+        window.addEventListener('blur', () => {
+          clearTimeout(this.blurTimer);
+          this.blurTimer = setTimeout(() => {
+            if (!document.hasFocus() && !document.hidden) reportViolation();
+          }, 3000);
+        });
+        window.addEventListener('focus', () => clearTimeout(this.blurTimer));
       },
 
       autoSubmitExam() {
+        // Sesi terkunci dinilai server saat waktunya habis; siswa yang terkunci tidak mengirim sendiri
+        if (this.isLocked) return;
         const form = document.getElementById('finish-exam-form');
-        if (form) {
-          form.submit();
-        }
+        if (form) form.submit();
       },
 
       goToPrevQuestion() {
         if (this.activeOrder > 1) {
-          const targetOrder = this.activeOrder - 1;
-          htmx.ajax('GET', `/exam/session/${this.sessionId}/question/${targetOrder}/`, {
-            target: '#question-viewport',
-            swap: 'innerHTML'
-          });
-          this.activeOrder = targetOrder;
+          const target = this.activeOrder - 1;
+          htmx.ajax('GET', `/exam/session/${this.sessionId}/question/${target}/`, { target: '#question-viewport', swap: 'innerHTML' });
+          this.activeOrder = target;
         }
       },
 
       goToNextQuestion() {
         if (this.activeOrder < this.totalCount) {
-          const targetOrder = this.activeOrder + 1;
-          htmx.ajax('GET', `/exam/session/${this.sessionId}/question/${targetOrder}/`, {
-            target: '#question-viewport',
-            swap: 'innerHTML'
-          });
-          this.activeOrder = targetOrder;
+          const target = this.activeOrder + 1;
+          htmx.ajax('GET', `/exam/session/${this.sessionId}/question/${target}/`, { target: '#question-viewport', swap: 'innerHTML' });
+          this.activeOrder = target;
         }
       },
 
       toggleDoubt() {
-        const doubtBtn = document.querySelector('#question-card-inner form button');
-        if (doubtBtn) {
-          doubtBtn.click();
-        }
+        const doubtBtn = document.querySelector('#question-card-inner [data-doubt-form] button');
+        if (doubtBtn) doubtBtn.click();
       }
     };
   }
 
-  document.body.addEventListener('htmx:afterSwap', function(evt) {
-    if (window.lucide) {
-      window.lucide.createIcons();
-    }
+  document.body.addEventListener('htmx:afterSwap', function() {
+    if (window.lucide) window.lucide.createIcons();
   });
 </script>
 {% endblock %}

@@ -20,6 +20,7 @@ urlpatterns = [
     # Anti-cheat Violation & Status Polling
     path('exam/session/<uuid:session_id>/violation/', views.ViolationHandlerView.as_view(), name='violation_handler'),
     path('exam/session/<uuid:session_id>/check-status/', views.StatusCheckView.as_view(), name='check_status'),
+    path('exam/session/<uuid:session_id>/heartbeat/', views.HeartbeatView.as_view(), name='heartbeat'),
     
     # Final Submission & Auto-grading
     path('exam/session/<uuid:session_id>/finish/', views.FinishExamView.as_view(), name='finish_exam'),

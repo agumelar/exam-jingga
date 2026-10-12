@@ -803,6 +803,15 @@ window.questionModalData = function(initial) {
         </div>
       </div>
 
+      <label class="flex items-start gap-3 p-4 rounded-2xl border border-stone-300 dark:border-stone-600 bg-stone-50 dark:bg-stone-800/50 cursor-pointer">
+        <input type="checkbox" name="lock_option_order" value="on" {% if question.lock_option_order %}checked{% endif %}
+          class="mt-0.5 w-5 h-5 accent-orange-700 focus-visible:outline-2 focus-visible:outline-orange-600">
+        <span class="text-sm text-stone-800 dark:text-stone-200">
+          <span class="font-semibold">Jangan acak urutan opsi</span><br>
+          Centang bila ada opsi yang merujuk opsi lain, misalnya "Semua jawaban benar" atau "A dan B benar".
+        </span>
+      </label>
+
       <!-- SECTION 4: ACTION SUBMIT BUTTONS -->
       <div class="flex items-center gap-3 pt-4 border-t border-stone-200 dark:border-stone-800">
         <button 

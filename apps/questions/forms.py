@@ -34,6 +34,7 @@ class QuestionForm(forms.ModelForm):
             'option_e',
             'image_e',
             'correct_answer',
+            'lock_option_order',
         ]
         widgets = {
             'cp_code': forms.Select(attrs={'class': 'w-full'}),

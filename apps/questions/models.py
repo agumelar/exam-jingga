@@ -1,7 +1,25 @@
+import re
 import uuid
 from django.db import models
 from django.core.exceptions import ValidationError
 from apps.master_data.models import Subject, Teacher
+
+
+_CROSS_REFERENCE_PATTERNS = [
+    re.compile(r'\b(semua|keduanya|seluruh)\b.*\b(benar|salah|jawaban|pilihan|opsi)\b', re.IGNORECASE),
+    re.compile(r'\b(benar|salah)\s+semua\b', re.IGNORECASE),
+    re.compile(r'\btidak\s+ada\b.*\b(benar|salah|jawaban)\b', re.IGNORECASE),
+    re.compile(r'\b[a-e]\s*(,|dan|&|serta|atau)\s*[a-e]\b', re.IGNORECASE),
+    re.compile(r'\b(jawaban|opsi|pilihan)\s+[a-e]\b', re.IGNORECASE),
+]
+
+
+def detect_cross_referencing_options(option_texts):
+    """
+    True bila ada opsi yang maknanya bergantung pada posisi opsi lain ("Semua benar",
+    "A dan B benar"). Opsi seperti itu rusak bila urutannya diacak.
+    """
+    return any(p.search(text or '') for text in option_texts for p in _CROSS_REFERENCE_PATTERNS)
 
 
 class Question(models.Model):
@@ -103,6 +121,10 @@ class Question(models.Model):
         choices=ANSWER_CHOICES,
         default='A',
         help_text="Kunci Jawaban Benar (A/B/C/D/E)"
+    )
+    lock_option_order = models.BooleanField(
+        default=False,
+        help_text="Jangan acak urutan opsi (untuk opsi seperti 'Semua benar' atau 'A dan B benar')"
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

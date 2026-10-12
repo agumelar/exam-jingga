@@ -48,6 +48,7 @@ def test_exam_session_model_creation_and_properties():
     )
 
     exam = Exam.objects.create(
+        shuffle_questions=False, shuffle_options=False,
         teacher=teacher,
         subject=subject,
         title='UAS Pemrograman Web',
@@ -106,7 +107,7 @@ def test_student_answer_model_and_grading():
     student_user = User.objects.create_user(username='siswa2', role=Role.SISWA)
     student = Student.objects.create(user=student_user, nis='9876543210', full_name='Budi Siswa')
 
-    exam = Exam.objects.create(teacher=teacher, subject=subject, title='UH Teks Anekdot', duration=60)
+    exam = Exam.objects.create(shuffle_questions=False, shuffle_options=False, teacher=teacher, subject=subject, title='UH Teks Anekdot', duration=60)
     schedule = Schedule.objects.create(
         exam=exam,
         teacher=teacher,
@@ -136,13 +137,15 @@ def test_student_answer_model_and_grading():
         session=session,
         question=q1,
         chosen_answer='A',
-        is_doubt=False
+        is_doubt=False,
+        order_number=1,
     )
     ans2 = StudentAnswer.objects.create(
         session=session,
         question=q2,
         chosen_answer='B',
-        is_doubt=True
+        is_doubt=True,
+        order_number=2,
     )
 
     assert isinstance(ans1.id, uuid.UUID)
@@ -170,10 +173,12 @@ def test_confirm_token_view_valid_and_invalid(client):
     """Test token verification, session creation and answer sheet initialization."""
     subject = Subject.objects.create(name='Matematika')
     teacher = Teacher.objects.create(full_name='Guru MTK')
+    mtk_class = ClassRoom.objects.create(name='X MTK 1', level=10)
     student_user = User.objects.create_user(username='siswa_mtk', password='password123', role=Role.SISWA)
-    student = Student.objects.create(user=student_user, nis='111222333', full_name='Siswa MTK')
+    student = Student.objects.create(user=student_user, nis='111222333', full_name='Siswa MTK', class_room=mtk_class)
 
     exam = Exam.objects.create(
+        shuffle_questions=False, shuffle_options=False,
         teacher=teacher,
         subject=subject,
         title='UH Vektor',
@@ -185,6 +190,7 @@ def test_confirm_token_view_valid_and_invalid(client):
     schedule = Schedule.objects.create(
         exam=exam,
         teacher=teacher,
+        class_room=mtk_class,
         start_time=timezone.now(),
         end_time=timezone.now() + timedelta(hours=2),
         token='VEKTOR',
@@ -204,7 +210,7 @@ def test_confirm_token_view_valid_and_invalid(client):
         {'schedule_id': str(schedule.id), 'token': 'WRONG9'},
         HTTP_HX_REQUEST='true'
     )
-    assert res_invalid.status_code == 400
+    assert res_invalid.status_code == 200
     assert 'Token ujian tidak valid' in res_invalid.content.decode('utf-8')
 
     # 2. Valid Token Test (case-insensitive & whitespace tolerant)
@@ -235,7 +241,7 @@ def test_exam_interface_view_and_question_swap(client):
     student_user = User.objects.create_user(username='siswa_fisika', role=Role.SISWA)
     student = Student.objects.create(user=student_user, nis='444555666', full_name='Siswa Fisika')
 
-    exam = Exam.objects.create(teacher=teacher, subject=subject, title='PAT Fisika Terapan', duration=90, status='validated')
+    exam = Exam.objects.create(shuffle_questions=False, shuffle_options=False, teacher=teacher, subject=subject, title='PAT Fisika Terapan', duration=90, status='validated')
     schedule = Schedule.objects.create(
         exam=exam,
         teacher=teacher,
@@ -283,7 +289,7 @@ def test_save_answer_view_with_oob_updates(client):
     student_user = User.objects.create_user(username='siswa_kimia', role=Role.SISWA)
     student = Student.objects.create(user=student_user, nis='777888999', full_name='Siswa Kimia')
 
-    exam = Exam.objects.create(teacher=teacher, subject=subject, title='UH Larutan Asam Basa', duration=60, status='validated')
+    exam = Exam.objects.create(shuffle_questions=False, shuffle_options=False, teacher=teacher, subject=subject, title='UH Larutan Asam Basa', duration=60, status='validated')
     schedule = Schedule.objects.create(
         exam=exam,
         teacher=teacher,
@@ -302,7 +308,7 @@ def test_save_answer_view_with_oob_updates(client):
         correct_answer='A'
     )
     ExamQuestion.objects.create(exam=exam, question=q1, order_number=1)
-    ans1 = StudentAnswer.objects.create(session=session, question=q1)
+    ans1 = StudentAnswer.objects.create(session=session, question=q1, order_number=1)
 
     client.force_login(student_user)
 
@@ -321,7 +327,7 @@ def test_save_answer_view_with_oob_updates(client):
     content = res.content.decode('utf-8')
     assert 'hx-swap-oob="outerHTML"' in content
     assert 'nav-btn-1' in content
-    assert 'bg-emerald-500' in content
+    assert 'bg-emerald-700' in content
 
     ans1.refresh_from_db()
     assert ans1.chosen_answer == 'A'
@@ -333,9 +339,7 @@ def test_save_answer_view_with_oob_updates(client):
         reverse('exam_engine:save_answer', kwargs={'session_id': session.id}),
         {
             'question_id': str(q1.id),
-            'chosen_answer': 'A',
-            'order_num': 1,
-            'is_doubt': 'true'
+            'toggle_doubt': '1',
         },
         HTTP_HX_REQUEST='true'
     )
@@ -359,7 +363,7 @@ def test_violation_handler_and_status_check(client):
     student_user = User.objects.create_user(username='siswa_bio', role=Role.SISWA)
     student = Student.objects.create(user=student_user, nis='12121212', full_name='Siswa Biologi')
 
-    exam = Exam.objects.create(teacher=teacher, subject=subject, title='PAS Biologi', exam_type='PAS', duration=60, status='validated')
+    exam = Exam.objects.create(shuffle_questions=False, shuffle_options=False, teacher=teacher, subject=subject, title='PAS Biologi', exam_type='PAS', duration=60, status='validated')
     schedule = Schedule.objects.create(
         exam=exam,
         teacher=teacher,
@@ -375,7 +379,7 @@ def test_violation_handler_and_status_check(client):
     # 1. First Violation (Warning Toast)
     res_v1 = client.post(reverse('exam_engine:violation_handler', kwargs={'session_id': session.id}))
     assert res_v1.status_code == 200
-    assert 'Peringatan Anti-Cheat (1/2)' in res_v1.content.decode('utf-8')
+    assert 'Peringatan pindah layar (1/2)' in res_v1.content.decode('utf-8')
     
     session.refresh_from_db()
     assert session.violation_count == 1
@@ -402,8 +406,7 @@ def test_violation_handler_and_status_check(client):
 
     res_check_unlocked = client.get(reverse('exam_engine:check_status', kwargs={'session_id': session.id}))
     assert res_check_unlocked.status_code == 200
-    assert 'lock-container' in res_check_unlocked.content.decode('utf-8')
-    assert 'window.location.reload()' in res_check_unlocked.content.decode('utf-8')
+    assert res_check_unlocked.headers.get('HX-Refresh') == 'true'
 
 
 @pytest.mark.django_db
@@ -417,7 +420,7 @@ def test_violation_handler_uh_warning_only(client):
     student_user = User.objects.create_user(username='siswa_kimia', role=Role.SISWA)
     student = Student.objects.create(user=student_user, nis='33333333', full_name='Siswa Kimia')
 
-    exam = Exam.objects.create(teacher=teacher, subject=subject, title='UH Larutan Asam', exam_type='UH', duration=60, status='validated')
+    exam = Exam.objects.create(shuffle_questions=False, shuffle_options=False, teacher=teacher, subject=subject, title='UH Larutan Asam', exam_type='UH', duration=60, status='validated')
     schedule = Schedule.objects.create(
         exam=exam,
         teacher=teacher,
@@ -432,7 +435,7 @@ def test_violation_handler_uh_warning_only(client):
     # 1. First violation
     res1 = client.post(reverse('exam_engine:violation_handler', kwargs={'session_id': session.id}))
     assert res1.status_code == 200
-    assert 'Peringatan Anti-Cheat (1)' in res1.content.decode('utf-8')
+    assert 'Peringatan pindah layar (1)' in res1.content.decode('utf-8')
     session.refresh_from_db()
     assert session.violation_count == 1
     assert session.status == 'active'
@@ -440,7 +443,7 @@ def test_violation_handler_uh_warning_only(client):
     # 2. Second violation: still active! Never locked!
     res2 = client.post(reverse('exam_engine:violation_handler', kwargs={'session_id': session.id}))
     assert res2.status_code == 200
-    assert 'Peringatan Anti-Cheat (2)' in res2.content.decode('utf-8')
+    assert 'Peringatan pindah layar (2)' in res2.content.decode('utf-8')
     assert 'lock-screen-overlay' not in res2.content.decode('utf-8')
     session.refresh_from_db()
     assert session.violation_count == 2
@@ -459,7 +462,7 @@ def test_finish_exam_view_and_score_calculation(client):
     student_user = User.objects.create_user(username='siswa_sejarah', role=Role.SISWA)
     student = Student.objects.create(user=student_user, nis='333222111', full_name='Siswa Sejarah')
 
-    exam = Exam.objects.create(teacher=teacher, subject=subject, title='PAS Sejarah Indonesia', duration=60, status='validated')
+    exam = Exam.objects.create(shuffle_questions=False, shuffle_options=False, teacher=teacher, subject=subject, title='PAS Sejarah Indonesia', duration=60, status='validated')
     schedule = Schedule.objects.create(
         exam=exam,
         teacher=teacher,
@@ -476,10 +479,10 @@ def test_finish_exam_view_and_score_calculation(client):
     q4 = Question.objects.create(subject=subject, question_text='Hari Pahlawan 10 Nov', correct_answer='D')
 
     # 3 out of 4 correct -> 75%
-    StudentAnswer.objects.create(session=session, question=q1, chosen_answer='A')
-    StudentAnswer.objects.create(session=session, question=q2, chosen_answer='B')
-    StudentAnswer.objects.create(session=session, question=q3, chosen_answer='C')
-    StudentAnswer.objects.create(session=session, question=q4, chosen_answer='A') # Wrong
+    StudentAnswer.objects.create(session=session, question=q1, order_number=1, chosen_answer='A')
+    StudentAnswer.objects.create(session=session, question=q2, order_number=2, chosen_answer='B')
+    StudentAnswer.objects.create(session=session, question=q3, order_number=3, chosen_answer='C')
+    StudentAnswer.objects.create(session=session, question=q4, order_number=4, chosen_answer='A') # Wrong
 
     client.force_login(student_user)
 
@@ -519,7 +522,7 @@ def test_student_dashboard_view(client):
         major=major
     )
 
-    exam1 = Exam.objects.create(teacher=teacher, subject=subject, title='UH Sistem Starter', exam_type='UH', duration=45, level=11, status='validated')
+    exam1 = Exam.objects.create(shuffle_questions=False, shuffle_options=False, teacher=teacher, subject=subject, title='UH Sistem Starter', exam_type='UH', duration=45, level=11, status='validated')
     schedule1 = Schedule.objects.create(
         exam=exam1,
         class_room=classroom,
@@ -533,7 +536,7 @@ def test_student_dashboard_view(client):
     )
 
     # Finished exam
-    exam2 = Exam.objects.create(teacher=teacher, subject=subject, title='UH Pengisian', exam_type='UH', duration=45, level=11, status='validated')
+    exam2 = Exam.objects.create(shuffle_questions=False, shuffle_options=False, teacher=teacher, subject=subject, title='UH Pengisian', exam_type='UH', duration=45, level=11, status='validated')
     schedule2 = Schedule.objects.create(
         exam=exam2,
         class_room=classroom,
@@ -586,7 +589,7 @@ def test_student_dashboard_teacher_assignment_isolation(client):
 
     now = timezone.now()
     # Exam Pak Ade
-    exam_ade = Exam.objects.create(teacher=t_ade, subject=subject, title='PAS Matematika Ade', exam_type='PAS', level=10, status='validated')
+    exam_ade = Exam.objects.create(shuffle_questions=False, shuffle_options=False, teacher=t_ade, subject=subject, title='PAS Matematika Ade', exam_type='PAS', level=10, status='validated')
     sch_ade = Schedule.objects.create(
         exam=exam_ade,
         teacher=t_ade,
@@ -597,7 +600,7 @@ def test_student_dashboard_teacher_assignment_isolation(client):
     )
 
     # Exam Pak Beni
-    exam_beni = Exam.objects.create(teacher=t_beni, subject=subject, title='PAS Matematika Beni', exam_type='PAS', level=10, status='validated')
+    exam_beni = Exam.objects.create(shuffle_questions=False, shuffle_options=False, teacher=t_beni, subject=subject, title='PAS Matematika Beni', exam_type='PAS', level=10, status='validated')
     sch_beni = Schedule.objects.create(
         exam=exam_beni,
         teacher=t_beni,
@@ -624,7 +627,7 @@ def test_opsi_a_hard_stop_remaining_seconds():
     """Verify calculate_remaining_seconds caps remaining duration by schedule.end_time (Opsi A)."""
     now = timezone.now()
     subject = Subject.objects.create(name='Bahasa Indonesia')
-    exam = Exam.objects.create(subject=subject, title='PTS B.Indo', duration=60, status='validated')
+    exam = Exam.objects.create(shuffle_questions=False, shuffle_options=False, subject=subject, title='PTS B.Indo', duration=60, status='validated')
     # Schedule closes in 20 minutes
     schedule = Schedule.objects.create(
         exam=exam,
@@ -653,14 +656,16 @@ def test_confirm_token_time_gates(client):
     """Verify ConfirmTokenView rejects token submission if outside schedule start_time/end_time window."""
     now = timezone.now()
     subject = Subject.objects.create(name='IPAS')
-    exam = Exam.objects.create(subject=subject, title='PTS IPAS', duration=60, status='validated')
+    exam = Exam.objects.create(shuffle_questions=False, shuffle_options=False, subject=subject, title='PTS IPAS', duration=60, status='validated')
+    gate_class = ClassRoom.objects.create(name='X GATE 1', level=10)
     student_user = User.objects.create_user(username='siswa_gate', role=Role.SISWA)
-    Student.objects.create(user=student_user, nis='999333444', full_name='Siswa Gate')
+    Student.objects.create(user=student_user, nis='999333444', full_name='Siswa Gate', class_room=gate_class)
     client.force_login(student_user)
 
     # 1. Schedule already ended (e.g. 13:31 test)
     ended_schedule = Schedule.objects.create(
         exam=exam,
+        class_room=gate_class,
         start_time=now - timedelta(hours=2),
         end_time=now - timedelta(minutes=5),
         token='PASSED',
@@ -671,12 +676,14 @@ def test_confirm_token_time_gates(client):
         {'schedule_id': str(ended_schedule.id), 'token': 'PASSED'},
         HTTP_HX_REQUEST='true'
     )
-    assert res_ended.status_code == 400
-    assert 'telah berakhir' in res_ended.content.decode('utf-8')
+    assert res_ended.status_code == 200
+    assert 'sudah berakhir' in res_ended.content.decode('utf-8')
 
-    # 2. Schedule not started yet
+    # 2. Schedule not started yet (paket lain, karena satu paket satu jadwal per kelas)
+    exam = Exam.objects.create(shuffle_questions=False, shuffle_options=False, subject=subject, title='PTS IPAS 2', duration=60, status='validated')
     future_schedule = Schedule.objects.create(
         exam=exam,
+        class_room=gate_class,
         start_time=now + timedelta(hours=1),
         end_time=now + timedelta(hours=2),
         token='FUTURE',
@@ -687,6 +694,6 @@ def test_confirm_token_time_gates(client):
         {'schedule_id': str(future_schedule.id), 'token': 'FUTURE'},
         HTTP_HX_REQUEST='true'
     )
-    assert res_future.status_code == 400
+    assert res_future.status_code == 200
     assert 'belum dibuka' in res_future.content.decode('utf-8')
 

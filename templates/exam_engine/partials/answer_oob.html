@@ -1,0 +1,6 @@
+{% include 'exam_engine/partials/nav_button.html' with q=item variant='sidebar' oob=True %}
+{% include 'exam_engine/partials/nav_button.html' with q=item variant='drawer' oob=True %}
+<span id="answered-counter" hx-swap-oob="outerHTML" class="text-xs font-bold text-orange-700 dark:text-orange-400">{{ answered_count }}/{{ total_count }}</span>
+<span id="drawer-answered-counter" hx-swap-oob="outerHTML" class="text-xs font-semibold text-stone-600 dark:text-zinc-400">Terjawab: {{ answered_count }} dari {{ total_count }} ({{ progress_percent }}%)</span>
+<div id="progress-bar-fill" hx-swap-oob="outerHTML" class="bg-orange-600 h-full transition-all duration-500" style="width: {{ progress_percent }}%;"></div>
+<div id="drawer-progress-bar-fill" hx-swap-oob="outerHTML" class="bg-orange-600 h-full transition-all duration-500" style="width: {{ progress_percent }}%;"></div>
