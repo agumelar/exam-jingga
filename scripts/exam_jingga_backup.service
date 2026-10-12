@@ -1,0 +1,10 @@
+[Unit]
+Description=Exam Jingga - backup harian database dan media
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/opt/exam-jingga
+ExecStart=/usr/bin/bash /opt/exam-jingga/scripts/backup_db.sh harian
