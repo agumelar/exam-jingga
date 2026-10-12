@@ -21,14 +21,11 @@ def test_system_check():
     call_command('check')
 
 
-def test_legacy_react_archived():
-    """Verify legacy React frontend files are archived in _legacy_react/."""
+def test_legacy_frontend_removed():
+    """Kode SPA React/Supabase lama sudah dihapus; aplikasi sepenuhnya Django + HTMX."""
     base_dir = settings.BASE_DIR
-    legacy_dir = base_dir / '_legacy_react'
-    assert legacy_dir.exists()
-    assert (legacy_dir / 'src').exists()
-    assert (legacy_dir / 'public').exists()
-    assert (legacy_dir / 'vite.config.js').exists()
+    assert not (base_dir / '_legacy_react').exists()
+    assert not (base_dir / 'supabase' / 'schema.sql').exists()
 
 
 def test_vendor_static_assets_exist():

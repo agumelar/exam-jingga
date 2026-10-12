@@ -9,7 +9,7 @@
 * **Nama Proyek**: Exam Jingga (Aplikasi CBT Ujian Sekolah SMKN 1 Rongga)
 * **Arsitektur**: **DATH Modern Monolith** (Django 5.1 LTS, Alpine.js, Tailwind CSS v4, HTMX) menggantikan arsitektur SPA React lama.
 * **Tujuan Utama**: Membangun sistem CBT sekolah yang kokoh, zero-CORS browser dependency, offline-first vendor assets, real-time HTMX auto-save & polling, mitigasi beban 722+ siswa serentak di VPS ARM64, integrasi Keycloak SSO & OpenAPI Central Data Master, serta otomatisasi deployment produksi dengan Gunicorn + WhiteNoise + Nginx + Systemd.
-* **Status Keseluruhan**: **🎉 SELURUH RE-ENGINEERING DATH STACK (TASK 1 s/d TASK 12) 100% SELESAI, PASS 128 TESTS (100% PASS RATE), DAN PRODUCTION-READY UNTUK VPS UBUNTU ARM64**.
+* **Status Keseluruhan**: Audit menyeluruh Oktober 2026 (Task 17-24) selesai: alur status naskah, keamanan login SSO-only, integritas ujian siswa, hak akses per peran, jadwal/kuota/pemilihan soal, laporan & logistik, master data & bank soal, backup & deploy. **305 / 305 test lulus.** Detail per fase ada di bagian 3 dan `log.md`; aturan operasional di `runbook-deploy.md`.
 
 ---
 
@@ -53,31 +53,24 @@
 | **Task 15: Filter Bertingkat 3-Tier Bank Soal (Jenjang -> Mapel -> Guru Pengampu)** | Implementasi filter cascading dinamis 0ms pada modal Tambah/Edit Butir Soal dan bilah filter Bank Soal (/bank-soal/): (1) Pemilihan Jenjang Kelas (10, 11, 12) otomatis memfilter dropdown Mata Pelajaran hanya untuk mapel yang diajarkan pada jenjang tersebut via `TeacherAssignment` (`class_room.level`), mengeliminasi mapel fase lain (misal Dasar-Dasar Kejuruan RPL hilang di kelas 11); (2) Pemilihan Mata Pelajaran otomatis memfilter dropdown Guru Pembuat hanya untuk guru yang mengampu mapel dan jenjang tersebut; (3) Auto-reset pilihan jika jenjang diubah; (4) Resolusi otomatis level rombel dari nama kelas pada model `ClassRoom.save()` & `openapi_sync.py` serta migrasi data `0003_auto_resolve_classroom_levels` di PostgreSQL produksi. Diverifikasi langsung via BrowserOS Neo pada server live. | ✅ PASS (136 tests) |
 | **Task 16: Kepemilikan Mandiri Bank Soal Guru (Strict Author Ownership & Layout Opsi A1)** | Penegakan SSOT kepemilikan mandiri bank soal per guru: (1) Akun Guru pada Bank Soal (/bank-soal/) murni hanya melihat dan mencari soal buatannya sendiri (`created_by=teacher`), mengeliminasi percampuran soal rekan pengampu satu mapel (misal Pak Diki & Bu Devia saling terisolasi mandiri); (2) Proteksi mutlak hak cipta: guru hanya berhak mengedit, menghapus, atau melihat detail soal miliknya sendiri (mencegah penimpaan/penghapusan tidak sengaja); (3) Penyelarasan Layout Baris 2 Opsi A1: kolom 3 dilengkapi header label `<label><i data-lucide="shield-check"></i> Kepemilikan Bank Soal</label>` yang presisi sejajar dengan dropdown Mapel & CP, badge jumlah soal terdaftar, dan status tag `MANDIRI`; (4) Placeholder pencarian adaptif untuk guru (`Cari butir soal saya berdasarkan pertanyaan, materi CP, atau opsi jawaban...`). Diverifikasi langsung via unit test dan live VPS. | ✅ PASS (137 tests) |
 | **Task 17: Audit Jadwal Ujian Bagian A (Alur Status Naskah & Verifikasi)** | Status naskah 3 tahap (`pending_selection` → `waiting_validation` → `validated`) dengan fase tampilan turunan `Schedule.phase` (Terjadwal, Berlangsung, Selesai, Terlewat dihitung dari jam jadwal); aturan transisi terpusat di `apps/schedules/lifecycle.py` (select_for_update): guru tarik pengajuan, admin verifikasi (naskah wajib lengkap) atau kembalikan ke guru (alasan wajib), buka kunci oleh admin (semua jenis) atau guru pemilik (UH) dengan alasan wajib dan hanya selama belum ada siswa yang mulai; paket kolaboratif diajukan setelah kuota semua guru terpenuhi; token diperbarui serentak di semua jadwal paket; gerbang token siswa menolak naskah yang belum terverifikasi; modal alasan aksesibel, komponen toast `components/m3/toast_region.html`, cache-bust `app.css?v=20261012_1`. | ✅ PASS (170 tests) |
-| **TOTAL TEST SUITE** | **Seluruh 170 Pengujian Django & Integration Tests Lulus 100% (0 Error, 0 Failure)** | 🏆 **170 / 170 PASS** |
+| **Task 18: Fase 0 - Darurat Keamanan** | Login SSO-only untuk semua peran; jalur darurat superuser `/accounts/darurat/` (throttle 5/15 menit + rate limit Nginx); 486 kata sandi lokal dicabut (`Jingga123`, `jingga{NIS}`), `password_plain` dihapus; single logout Keycloak; pemetaan peran SSO persis (tanpa pola username, klaim pengawas -> guru, superuser lokal tidak bisa ditautkan SSO); `SECRET_KEY` & `WEBHOOK_SECRET_KEY` wajib (produksi sebelumnya memakai kunci `django-insecure` dari repo, sudah diganti); webhook `compare_digest`, tidak pernah memberi admin/kata sandi; XSS opsi soal & JSON dalam script ditutup; upload pengaturan hanya gambar; alat migrasi Supabase berkredensial dihapus. | ✅ |
+| **Task 19: Fase 1 - Integritas Ujian Siswa** | `get_owned_session` untuk 7 endpoint sesi; `eligibility.py` satu sumber dashboard & gerbang token (kelas, guru, status siswa); jawaban ditolak setelah waktu habis + `grade_expired_sessions` (timer 2 menit); toggle Ragu tidak menghapus jawaban; urutan soal & opsi A-E diacak per siswa (`order_number`, `option_order`) dengan jawaban tetap huruf asli sehingga analisis pengecoh valid; centang `lock_option_order` (26 soal produksi ditandai otomatis); penilaian atomik; heartbeat + deteksi blur 3 detik; `never_cache`. | ✅ |
+| **Task 20: Fase 2 - Hak Akses Per Peran** | `apps/accounts/policy.py` dipakai server & sidebar; peran pengawas dihapus (SOP: siswa terkunci ke kurikulum); logistik, kartu, daftar hadir, pengaturan khusus admin/kurikulum; aksi sesi (buka kunci/reset/paksa selesai) hanya admin/kurikulum dengan alasan wajib + `SessionActionLog` (reset mengarsipkan lembar jawaban); guru monitoring read-only paket sendiri; hasil/export/analisis tertutup bila bukan miliknya. | ✅ |
+| **Task 21: Fase 3 - Jadwal B, C, D** | Form jadwal bertingkat jenjang->mapel->guru->kelas tervalidasi `TeacherAssignment`; PTS mandiri per guru (admin memilih guru pengampu); bentrok jadwal per kelas ditolak; edit menyinkronkan waktu/token ke semua jadwal paket, isi naskah terkunci setelah diajukan, waktu terkunci setelah siswa mulai; hapus ditolak bila ada sesi (`PROTECT`); kuota per guru ditegakkan; guru hanya memilih soal miliknya; soal tanpa opsi E ditolak; paginasi 25. | ✅ |
+| **Task 22: Fase 4 - Laporan & Logistik** | `expected_students_for_exam` dipakai monitoring/rekap/export; hitungan rekap dianotasi (tanpa N+1), kolom Kosong terpisah, KKM dari Pengaturan; daya pembeda butir; Excel aman dari injeksi formula; waktu WIB; alokasi ruang menolak bila kapasitas kurang; daftar peserta pintu; tanpa data contoh palsu; penanda koneksi terputus; link Rekap di kartu jadwal diperbaiki. | ✅ |
+| **Task 23: Fase 5 - Master Data & Bank Soal** | Sinkron menarik siswa sekali, berhenti bila halaman gagal, menonaktifkan siswa yang keluar (dengan rem pengaman); guru dicocokkan lewat `sso_id`; relasi ke hasil ujian `PROTECT`/`SET_NULL`; penugasan unik; import .xlsx tervalidasi & atomik; soal yang dipakai naskah terkunci/terjawab tidak bisa diedit, soal di paket tidak bisa dihapus. | ✅ |
+| **Task 24: Fase 6-7 - Operasional & Pembersihan** | Backup `pg_dump` (dalam container PG17) + media, 14 hari, timer 01.30 WIB, pra-migrasi otomatis, siap salin ke Google Drive via rclone; deploy berbasis git (`scripts/deploy_vps_dath.sh`); Nginx rate limit, proxy data-master terbuka dihapus, header aman media; static ber-hash; dependency dikunci; kode React/Supabase lama, workflow FTP, skrip berkredensial dihapus; `runbook-deploy.md` diperbarui. | ✅ |
+| **TOTAL TEST SUITE** | **Seluruh 305 pengujian Django & integrasi lulus (0 error, 0 failure)** | 🏆 **305 / 305 PASS** |
 
 ---
 
-## 🔄 4. Prosedur Deployment VPS Produksi (`scripts/deploy_vps_dath.sh`)
+## 🔄 4. Prosedur Deployment VPS Produksi
 
-Untuk mendeploy pembaharuan ke server produksi `145.241.157.243`:
+Deploy hanya pada jendela **22.00-04.00 WIB** (freeze 06.30-16.30 WIB). Langkah lengkap, backup, restore, dan rollback ada di [`runbook-deploy.md`](./runbook-deploy.md).
 
 ```bash
-# Opsi 1: Eksekusi otomatis dari lokal (via SSH)
-bash scripts/deploy_vps_dath.sh main
-
-# Opsi 2: Eksekusi manual di dalam VPS
-cd /opt/exam-jingga
-git pull origin main
-source .venv/bin/activate
-pip install -r requirements.txt
-npm run build:css
-python manage.py migrate --noinput
-python manage.py collectstatic --noinput --clear
-sudo cp scripts/exam_jingga.service /etc/systemd/system/exam_jingga.service
-sudo cp scripts/nginx_dath.conf /etc/nginx/sites-available/exam.smkn1rongga.sch.id
-sudo systemctl daemon-reload
-sudo nginx -t && sudo systemctl reload nginx
-sudo systemctl restart exam_jingga.service
+bash scripts/deploy_vps_dath.sh            # deploy origin/main (server git merge --ff-only, backup pra-migrasi, migrate, restart)
+bash scripts/deploy_vps_dath.sh <commit>   # deploy commit tertentu
 ```
 
 ---
@@ -100,9 +93,9 @@ Test suite `tests/test_e2e_workflow.py` mensimulasikan siklus penuh asesmen seko
 
 ## ⚡ 6. Pembaruan Operasional Terkini (Live Ready)
 * **Sentralisasi Media Storage**: 282 media gambar bank soal tersimpan permanen di storage NVMe VPS (`/opt/exam-jingga/media/`) dengan streaming Nginx CORS dan smart resolver `image_url`. Lingkungan lokal streaming langsung dari VPS tanpa membebani disk lokal.
-* **Form Login Mandiri & Logout Normal**: Form login utama di depan mendukung NIS siswa & Username/NIP guru secara instan. Logout membersihkan sesi dan me-redirect langsung ke halaman login lokal.
+* **Login SSO-only & Logout Tunggal**: Semua peran login lewat SSO Keycloak (siswa: username NIS). Tidak ada form kata sandi; superuser memakai `/accounts/darurat/` hanya saat SSO mati. Logout juga mengakhiri sesi Keycloak (penting di komputer lab).
 * **Jadwal Ujian Aktif & Aturan Hard-Stop Opsi A**: Paket ujian Ulangan Harian Matematika Kelas 11 RPL 1 aktif dengan Token `MAT11X`. Siswa yang mencoba masuk setelah batas `end_time` jadwal (misal 13:31 pada jadwal 12:30-13:30) secara otomatis ditolak gerbang ujian (*strict token gate*), dan durasi sisa pengerjaan siswa terpotong otomatis agar tepat berakhir bersamaan dengan waktu penutupan jadwal.
-* **Scoping Hak Akses Jadwal Guru**: Guru kini dibatasi secara eksklusif hanya dapat menjadwalkan jenis **Ulangan Harian (UH)**. Jenis ujian besar (PTS, PAS, PAT, SAJ) dikelola terpusat oleh Admin/Waka Kurikulum.
+* **Peran**: Admin/Kurikulum (termasuk platform/data admin) mengelola jadwal PTS/PAS/PAT/SAJ, verifikasi, logistik, kartu, pengaturan, dan membuka kunci siswa. Guru membuat UH untuk kelas yang ia ajar, memilih soal dari bank miliknya, melihat hasil paketnya. Peran pengawas tidak dipakai. Lihat `apps/accounts/policy.py`.
 * **Standar SMK 5 Opsi & Tagging Capaian Pembelajaran (CP)**: Seluruh pembuatan dan pembaruan butir soal CBT wajib mengisi 5 pilihan jawaban (A, B, C, D, E) untuk standar SMK. Guru dapat menandai Capaian Pembelajaran (`CP 1` s/d `CP 10`) beserta topik materi untuk mempermudah penyusunan bank soal dengan ratusan butir. Filter CP hadir di halaman Bank Soal (`/bank-soal/`) dan Pemilihan Soal Ujian (`/select-questions/`) lengkap dengan quick-filter chips dan pencarian topik CP. Paginasi HTMX post-mutation distabilkan dengan helper paginator, dan 38 soal warisan legacy yang belum beropsi E diberi penanda `[⚠️ Opsi E Kosong]` non-blocking.
 * **Anti-Slop Craftmanship & Live Polling**: Pemasangan live stream aktivitas ujian HTMX (interval 15 detik), caching agregasi kartu metrik dashboard (TTL 30 detik), interaktivitas tombol salin token dengan feedback visual Alpine.js, dan Empty State jadwal ujian berorientasi aksi (+ Buat Jadwal Baru).
 
@@ -111,7 +104,7 @@ Test suite `tests/test_e2e_workflow.py` mensimulasikan siklus penuh asesmen seko
 * **Alur Status Naskah (Task 17)**: Status `Exam` yang disimpan hanya `pending_selection`, `waiting_validation`, `validated`. Jangan lagi memakai `ready`, `active`, atau `closed`; fase berlangsung/selesai dihitung dari `Schedule.phase`. Semua perubahan status lewat `apps/schedules/lifecycle.py`. `Schedule.status` tidak dipakai logika baru (selalu `active`). Audit berikutnya: Bagian B (pembuatan jadwal), C (pembagian kuota, termasuk batas kuota per guru saat memilih soal), D (pemilihan butir soal). Catatan terbuka: akun pengawas belum melihat jadwal apa pun di `/schedules/` karena scoping daftar hanya untuk admin dan guru, sehingga hak pengawas memperbarui token belum bisa dipakai lewat UI.
 
 ## 🏛️ 7. Integrasi Keycloak SSO & Master Data Hub (School Data Platform)
-* **Pilar 1 - OIDC PKCE Login**: Terhubung ke `https://sso.smkn1rongga.sch.id/realms/sekolah` dengan `prompt=login` (anti-tabrak sesi di lab komputer), pemetaan klaim `student` -> `Role.SISWA`, `ptk` -> `Role.GURU`/`Role.ADMIN`, dan auto-linking ke profil `Student` / `Teacher`.
+* **Pilar 1 - OIDC PKCE Login**: Terhubung ke `https://sso.smkn1rongga.sch.id/realms/sekolah` dengan `prompt=login` (anti-tabrak sesi di lab komputer), pemetaan klaim `student` -> `Role.SISWA`, `ptk`/`guru` -> `Role.GURU`, role Keycloak `admin`/`kurikulum`/`platform_admin`/`data_admin` -> peran admin (hanya dari role persis), dan auto-linking ke profil `Student` / `Teacher`.
 * **Pilar 2 - M2M Client Credentials Sync**: Service `MasterDataSyncService` mendukung pengambilan token M2M dari Keycloak dan paginasi otomatis 722+ siswa aktif dari `GET https://data.smkn1rongga.sch.id/v1/students` serta guru dari `GET /v1/staff`.
 * **Pilar 3 - Real-time Webhook Receiver**: Endpoint `POST https://exam.smkn1rongga.sch.id/api/webhook/sync/` terproteksi header `x-api-key` (nilai di `WEBHOOK_SECRET_KEY` pada `.env` VPS, tidak ditulis di repo) untuk menerima sinyal mutasi data (tambah siswa baru, mutasi rombel, update data guru) secara instan dari panel [Data Admin](https://data-admin.smkn1rongga.sch.id).
 
