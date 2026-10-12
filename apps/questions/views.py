@@ -173,6 +173,21 @@ def get_subjects_level_mapping(subjects_qs=None, teacher=None):
     return subjects_data
 
 
+def _refuse(message, status=409):
+    """Tolak aksi HTMX tanpa mengganti daftar; pesan tampil lewat toast."""
+    response = HttpResponse(message, status=status)
+    response['HX-Reswap'] = 'none'
+    response['HX-Trigger'] = json.dumps({'showToast': {'message': message, 'level': 'error'}})
+    return response
+
+
+def _clamped_per_page(raw, default=20):
+    try:
+        return min(max(int(raw), 10), 100)
+    except (TypeError, ValueError):
+        return default
+
+
 def _render_question_list_partial(request, toast_message=None, status_code=200):
     """Shared helper to render question_list.html partial with full pagination and filter context."""
     user = request.user
@@ -185,7 +200,7 @@ def _render_question_list_partial(request, toast_message=None, status_code=200):
     questions_qs = get_scoped_questions_queryset(request)
     filtered_count = questions_qs.count()
 
-    per_page = int(request.GET.get('per_page') or request.POST.get('per_page') or 20)
+    per_page = _clamped_per_page(request.GET.get('per_page') or request.POST.get('per_page'))
     paginator = Paginator(questions_qs, per_page)
     page_number = request.GET.get('page') or request.POST.get('page', 1)
     try:
@@ -279,7 +294,7 @@ class BankSoalView(View):
         filtered_count = questions_qs.count()
 
         # Pagination: 20 per page
-        per_page = int(request.GET.get('per_page', 20))
+        per_page = _clamped_per_page(request.GET.get('per_page'))
         paginator = Paginator(questions_qs, per_page)
         page_number = request.GET.get('page', 1)
         try:
@@ -418,10 +433,13 @@ class QuestionCreateView(View):
             user.role in [Role.ADMIN, Role.PLATFORM_ADMIN, Role.DATA_ADMIN, Role.KURIKULUM]
         )
 
+        if not is_staff_admin and not teacher:
+            return _refuse("Akun Anda belum terhubung ke data guru. Hubungi bagian kurikulum.", 403)
+
         form = QuestionForm(request.POST, request.FILES)
         if form.is_valid():
             question = form.save(commit=False)
-            if not is_staff_admin and teacher:
+            if not is_staff_admin:
                 question.created_by = teacher
             elif not question.created_by and teacher:
                 question.created_by = teacher
@@ -429,7 +447,8 @@ class QuestionCreateView(View):
 
             if request.headers.get('HX-Request') or request.POST.get('is_htmx'):
                 response = _render_question_list_partial(request, toast_message='Butir soal berhasil ditambahkan ke bank soal.')
-                response['HX-Trigger'] = json.dumps({'questionSaved': True, 'closeModal': True})
+                response['HX-Trigger'] = json.dumps({'questionSaved': True})
+                response['HX-Trigger-After-Settle'] = json.dumps({'closeModal': True})
                 return response
 
             messages.success(request, "Butir soal berhasil ditambahkan ke bank soal.")
@@ -568,6 +587,9 @@ class QuestionEditView(View):
 
     def post(self, request, pk, *args, **kwargs):
         question = self.get_question(request, pk)
+        lock_reason = question.edit_lock_reason()
+        if lock_reason:
+            return _refuse(lock_reason)
         user = request.user
         teacher = get_current_teacher(user)
         is_staff_admin = (
@@ -585,7 +607,8 @@ class QuestionEditView(View):
 
             if request.headers.get('HX-Request') or request.POST.get('is_htmx'):
                 response = _render_question_list_partial(request, toast_message='Butir soal berhasil diperbarui.')
-                response['HX-Trigger'] = json.dumps({'questionSaved': True, 'closeModal': True})
+                response['HX-Trigger'] = json.dumps({'questionSaved': True})
+                response['HX-Trigger-After-Settle'] = json.dumps({'closeModal': True})
                 return response
 
             messages.success(request, "Butir soal berhasil diperbarui.")
@@ -651,13 +674,9 @@ class QuestionDeleteView(View):
 
     def post(self, request, pk, *args, **kwargs):
         question = self.get_question(request, pk)
-        user = request.user
-        teacher = get_current_teacher(user)
-        is_staff_admin = (
-            user.is_superuser or
-            getattr(user, 'is_admin', False) or
-            user.role in [Role.ADMIN, Role.PLATFORM_ADMIN, Role.DATA_ADMIN, Role.KURIKULUM]
-        )
+        block_reason = question.delete_block_reason()
+        if block_reason:
+            return _refuse(block_reason)
 
         # Cleanup image files from disk
         images = [
@@ -679,7 +698,8 @@ class QuestionDeleteView(View):
 
         if request.headers.get('HX-Request') or request.POST.get('is_htmx'):
             response = _render_question_list_partial(request, toast_message='Butir soal berhasil dihapus.')
-            response['HX-Trigger'] = json.dumps({'questionDeleted': True, 'closeModal': True})
+            response['HX-Trigger'] = json.dumps({'questionDeleted': True})
+            response['HX-Trigger-After-Settle'] = json.dumps({'closeModal': True})
             return response
 
         messages.success(request, "Butir soal berhasil dihapus.")

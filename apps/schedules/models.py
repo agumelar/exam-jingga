@@ -147,9 +147,10 @@ class ExamQuestion(models.Model):
         db_column='exam_id',
         help_text="Paket Ujian Terkait"
     )
+    # PROTECT: soal yang sudah masuk naskah tidak bisa dihapus dari bank soal
     question = models.ForeignKey(
         'questions.Question',
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='question_exams',
         db_column='question_id',
         help_text="Butir Soal Terpilih dari Bank Soal"

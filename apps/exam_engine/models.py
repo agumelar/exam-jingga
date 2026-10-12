@@ -18,7 +18,7 @@ class ExamSession(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     student = models.ForeignKey(
         'master_data.Student',
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='exam_sessions',
         db_column='student_id',
         help_text="Siswa Peserta Ujian"
@@ -156,7 +156,7 @@ class StudentAnswer(models.Model):
     )
     question = models.ForeignKey(
         'questions.Question',
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='student_answers',
         db_column='question_id',
         help_text="Butir Soal Terkait"

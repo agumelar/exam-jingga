@@ -146,6 +146,24 @@ class Question(models.Model):
             return f"{self.cp_code}: {self.cp_name}"
         return self.cp_code or self.cp_name or ""
 
+    def edit_lock_reason(self):
+        """Alasan soal tidak boleh diubah: sudah masuk naskah yang diajukan/terverifikasi atau sudah dijawab siswa."""
+        if self.student_answers.exists():
+            return "Soal ini sudah dijawab siswa, jadi isinya tidak bisa diubah agar nilai tetap sah."
+        locked = self.question_exams.exclude(exam__status='pending_selection').select_related('exam').first()
+        if locked:
+            return f"Soal ini dipakai naskah '{locked.exam.title}' yang sudah diajukan atau terverifikasi. Buka kunci naskah dulu."
+        return None
+
+    def delete_block_reason(self):
+        """Alasan soal tidak boleh dihapus dari bank soal."""
+        if self.student_answers.exists():
+            return "Soal ini sudah dijawab siswa dan menjadi bagian dari riwayat nilai, jadi tidak bisa dihapus."
+        used = self.question_exams.count()
+        if used:
+            return f"Soal ini masih dipilih di {used} paket ujian. Lepas dari paket tersebut dulu."
+        return None
+
     @property
     def has_empty_option_e(self):
         return not bool(str(self.option_e).strip() or self.image_e)

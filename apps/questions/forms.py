@@ -48,6 +48,30 @@ class QuestionForm(forms.ModelForm):
             'correct_answer': forms.RadioSelect(choices=Question.ANSWER_CHOICES),
         }
 
+    def _clean_image(self, name):
+        image = self.cleaned_data.get(name)
+        if image and getattr(image, 'size', 0) > 2 * 1024 * 1024:
+            raise forms.ValidationError("Ukuran gambar maksimal 2 MB.")
+        return image
+
+    def clean_question_image(self):
+        return self._clean_image('question_image')
+
+    def clean_image_a(self):
+        return self._clean_image('image_a')
+
+    def clean_image_b(self):
+        return self._clean_image('image_b')
+
+    def clean_image_c(self):
+        return self._clean_image('image_c')
+
+    def clean_image_d(self):
+        return self._clean_image('image_d')
+
+    def clean_image_e(self):
+        return self._clean_image('image_e')
+
     def clean(self):
         cleaned_data = super().clean()
         for opt in ['a', 'b', 'c', 'd', 'e']:

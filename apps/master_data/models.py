@@ -68,9 +68,10 @@ class Teacher(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # SET_NULL: menghapus akun login tidak boleh menghapus guru beserta bank soalnya
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
         db_column='user_id',
@@ -97,9 +98,10 @@ class Teacher(models.Model):
 class Student(models.Model):
     """Data Siswa Peserta Ujian CBT."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # SET_NULL: menghapus akun login tidak boleh menghapus data siswa beserta riwayat nilainya
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
         db_column='user_id',
@@ -188,6 +190,9 @@ class TeacherAssignment(models.Model):
         db_table = 'teacher_assignments'
         verbose_name = 'Penugasan Guru'
         verbose_name_plural = 'Daftar Penugasan Guru'
+        constraints = [
+            models.UniqueConstraint(fields=['teacher', 'subject', 'class_room'], name='uq_teacher_subject_class'),
+        ]
 
     def save(self, *args, **kwargs):
         if self.subject and not self.subject_name:

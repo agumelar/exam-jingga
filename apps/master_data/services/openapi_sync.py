@@ -12,6 +12,10 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+class SyncIncompleteError(RuntimeError):
+    """Tarikan data pusat terputus di tengah; hasilnya tidak boleh diperlakukan sebagai data lengkap."""
+
+
 class MasterDataSyncService:
     """
     Service untuk sinkronisasi data master dari data.smkn1rongga.sch.id / SDP OpenAPI.
@@ -83,6 +87,8 @@ class MasterDataSyncService:
     def fetch_all_students_paginated(self, bearer_token=None, on_progress=None):
         """
         Mengambil seluruh data siswa aktif dari GET /v1/students dengan paginasi otomatis.
+        Bila satu halaman gagal, sinkron dihentikan (SyncIncompleteError) agar data parsial
+        tidak dianggap lengkap dan tidak memicu penonaktifan siswa.
         """
         all_students = []
         page = 1
@@ -104,17 +110,13 @@ class MasterDataSyncService:
 
             try:
                 response = requests.get(url, params=params, headers=headers, timeout=25)
-            except Exception as e:
-                logger.warning(f"Paginated fetch failed on page {page}: {e}")
-                break
-
-            if not response.ok:
-                break
-
-            try:
+                response.raise_for_status()
                 res_json = response.json()
-            except Exception:
-                break
+            except Exception as e:
+                if page == 1:
+                    logger.warning(f"Paginated fetch failed on first page: {e}")
+                    break
+                raise SyncIncompleteError(f"Halaman siswa {page} dari {page_count} gagal diambil: {e}") from e
 
             items = res_json.get('data', []) if isinstance(res_json, dict) else res_json
             if isinstance(items, list):
@@ -185,9 +187,9 @@ class MasterDataSyncService:
                     code = 'RPL'
                 elif 'SEPEDA MOTOR' in upper or 'TBSM' in upper or 'TSM' in upper:
                     code = 'TBSM'
-                elif 'TANAMAN' in upper or 'PANGAN' in upper or 'ATPH' in upper or 'AT' in upper:
+                elif 'TANAMAN' in upper or 'PANGAN' in upper or 'ATPH' in upper or 'AT' in upper.replace('-', ' ').split():
                     code = 'ATPH'
-                elif 'KENDARAAN' in upper or 'TKRO' in upper or 'TO' in upper:
+                elif 'KENDARAAN' in upper or 'TKRO' in upper or 'TO' in upper.replace('-', ' ').split():
                     code = 'TKRO'
 
                 if code:
@@ -265,9 +267,9 @@ class MasterDataSyncService:
                     matched_major = major_map.get('RPL')
                 elif 'TBSM' in upper or 'TSM' in upper:
                     matched_major = major_map.get('TBSM')
-                elif 'ATPH' in upper or 'AT' in upper:
+                elif 'ATPH' in upper or 'AT' in upper.replace('-', ' ').split():
                     matched_major = major_map.get('ATPH')
-                elif 'TKRO' in upper or 'TO' in upper:
+                elif 'TKRO' in upper or 'TO' in upper.replace('-', ' ').split():
                     matched_major = major_map.get('TKRO')
 
                 classroom, _ = ClassRoom.objects.update_or_create(
@@ -311,7 +313,12 @@ class MasterDataSyncService:
             for t in (raw_staff or []):
                 full_name = t.get('fullName') or t.get('full_name') or t.get('name') or 'Guru'
                 nip = str(t.get('nip') or '').strip() or None
-                email = (t.get('email') or f"{nip or 'guru'}@smkn1rongga.sch.id").lower().strip()
+                raw_email = str(t.get('email') or '').lower().strip()
+                if not raw_email and not nip:
+                    # Tanpa email dan NIP tidak ada kunci unik; dulu semua baris ini tergabung ke satu akun
+                    logger.warning("Lewati staf tanpa email dan NIP: %s", full_name)
+                    continue
+                email = raw_email or f"{nip}@smkn1rongga.sch.id"
                 raw_role = (t.get('ptkType') or t.get('role_level') or t.get('role') or 'guru').lower()
                 
                 # Data master hanya informasi jabatan; peran admin/kurikulum di aplikasi datang dari SSO
@@ -352,16 +359,17 @@ class MasterDataSyncService:
                     user.set_unusable_password()
                     user.save()
 
-                teacher, _ = Teacher.objects.update_or_create(
-                    email=email,
-                    defaults={
-                        'user': user,
-                        'full_name': full_name,
-                        'nip': nip,
-                        'role_level': role_level,
-                        'sso_id': sso_id
-                    }
-                )
+                teacher = (sso_id and Teacher.objects.filter(sso_id=sso_id).first()) or Teacher.objects.filter(email__iexact=email).first()
+                if teacher is None:
+                    teacher = Teacher(email=email)
+                teacher.email = email
+                teacher.user = user
+                teacher.full_name = full_name
+                teacher.nip = nip
+                teacher.role_level = role_level
+                if sso_id:
+                    teacher.sso_id = sso_id
+                teacher.save()
                 synced_teachers.append(teacher)
 
         return {
@@ -419,9 +427,9 @@ class MasterDataSyncService:
                         matched_major = major_code_map.get('RPL')
                     elif 'TBSM' in class_name or 'TSM' in class_name:
                         matched_major = major_code_map.get('TBSM')
-                    elif 'ATPH' in class_name or 'AT' in class_name:
+                    elif 'ATPH' in class_name or 'AT' in class_name.replace('-', ' ').split():
                         matched_major = major_code_map.get('ATPH')
-                    elif 'TKRO' in class_name or 'TO' in class_name:
+                    elif 'TKRO' in class_name or 'TO' in class_name.replace('-', ' ').split():
                         matched_major = major_code_map.get('TKRO')
 
                 raw_status = str(s.get('status') or 'aktif').lower()
@@ -448,6 +456,7 @@ class MasterDataSyncService:
                         user.nis = nis
                         user.email = email
                         user.role = Role.SISWA
+                        user.is_active = status == 'aktif'
                         if sso_id and not user.sso_id:
                             user.sso_id = sso_id
                         user.save()
@@ -477,21 +486,41 @@ class MasterDataSyncService:
                 )
                 synced_students.append(student)
 
+        deactivated = self._deactivate_missing_students({s.nis for s in synced_students})
+
         return {
             'success': True,
             'count': len(synced_students),
+            'deactivated': deactivated,
             'students': synced_students,
-            'message': f"Sinkronisasi berhasil! Total {len(synced_students)} siswa tersinkronisasi lengkap dari SDP."
+            'message': f"Sinkronisasi berhasil: {len(synced_students)} siswa tersinkron, {deactivated} siswa yang tidak ada lagi di data pusat dinonaktifkan."
         }
+
+    def _deactivate_missing_students(self, fetched_nis):
+        """
+        Siswa aktif yang tidak ada lagi di data pusat dinonaktifkan (status dan login).
+        Rem pengaman: bila data pusat yang diterima kurang dari separuh siswa aktif, penonaktifan
+        dibatalkan karena lebih mungkin data pusat bermasalah daripada separuh siswa keluar.
+        """
+        active = Student.objects.filter(status='aktif')
+        if not fetched_nis or len(fetched_nis) < active.count() * 0.5:
+            logger.warning("Penonaktifan siswa dilewati: data pusat hanya %s siswa", len(fetched_nis))
+            return 0
+        missing = active.exclude(nis__in=fetched_nis)
+        user_ids = list(missing.exclude(user=None).values_list('user_id', flat=True))
+        count = missing.update(status='keluar')
+        User.objects.filter(id__in=user_ids, is_superuser=False).update(is_active=False)
+        return count
 
     def sync_all(self, bearer_token=None, on_progress=None):
         """
-        Tarik Seluruh Data Master Sekaligus Secara Berurutan
+        Tarik seluruh data master. Data siswa diambil sekali lalu dipakai untuk jurusan, kelas, dan siswa.
         """
-        majors_res = self.sync_majors(bearer_token=bearer_token, on_progress=on_progress)
-        classes_res = self.sync_classes(bearer_token=bearer_token, on_progress=on_progress)
+        raw_students = self.fetch_all_students_paginated(bearer_token=bearer_token, on_progress=on_progress)
+        majors_res = self.sync_majors(raw_students=raw_students, bearer_token=bearer_token, on_progress=on_progress)
+        classes_res = self.sync_classes(raw_students=raw_students, bearer_token=bearer_token, on_progress=on_progress)
         teachers_res = self.sync_teachers(bearer_token=bearer_token, on_progress=on_progress)
-        students_res = self.sync_students(bearer_token=bearer_token, on_progress=on_progress)
+        students_res = self.sync_students(raw_students=raw_students, bearer_token=bearer_token, on_progress=on_progress)
 
         return {
             'success': True,

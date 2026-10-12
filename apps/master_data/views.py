@@ -9,6 +9,7 @@ from django.utils.decorators import method_decorator
 from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Q
 from django.contrib.auth import get_user_model
 from apps.accounts.decorators import admin_required
@@ -20,6 +21,28 @@ from apps.reports.utils import excel_safe
 
 def excel_row(values):
     return [excel_safe(v) for v in values]
+
+MAX_IMPORT_BYTES = 5 * 1024 * 1024
+MAX_IMPORT_ROWS = 3000
+
+
+def _safe_return_url(request, fallback):
+    """Tujuan kembali dari form: hanya URL di aplikasi ini (next/Referer bisa diisi pihak luar)."""
+    from django.utils.http import url_has_allowed_host_and_scheme
+    for candidate in (request.POST.get('next'), request.META.get('HTTP_REFERER')):
+        if candidate and url_has_allowed_host_and_scheme(candidate, allowed_hosts={request.get_host()},
+                                                         require_https=request.is_secure()):
+            return candidate
+    return fallback
+
+
+def _excel_upload_problem(excel_file):
+    if not excel_file.name.lower().endswith('.xlsx'):
+        return "Berkas harus berformat .xlsx (Excel 2007 ke atas)."
+    if excel_file.size > MAX_IMPORT_BYTES:
+        return "Ukuran berkas maksimal 5 MB."
+    return None
+
 
 User = get_user_model()
 
@@ -334,15 +357,22 @@ class StudentImportView(View):
 
     def post(self, request, *args, **kwargs):
         excel_file = request.FILES.get('excel_file')
-        target_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('import_siswa')
+        target_url = _safe_return_url(request, reverse('import_siswa'))
 
         if not excel_file:
-            messages.error(request, "Harap pilih berkas Excel (.xlsx / .xls) untuk diimpor!")
+            messages.error(request, "Harap pilih berkas Excel (.xlsx) untuk diimpor!")
+            return redirect(target_url)
+        problem = _excel_upload_problem(excel_file)
+        if problem:
+            messages.error(request, problem)
             return redirect(target_url)
 
         try:
-            wb = openpyxl.load_workbook(excel_file, data_only=True)
+            wb = openpyxl.load_workbook(excel_file, data_only=True, read_only=False)
             ws = wb.active
+            if ws.max_row > MAX_IMPORT_ROWS + 1:
+                messages.error(request, f"Maksimal {MAX_IMPORT_ROWS} baris siswa per berkas.")
+                return redirect(target_url)
 
             header_row = [str(cell.value).strip().lower() if cell.value else '' for cell in ws[1]]
             col_nis = None
@@ -372,63 +402,64 @@ class StudentImportView(View):
                 elif norm.startswith('XII '):
                     class_map['12 ' + norm[4:]] = c
 
-            created_count = 0
-            updated_count = 0
-            errors = []
+            with transaction.atomic():
+                created_count = 0
+                updated_count = 0
+                errors = []
 
-            for row_idx in range(2, ws.max_row + 1):
-                raw_nis = ws.cell(row=row_idx, column=col_nis).value
-                raw_nama = ws.cell(row=row_idx, column=col_nama).value
-                raw_kelas = ws.cell(row=row_idx, column=col_kelas).value
+                for row_idx in range(2, ws.max_row + 1):
+                    raw_nis = ws.cell(row=row_idx, column=col_nis).value
+                    raw_nama = ws.cell(row=row_idx, column=col_nama).value
+                    raw_kelas = ws.cell(row=row_idx, column=col_kelas).value
 
-                if not raw_nis or not raw_nama:
-                    continue
+                    if not raw_nis or not raw_nama:
+                        continue
 
-                nis = str(raw_nis).strip()
-                full_name = str(raw_nama).strip()
-                class_name = str(raw_kelas or '').strip()
+                    nis = str(raw_nis).strip()
+                    full_name = str(raw_nama).strip()
+                    class_name = str(raw_kelas or '').strip()
 
-                norm_class = class_name.upper()
-                classroom = class_map.get(norm_class)
+                    norm_class = class_name.upper()
+                    classroom = class_map.get(norm_class)
 
-                if not classroom:
-                    errors.append(f"Baris {row_idx}: {full_name} (Kelas '{class_name}' tidak ditemukan)")
-                    continue
+                    if not classroom:
+                        errors.append(f"Baris {row_idx}: {full_name} (Kelas '{class_name}' tidak ditemukan)")
+                        continue
 
-                email = f"{nis}@student.smkn1rongga.sch.id"
-                user, user_created = User.objects.get_or_create(
-                    username=nis,
-                    defaults={
-                        'role': Role.SISWA,
-                        'full_name': full_name,
-                        'nis': nis,
-                        'email': email,
-                    }
-                )
-                user.full_name = full_name
-                user.role = Role.SISWA
-                user.nis = nis
-                if user_created:
-                    # Siswa login lewat SSO (username = NIS); akun lokal tidak punya kata sandi
-                    user.set_unusable_password()
-                user.save()
+                    email = f"{nis}@student.smkn1rongga.sch.id"
+                    user, user_created = User.objects.get_or_create(
+                        username=nis,
+                        defaults={
+                            'role': Role.SISWA,
+                            'full_name': full_name,
+                            'nis': nis,
+                            'email': email,
+                        }
+                    )
+                    user.full_name = full_name
+                    user.role = Role.SISWA
+                    user.nis = nis
+                    if user_created:
+                        # Siswa login lewat SSO (username = NIS); akun lokal tidak punya kata sandi
+                        user.set_unusable_password()
+                    user.save()
 
-                _, s_created = Student.objects.update_or_create(
-                    nis=nis,
-                    defaults={
-                        'user': user,
-                        'full_name': full_name,
-                        'class_room': classroom,
-                        'major': classroom.major,
-                        'email': email,
-                        'status': 'aktif',
-                    }
-                )
+                    _, s_created = Student.objects.update_or_create(
+                        nis=nis,
+                        defaults={
+                            'user': user,
+                            'full_name': full_name,
+                            'class_room': classroom,
+                            'major': classroom.major,
+                            'email': email,
+                            'status': 'aktif',
+                        }
+                    )
 
-                if s_created:
-                    created_count += 1
-                else:
-                    updated_count += 1
+                    if s_created:
+                        created_count += 1
+                    else:
+                        updated_count += 1
 
             msg = f"Berhasil memproses data: {created_count} siswa baru ditambahkan, {updated_count} siswa diperbarui."
             if errors:
@@ -484,7 +515,7 @@ class TeacherAssignmentListView(View):
 
     def post(self, request, *args, **kwargs):
         action = request.POST.get('action', 'create')
-        target_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('penugasan_guru')
+        target_url = _safe_return_url(request, None) or reverse('penugasan_guru')
 
         if action == 'create':
             teacher_id = request.POST.get('teacher_id')
@@ -525,6 +556,9 @@ class TeacherAssignmentListView(View):
             subject = get_object_or_404(Subject, id=subject_id)
             classroom = get_object_or_404(ClassRoom, id=class_id)
 
+            if TeacherAssignment.objects.filter(teacher=teacher, subject=subject, class_room=classroom).exclude(pk=assignment.pk).exists():
+                messages.error(request, f"{teacher.full_name} sudah ditugaskan mengajar {subject.name} di {classroom.name}.")
+                return redirect(target_url)
             assignment.teacher = teacher
             assignment.subject = subject
             assignment.subject_name = subject.name
@@ -562,7 +596,7 @@ class SubjectListView(View):
 
     def post(self, request, *args, **kwargs):
         action = request.POST.get('action', 'create')
-        target_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('master_mapel')
+        target_url = _safe_return_url(request, None) or reverse('master_mapel')
 
         if action == 'create':
             name = request.POST.get('name', '').strip()
@@ -621,7 +655,7 @@ class SubjectDeleteView(View):
         if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.content_type == 'application/json':
             return JsonResponse({'status': 'success', 'message': f"Mata pelajaran '{name}' berhasil dihapus."})
         messages.success(request, f"Mata pelajaran '{name}' berhasil dihapus.")
-        target_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('master_mapel')
+        target_url = _safe_return_url(request, None) or reverse('master_mapel')
         return redirect(target_url)
 
 
@@ -667,11 +701,15 @@ class SubjectTemplateExportView(View):
 class SubjectImportExcelView(View):
     """View to import subjects from uploaded Excel file."""
     def post(self, request, *args, **kwargs):
-        target_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('master_mapel')
+        target_url = _safe_return_url(request, None) or reverse('master_mapel')
         excel_file = request.FILES.get('excel_file')
 
         if not excel_file:
-            messages.error(request, "Harap pilih file Excel (.xlsx / .xls) untuk diimpor!")
+            messages.error(request, "Harap pilih file Excel (.xlsx) untuk diimpor!")
+            return redirect(target_url)
+        problem = _excel_upload_problem(excel_file)
+        if problem:
+            messages.error(request, problem)
             return redirect(target_url)
 
         try:
@@ -694,8 +732,9 @@ class SubjectImportExcelView(View):
                 if val:
                     name_str = str(val).strip()
                     if name_str:
-                        _, created = Subject.objects.get_or_create(name=name_str)
-                        if created:
+                        # Nama mapel dibandingkan tanpa beda huruf besar/kecil supaya tidak terbuat ganda
+                        if not Subject.objects.filter(name__iexact=name_str).exists():
+                            Subject.objects.create(name=name_str)
                             imported_count += 1
 
             messages.success(request, f"Berhasil mengimpor {imported_count} mata pelajaran baru.")

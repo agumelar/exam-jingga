@@ -451,7 +451,8 @@ def test_teacher_assignment_crud_views(client):
     assert create_res.status_code == 200
     assert TeacherAssignment.objects.filter(teacher=teacher).count() == 2
 
-    # 2. Update assignment
+    # 2. Update assignment (ke kelas yang belum punya penugasan sama; duplikat ditolak)
+    c3 = ClassRoom.objects.create(name='X RPL 3', level=10)
     assignment = TeacherAssignment.objects.filter(teacher=teacher, class_room=c1).first()
     update_data = {
         'action': 'update',
@@ -460,10 +461,14 @@ def test_teacher_assignment_crud_views(client):
         'subject_id': str(subject.id),
         'class_id': str(c2.id)
     }
+    client.post(reverse('master_data:assignments'), data=update_data, follow=True)
+    assignment.refresh_from_db()
+    assert assignment.class_room == c1
+    update_data['class_id'] = str(c3.id)
     update_res = client.post(reverse('master_data:assignments'), data=update_data, follow=True)
     assert update_res.status_code == 200
     assignment.refresh_from_db()
-    assert assignment.class_room == c2
+    assert assignment.class_room == c3
 
     # 3. Delete assignment
     delete_data = {
