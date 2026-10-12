@@ -3,8 +3,8 @@
   "private": true,
   "scripts": {
     "build": "npm run build:css",
-    "build:css": "npx @tailwindcss/cli -i ./static/css/input.css -o ./static/css/app.css --minify",
-    "watch:css": "npx @tailwindcss/cli -i ./static/css/input.css -o ./static/css/app.css --watch"
+    "build:css": "npx @tailwindcss/cli -i ./assets/css/input.css -o ./static/css/app.css --minify",
+    "watch:css": "npx @tailwindcss/cli -i ./assets/css/input.css -o ./static/css/app.css --watch"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.3",

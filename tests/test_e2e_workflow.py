@@ -436,7 +436,8 @@ def test_production_settings_configuration_integrity(monkeypatch):
     assert prod_settings.DEBUG is False
     assert prod_settings.STORAGES['staticfiles']['BACKEND'] in [
         'whitenoise.storage.CompressedStaticFilesStorage',
-        'whitenoise.storage.CompressedManifestStaticFilesStorage'
+        'whitenoise.storage.CompressedManifestStaticFilesStorage',
+        'apps.core.storage.HashedStaticFilesStorage',
     ]
     assert prod_settings.SECURE_PROXY_SSL_HEADER == ('HTTP_X_FORWARDED_PROTO', 'https')
     assert prod_settings.SESSION_COOKIE_SECURE is True
