@@ -42,6 +42,7 @@ set +a
 export DJANGO_SETTINGS_MODULE=config.settings.production
 
 echo "[3/7] Backup database sebelum migrasi"
+sudo install -d -o "$(id -un)" -g "$(id -gn)" -m 700 /opt/exam-jingga-backups
 bash scripts/backup_db.sh pra-migrasi
 
 echo "[4/7] Migrasi + tabel cache"
