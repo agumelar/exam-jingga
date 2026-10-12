@@ -3,11 +3,27 @@ import math
 import random
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from django.db import transaction
+from django.db.models import Count, Q
 from django.http import HttpResponse
 from django.utils import timezone
 from apps.master_data.models import Student
 from apps.exam_engine.models import ExamSession, StudentAnswer
 from apps.reports.models import StudentLogistic
+
+
+FORMULA_PREFIXES = ('=', '+', '-', '@', '\t', '\r')
+
+
+def excel_safe(value):
+    """Teks yang diawali karakter formula ditulis sebagai teks biasa, bukan rumus Excel."""
+    if isinstance(value, str) and value.startswith(FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
+
+def _now_wib():
+    return timezone.localtime().strftime('%d-%m-%Y %H:%M')
 
 
 def get_exam_related_schedules(exam):
@@ -26,9 +42,14 @@ def get_student_best_session_map(exam, schedule_ids=None):
     if not schedule_ids:
         return {}
 
+    # Hitungan benar/terjawab/total dianotasi sekaligus agar rekap tidak menjalankan query per siswa
     sessions = ExamSession.objects.filter(
         schedule_id__in=schedule_ids
-    ).select_related('student', 'schedule').order_by('-started_at')
+    ).select_related('student', 'schedule').annotate(
+        correct_n=Count('student_answers', filter=Q(student_answers__is_correct=True)),
+        answered_n=Count('student_answers', filter=Q(student_answers__chosen_answer__isnull=False) & ~Q(student_answers__chosen_answer='')),
+        total_n=Count('student_answers'),
+    ).order_by('-started_at')
 
     session_map = {}
     for s in sessions:
@@ -47,9 +68,21 @@ def get_student_best_session_map(exam, schedule_ids=None):
     return session_map
 
 
-def calculate_distractor_analysis(exam, schedule_ids=None):
+def _discrimination_label(d):
+    if d >= 0.40:
+        return "Sangat baik"
+    if d >= 0.30:
+        return "Baik"
+    if d >= 0.20:
+        return "Cukup"
+    return "Perlu revisi"
+
+
+def calculate_distractor_analysis(exam, schedule_ids=None, student_ids=None):
     """
-    Menghitung analisis butir soal, daya pembeda, tingkat kesukaran, dan sebaran pilihan A-E.
+    Analisis butir: tingkat kesukaran, daya pembeda (kelompok atas vs bawah 27%), dan sebaran pilihan A-E.
+    Jawaban tersimpan dalam huruf asli soal, jadi sebaran tetap valid walau opsi diacak per siswa.
+    student_ids: batasi ke siswa tertentu (guru hanya melihat kelas yang ia ajar).
     """
     if schedule_ids is None:
         schedule_ids = get_exam_related_schedules(exam)
@@ -59,13 +92,16 @@ def calculate_distractor_analysis(exam, schedule_ids=None):
     questions = [eq.question for eq in exam_questions if eq.question]
 
     # 2. Ambil semua sesi yang selesai
-    finished_sessions = ExamSession.objects.filter(
-        schedule_id__in=schedule_ids,
-        status='finished'
-    ).select_related('student')
-    
-    finished_session_ids = list(finished_sessions.values_list('id', flat=True))
-    total_finished = len(finished_session_ids)
+    finished_sessions = ExamSession.objects.filter(schedule_id__in=schedule_ids, status='finished')
+    if student_ids is not None:
+        finished_sessions = finished_sessions.filter(student_id__in=student_ids)
+
+    ranked = list(finished_sessions.order_by('-score').values_list('id', flat=True))
+    finished_session_ids = ranked
+    total_finished = len(ranked)
+    group_size = max(1, round(total_finished * 0.27)) if total_finished else 0
+    upper_ids = {str(i) for i in ranked[:group_size]}
+    lower_ids = {str(i) for i in ranked[-group_size:]} if group_size else set()
 
     # 3. Ambil seluruh jawaban siswa pada sesi selesai
     answers = []
@@ -101,8 +137,7 @@ def calculate_distractor_analysis(exam, schedule_ids=None):
             if sid not in session_choice_map:
                 session_choice_map[sid] = ans['chosen_answer']
 
-        # Kunci jawaban
-        kunci = (q.correct_answer or 'A').strip().upper()
+        kunci = (q.correct_answer or '').strip().upper()
 
         for sid in finished_session_ids:
             sid_str = str(sid)
@@ -137,7 +172,10 @@ def calculate_distractor_analysis(exam, schedule_ids=None):
             difficulty_level = "Sukar"
             difficulty_badge = "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400"
 
-        # Daya Pembeda / Efektivitas Pengecoh
+        upper_correct = sum(1 for sid in upper_ids if str(session_choice_map.get(sid) or '').strip().upper() == kunci)
+        lower_correct = sum(1 for sid in lower_ids if str(session_choice_map.get(sid) or '').strip().upper() == kunci)
+        discrimination = round((upper_correct - lower_correct) / group_size, 2) if group_size else 0.0
+
         distractor_summary = []
         for opt in ['A', 'B', 'C', 'D', 'E']:
             if opt != kunci:
@@ -157,6 +195,8 @@ def calculate_distractor_analysis(exam, schedule_ids=None):
             'difficulty_level': difficulty_level,
             'difficulty_badge': difficulty_badge,
             'p_index': round(p_index, 2),
+            'discrimination': discrimination,
+            'discrimination_label': _discrimination_label(discrimination) if total_finished else '-',
             'distractor_summary': ', '.join(distractor_summary),
         })
 
@@ -167,9 +207,15 @@ def calculate_distractor_analysis(exam, schedule_ids=None):
     }
 
 
+class LogisticsCapacityError(ValueError):
+    pass
+
+
 def auto_distribute_logistics(levels, room_count, capacity, sessions_count, exam_period=''):
     """
-    Mengocok dan mengalokasikan seluruh siswa aktif pada jenjang yang dipilih ke Ruang & Sesi.
+    Mengocok dan mengalokasikan seluruh siswa aktif pada jenjang terpilih ke ruang dan sesi.
+    Ditolak bila kapasitas (ruang x kursi x sesi) kurang dari jumlah siswa, supaya tidak ada siswa
+    yang diam-diam kehilangan tempat. Hapus dan buat ulang berjalan dalam satu transaksi.
     """
     if not levels or room_count <= 0 or capacity <= 0 or sessions_count <= 0:
         return 0
@@ -184,12 +230,15 @@ def auto_distribute_logistics(levels, room_count, capacity, sessions_count, exam
     if not students_list:
         return 0
 
-    # Shuffle siswa
-    random.shuffle(students_list)
+    total_capacity = room_count * capacity * sessions_count
+    if total_capacity < len(students_list):
+        raise LogisticsCapacityError(
+            f"Kapasitas {room_count} ruang x {capacity} kursi x {sessions_count} sesi = {total_capacity} kursi, "
+            f"kurang dari {len(students_list)} siswa. Tambah ruang, kursi, atau sesi."
+        )
 
-    # Kosongkan data logistik untuk siswa terkait
+    random.shuffle(students_list)
     student_ids = [s.id for s in students_list]
-    StudentLogistic.objects.filter(student_id__in=student_ids).delete()
 
     new_logistics = []
     student_idx = 0
@@ -212,13 +261,14 @@ def auto_distribute_logistics(levels, room_count, capacity, sessions_count, exam
                 else:
                     break
 
-    if new_logistics:
+    with transaction.atomic():
+        StudentLogistic.objects.filter(student_id__in=student_ids).delete()
         StudentLogistic.objects.bulk_create(new_logistics)
 
     return len(new_logistics)
 
 
-def generate_exam_results_excel(exam, participants_data, analysis_data):
+def generate_exam_results_excel(exam, participants_data, analysis_data, kkm=75):
     """
     Membuat file Excel rekap hasil ujian lengkap dengan Rekap Nilai & Analisis Butir Soal.
     """
@@ -245,12 +295,12 @@ def generate_exam_results_excel(exam, participants_data, analysis_data):
 
     # Title Banner
     ws_rekap.append([f"REKAPITULASI HASIL UJIAN: {exam.title.upper()}"])
-    ws_rekap.append([f"Mata Pelajaran: {exam.subject.name if exam.subject else '-'} | Tipe: {exam.exam_type} | Waktu Unduh: {timezone.now().strftime('%d-%m-%Y %H:%M')} WIB"])
+    ws_rekap.append([f"Mata Pelajaran: {exam.subject.name if exam.subject else '-'} | Tipe: {exam.exam_type} | Waktu Unduh: {_now_wib()} WIB"])
     ws_rekap.append([])  # empty row
 
     rekap_headers = [
         "No", "NIS", "Nama Lengkap Siswa", "Kelas", "Status Ujian", 
-        "Jml Benar", "Jml Salah", "Nilai Akhir", "Status Kelulusan (KKM 75)"
+        "Jml Benar", "Jml Salah", "Kosong", "Nilai Akhir", f"Status Kelulusan (KKM {kkm:g})"
     ]
     ws_rekap.append(rekap_headers)
 
@@ -273,20 +323,21 @@ def generate_exam_results_excel(exam, participants_data, analysis_data):
             p.get('status_label', 'Belum Mulai'),
             p.get('correct_count', 0),
             p.get('wrong_count', 0),
+            p.get('blank_count', 0),
             p.get('score', 0),
-            "TUNTAS" if p.get('score', 0) >= 75 and p.get('is_finished') else ("BELUM TUNTAS" if p.get('is_finished') else "-")
+            "TUNTAS" if p.get('score', 0) >= kkm and p.get('is_finished') else ("BELUM TUNTAS" if p.get('is_finished') else "-")
         ]
-        ws_rekap.append(row_data)
+        ws_rekap.append([excel_safe(v) for v in row_data])
         current_row = header_row_idx + idx
         for col_idx in range(1, len(row_data) + 1):
             cell = ws_rekap.cell(row=current_row, column=col_idx)
             cell.font = regular_font
             cell.border = thin_border
-            if col_idx in [1, 2, 4, 5, 6, 7, 9]:
+            if col_idx in [1, 2, 4, 5, 6, 7, 8, 10]:
                 cell.alignment = center_align
             elif col_idx == 3:
                 cell.alignment = left_align
-            elif col_idx == 8:
+            elif col_idx == 9:
                 cell.alignment = right_align
                 cell.font = bold_font
 
@@ -305,7 +356,7 @@ def generate_exam_results_excel(exam, participants_data, analysis_data):
     analisis_headers = [
         "No Soal", "Kunci", "Cuplikan Soal", "Benar", "Salah", "Kosong",
         "Pilih A", "Pilih B", "Pilih C", "Pilih D", "Pilih E",
-        "Ketuntasan (%)", "Tingkat Kesukaran"
+        "Ketuntasan (%)", "Tingkat Kesukaran", "Daya Pembeda", "Kategori Daya Pembeda"
     ]
     ws_analisis.append(analisis_headers)
 
@@ -332,15 +383,17 @@ def generate_exam_results_excel(exam, participants_data, analysis_data):
             distro.get('D', 0),
             distro.get('E', 0),
             f"{item.get('correct_percentage', 0)}%",
-            item.get('difficulty_level', '-')
+            item.get('difficulty_level', '-'),
+            item.get('discrimination', 0),
+            item.get('discrimination_label', '-'),
         ]
-        ws_analisis.append(row_data)
+        ws_analisis.append([excel_safe(v) for v in row_data])
         current_row = header_row_idx + idx
         for col_idx in range(1, len(row_data) + 1):
             cell = ws_analisis.cell(row=current_row, column=col_idx)
             cell.font = regular_font
             cell.border = thin_border
-            if col_idx in [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]:
+            if col_idx != 3:
                 cell.alignment = center_align
             else:
                 cell.alignment = left_align
@@ -383,7 +436,7 @@ def generate_logistics_excel(logistics_qs):
     )
 
     ws.append(["DAFTAR ALOKASI LOGISTIK RUANGAN & SESI UJIAN"])
-    ws.append([f"Waktu Unduh: {timezone.now().strftime('%d-%m-%Y %H:%M')} WIB"])
+    ws.append([f"Waktu Unduh: {_now_wib()} WIB"])
     ws.append([])
 
     headers = ["No", "NIS", "Nama Lengkap Siswa", "Kelas", "Ruangan", "Sesi"]
@@ -406,7 +459,7 @@ def generate_logistics_excel(logistics_qs):
             log.room_name,
             log.session_name,
         ]
-        ws.append(row_data)
+        ws.append([excel_safe(v) for v in row_data])
         current_row = header_row_idx + idx
         for col_idx in range(1, len(row_data) + 1):
             cell = ws.cell(row=current_row, column=col_idx)
@@ -426,7 +479,7 @@ def generate_logistics_excel(logistics_qs):
     wb.save(output)
     output.seek(0)
 
-    filename = f"Alokasi_Logistik_{timezone.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    filename = f"Alokasi_Logistik_{timezone.localtime().strftime('%Y%m%d_%H%M')}.xlsx"
     response = HttpResponse(
         output.getvalue(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

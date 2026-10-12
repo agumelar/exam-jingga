@@ -68,7 +68,7 @@ Refreshed periodically via HTMX polling (every 3s) or on filter change.
           <div class="flex justify-between items-center mb-4 border-b border-stone-100 dark:border-stone-800/80 pb-3.5">
             <span class="px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 {{ item.status_badge }}">
               {% if item.status == 'active' %}
-                <i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i>
+                <i data-lucide="pencil" class="w-3.5 h-3.5" aria-hidden="true"></i>
               {% elif item.status == 'locked' %}
                 <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>
               {% elif item.status == 'finished' %}
@@ -78,6 +78,11 @@ Refreshed periodically via HTMX polling (every 3s) or on filter change.
               {% endif %}
               {{ item.status_label }}
             </span>
+            {% if item.is_offline %}
+              <span class="px-2.5 py-1 rounded-xl text-xs font-semibold bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 border border-amber-300 dark:border-amber-800" title="Browser siswa tidak mengirim detak lebih dari 45 detik">
+                Koneksi terputus
+              </span>
+            {% endif %}
             <span class="text-xs font-mono font-medium text-stone-400 bg-stone-100 dark:bg-stone-800 px-2.5 py-1 rounded-lg">
               #{{ forloop.counter }}
             </span>

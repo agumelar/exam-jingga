@@ -39,8 +39,7 @@
 
     <!-- Tombol Cetak Tempelan Pintu -->
     <a
-      href="?room={{ filter_room }}&session={{ filter_session }}&type=door&print=true"
-      onclick="window.print(); return false;"
+      href="?room={{ filter_room|urlencode }}&session={{ filter_session|urlencode }}&type=door&print=true"
       class="px-5 py-2.5 bg-stone-800 hover:bg-stone-900 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 rounded-2xl font-semibold text-xs tracking-wide transition shadow-md active:scale-95 flex items-center gap-2 cursor-pointer"
     >
       <i data-lucide="door-open" class="w-4 h-4"></i>
@@ -48,14 +47,13 @@
     </a>
 
     <!-- Tombol Cetak Daftar Hadir Pengawas -->
-    <button
-      type="button"
-      onclick="window.print()"
+    <a
+      href="?room={{ filter_room|urlencode }}&session={{ filter_session|urlencode }}&type=attendance&print=true"
       class="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-2xl font-semibold text-xs tracking-wide transition shadow-lg shadow-orange-600/20 active:scale-95 flex items-center gap-2 cursor-pointer"
     >
       <i data-lucide="printer" class="w-4 h-4"></i>
       <span>Daftar Hadir</span>
-    </button>
+    </a>
   </div>
 </div>
 {% endblock %}
@@ -122,7 +120,7 @@
       </div>
     {% empty %}
       <div class="py-12 text-center text-stone-400 italic">
-        Tidak ada data logistik siswa untuk kriteria filter ini.
+        Belum ada alokasi ruang dan sesi untuk filter ini. Buat alokasi di menu <a href="{% url 'reports:logistics' %}" class="underline font-semibold">Logistik</a> lebih dulu.
       </div>
     {% endfor %}
   </div>
@@ -130,6 +128,31 @@
 
 <!-- PRINT CONTAINER (ONLY VISIBLE ON PRINT) -->
 <div class="hidden print:block font-serif text-black">
+  {% if print_type == 'door' %}
+  {% for group in groups %}
+    <div class="print-page">
+      <div class="print-title-area">
+        <h2 style="font-size: 26pt;">{{ group.room_name }} &bull; {{ group.session_name }}</h2>
+        <p style="font-size: 14pt;">DAFTAR PESERTA {{ settings.exam_name|default:'UJIAN'|upper }} TAHUN AJARAN {{ settings.academic_year }}</p>
+      </div>
+      <table class="print-table" style="font-size: 13pt;">
+        <thead>
+          <tr><th style="width: 8%;">No</th><th style="width: 22%;">NIS</th><th>Nama Peserta</th><th style="width: 22%;">Kelas</th></tr>
+        </thead>
+        <tbody>
+          {% for s in group.students %}
+            <tr>
+              <td style="text-align: center;">{{ forloop.counter }}</td>
+              <td style="text-align: center;">{{ s.student.nis }}</td>
+              <td>&nbsp;<b>{{ s.student.full_name }}</b></td>
+              <td style="text-align: center;">{{ s.student.class_room.name|default:'-' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endfor %}
+  {% else %}
   {% for group in groups %}
     <div class="print-page">
       <!-- Kop Surat Resmi -->
@@ -242,7 +265,11 @@
       </div>
     </div>
   {% endfor %}
+  {% endif %}
 </div>
+{% if is_print_mode and groups %}
+<script>window.addEventListener('load', function () { window.print(); });</script>
+{% endif %}
 
 <style>
 @media print {
@@ -257,10 +284,10 @@
     margin: 0 !important;
     padding: 0 !important;
   }
-  nav, aside, header, footer, .print\\:hidden {
+  nav, aside, header, footer, .print\:hidden {
     display: none !important;
   }
-  .lg\\:ml-64 {
+  .lg\:ml-64 {
     margin-left: 0 !important;
   }
   main {

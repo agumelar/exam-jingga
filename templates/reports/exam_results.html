@@ -106,7 +106,7 @@
         <div class="p-2.5 bg-purple-50 dark:bg-purple-950/40 text-purple-600 rounded-xl mb-2">
           <i data-lucide="check-check" class="w-5 h-5"></i>
         </div>
-        <p class="text-xs font-medium text-stone-400 mb-1">Kelulusan KKM 75</p>
+        <p class="text-xs font-medium text-stone-400 mb-1">Kelulusan KKM {{ stats.kkm|floatformat:"-1" }}</p>
         <p class="text-3xl font-bold text-purple-600">{{ stats.pass_rate }}%</p>
       </div>
     </div>
@@ -179,6 +179,7 @@
                   <th class="py-4 px-5 w-32 text-center">Status</th>
                   <th class="py-4 px-5 w-24 text-center">Benar</th>
                   <th class="py-4 px-5 w-24 text-center">Salah</th>
+                  <th class="py-4 px-5 w-24 text-center">Kosong</th>
                   <th class="py-4 px-5 w-32 text-right">Nilai Akhir</th>
                   <th class="py-4 px-5 w-36 text-center">Status KKM</th>
                 </tr>
@@ -202,6 +203,9 @@
                     </td>
                     <td class="py-4 px-5 text-center font-medium text-red-500 text-sm">
                       {% if p.is_finished %}{{ p.wrong_count }}{% else %}-{% endif %}
+                    </td>
+                    <td class="py-4 px-5 text-center font-medium text-stone-600 dark:text-stone-300 text-sm">
+                      {% if p.is_finished %}{{ p.blank_count }}{% else %}-{% endif %}
                     </td>
                     <td class="py-4 px-5 text-right font-bold text-xl text-stone-900 dark:text-white">
                       {% if p.is_finished %}{{ p.score }}{% else %}-{% endif %}
@@ -270,6 +274,7 @@
                   <th class="py-4 px-4 w-20">Kosong</th>
                   <th class="py-4 px-5 w-32 text-center">Ketuntasan (%)</th>
                   <th class="py-4 px-5 w-32 text-center">Tingkat Kesukaran</th>
+                  <th class="py-4 px-5 w-32 text-center">Daya Pembeda</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-stone-100 dark:divide-stone-800/80">
@@ -311,7 +316,7 @@
                     <td class="py-4 px-4 text-center font-semibold text-emerald-600 text-base">{{ item.correct }}</td>
                     <td class="py-4 px-4 text-center font-semibold text-red-500 text-base">{{ item.wrong }}</td>
                     <td class="py-4 px-4 text-center font-semibold text-stone-400 text-base">{{ item.blank }}</td>
-                    <td class="py-4 px-5 text-center font-bold text-lg {% if item.correct_percentage >= 75 %}text-emerald-600{% else %}text-orange-600{% endif %}">
+                    <td class="py-4 px-5 text-center font-bold text-lg {% if item.correct_percentage >= stats.kkm %}text-emerald-700 dark:text-emerald-400{% else %}text-orange-700 dark:text-orange-400{% endif %}">
                       {{ item.correct_percentage }}%
                     </td>
                     <td class="py-4 px-5 text-center">
@@ -319,10 +324,14 @@
                         {{ item.difficulty_level }}
                       </span>
                     </td>
+                    <td class="py-4 px-5 text-center text-sm">
+                      <span class="font-semibold text-stone-900 dark:text-white">{{ item.discrimination }}</span>
+                      <span class="block text-xs text-stone-600 dark:text-stone-400">{{ item.discrimination_label }}</span>
+                    </td>
                   </tr>
                 {% empty %}
                   <tr>
-                    <td colspan="8" class="py-12 text-center text-stone-400 italic">
+                    <td colspan="9" class="py-12 text-center text-stone-600 dark:text-stone-400 italic">
                       Belum ada butir soal atau jawaban siswa untuk dianalisis.
                     </td>
                   </tr>

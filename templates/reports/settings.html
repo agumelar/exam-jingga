@@ -394,6 +394,11 @@
           class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-200 dark:border-stone-800 rounded-2xl p-3 text-xs font-medium outline-none focus:ring-2 focus:ring-orange-500"
         />
       </div>
+      <div class="space-y-1.5">
+        <label for="set-kkm" class="text-xs font-medium text-stone-700 dark:text-stone-300 ml-1">KKM (nilai ketuntasan)</label>
+        <input id="set-kkm" type="number" name="kkm" min="0" max="100" step="0.5" value="{{ settings.kkm|default:75 }}"
+          class="w-full bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-white border border-stone-300 dark:border-stone-700 rounded-2xl p-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-orange-600" />
+      </div>
     </div>
 
     <!-- FLOATING SUBMIT BUTTON -->

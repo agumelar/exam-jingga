@@ -87,7 +87,8 @@
       </div>
     {% empty %}
       <div class="col-span-full py-16 text-center bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800">
-        <p class="font-medium text-stone-400 text-sm">Tidak ada data kartu peserta untuk kriteria filter ini.</p>
+        <p class="font-medium text-stone-700 dark:text-stone-300 text-sm">Belum ada alokasi ruang dan sesi untuk filter ini.</p>
+        <p class="text-sm text-stone-600 dark:text-stone-400 mt-1">Kartu dibuat dari alokasi di menu <a href="{% url 'reports:logistics' %}" class="underline font-semibold">Logistik</a>.</p>
       </div>
     {% endfor %}
   </div>
@@ -197,10 +198,10 @@
     margin: 0 !important;
     padding: 0 !important;
   }
-  nav, aside, header, footer, .print\\:hidden {
+  nav, aside, header, footer, .print\:hidden {
     display: none !important;
   }
-  .lg\\:ml-64 {
+  .lg\:ml-64 {
     margin-left: 0 !important;
   }
   main {

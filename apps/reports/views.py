@@ -39,6 +39,8 @@ from apps.accounts.policy import (
     teacher_of,
 )
 from apps.reports.session_actions import SessionActionError, perform_session_action
+from apps.exam_engine.eligibility import expected_students_for_exam
+from apps.reports.utils import LogisticsCapacityError
 from apps.core.uploads import validated_image_extension
 
 
@@ -157,12 +159,7 @@ class SessionMonitoringView(View):
         exam = selected_schedule.exam
         related_sch_ids = list(exam.schedules.values_list('id', flat=True)) if exam else [selected_schedule.id]
 
-        # Scope siswa target
-        students_qs = Student.objects.filter(status='aktif').select_related('class_room', 'major')
-        if exam and exam.exam_type in ['UH', 'PTS'] and selected_schedule.class_room:
-            students_qs = students_qs.filter(class_room=selected_schedule.class_room)
-        elif exam and exam.level:
-            students_qs = students_qs.filter(class_room__level=exam.level)
+        students_qs = expected_students_for_exam(exam, _allowed_class_ids(user, exam))
 
         if class_id:
             students_qs = students_qs.filter(class_room_id=class_id)
@@ -239,9 +236,13 @@ class SessionMonitoringView(View):
                 status_label = session.status
                 status_badge = 'bg-stone-100 text-stone-600'
 
+            last_seen = session.last_seen_at if session else None
             item = {
                 'student': s,
                 'session': session,
+                'is_offline': bool(session and session.status == 'active' and (
+                    not last_seen or (timezone.now() - last_seen).total_seconds() > 45
+                )),
                 'logistic': logistic,
                 'status': status,
                 'status_label': status_label,
@@ -366,7 +367,10 @@ class ExamResultsListView(View):
         # If there are exams, redirect to the first one or display selector
         selected_exam_id = request.GET.get('exam_id')
         if selected_exam_id:
-            return redirect('reports:exam_results_detail', exam_id=selected_exam_id)
+            try:
+                return redirect('reports:exam_results_detail', exam_id=uuid.UUID(selected_exam_id))
+            except ValueError:
+                raise Http404
 
         if exams.exists():
             first_exam = exams.first()
@@ -396,17 +400,8 @@ class ExamResultsView(View):
         related_schedules = exam.schedules.all()
         related_sch_ids = list(related_schedules.values_list('id', flat=True))
 
-        # Tarik siswa
-        students_qs = Student.objects.filter(status='aktif').select_related('class_room', 'major')
-        if exam.exam_type in ['UH', 'PTS']:
-            sch_classes = [s.class_room_id for s in related_schedules if s.class_room_id]
-            if sch_classes:
-                students_qs = students_qs.filter(class_room_id__in=sch_classes)
-        elif exam.level:
-            students_qs = students_qs.filter(class_room__level=exam.level)
-
-        if allowed_class_ids is not None:
-            students_qs = students_qs.filter(class_room_id__in=allowed_class_ids)
+        students_qs = expected_students_for_exam(exam, allowed_class_ids)
+        kkm = SchoolSetting.get_settings().kkm
 
         # Filters
         class_filter = request.GET.get('class_name', 'Semua Kelas')
@@ -421,11 +416,7 @@ class ExamResultsView(View):
             )
 
         students = list(students_qs.order_by('class_room__name', 'full_name'))
-        available_classes = list(
-            ClassRoom.objects.filter(
-                id__in=Student.objects.filter(status='aktif', class_room__level=exam.level if exam.level else None).values_list('class_room_id', flat=True)
-            ).values_list('name', flat=True).distinct().order_by('name')
-        ) if exam.level else list(ClassRoom.objects.values_list('name', flat=True).distinct().order_by('name'))
+        available_classes = sorted({s.class_room.name for s in expected_students_for_exam(exam, allowed_class_ids) if s.class_room})
 
         # Map sesi terbaik per siswa
         session_map = get_student_best_session_map(exam, related_sch_ids)
@@ -445,9 +436,10 @@ class ExamResultsView(View):
                 completed_count += 1
                 scores_list.append(score)
 
-            correct_cnt = session.correct_count if session else 0
-            total_ans = session.total_questions_count if session else 0
-            wrong_cnt = max(0, total_ans - correct_cnt) if session else 0
+            correct_cnt = session.correct_n if session else 0
+            answered_cnt = session.answered_n if session else 0
+            wrong_cnt = max(0, answered_cnt - correct_cnt)
+            blank_cnt = max(0, (session.total_n if session else 0) - answered_cnt)
 
             status_label = 'Belum Mulai'
             status_badge = 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400'
@@ -472,9 +464,10 @@ class ExamResultsView(View):
                 'score': score,
                 'correct_count': correct_cnt,
                 'wrong_count': wrong_cnt,
+                'blank_count': blank_cnt,
                 'status_label': status_label,
                 'status_badge': status_badge,
-                'is_passed': score >= 75.0 and is_finished,
+                'is_passed': score >= kkm and is_finished,
             })
 
         total_students = len(students)
@@ -492,10 +485,12 @@ class ExamResultsView(View):
             'total': total_students,
             'pass_rate': pass_rate,
             'passed_count': passed_count,
+            'kkm': kkm,
         }
 
-        # Analisis butir soal
-        analysis = calculate_distractor_analysis(exam, related_sch_ids)
+        analysis = calculate_distractor_analysis(
+            exam, related_sch_ids, student_ids=None if allowed_class_ids is None else [s.id for s in students]
+        )
 
         context = {
             'active_menu': 'hasil_ujian',
@@ -525,16 +520,7 @@ class ExamResultsExportView(View):
         related_sch_ids = list(exam.schedules.values_list('id', flat=True))
         allowed_class_ids = _allowed_class_ids(request.user, exam)
 
-        students_qs = Student.objects.filter(status='aktif').select_related('class_room', 'major')
-        if exam.exam_type in ['UH', 'PTS']:
-            sch_classes = [s.class_room_id for s in exam.schedules.all() if s.class_room_id]
-            if sch_classes:
-                students_qs = students_qs.filter(class_room_id__in=sch_classes)
-        elif exam.level:
-            students_qs = students_qs.filter(class_room__level=exam.level)
-
-        if allowed_class_ids is not None:
-            students_qs = students_qs.filter(class_room_id__in=allowed_class_ids)
+        students_qs = expected_students_for_exam(exam, allowed_class_ids)
 
         students = list(students_qs.order_by('class_room__name', 'full_name'))
         session_map = get_student_best_session_map(exam, related_sch_ids)
@@ -548,14 +534,18 @@ class ExamResultsExportView(View):
                 'full_name': s.full_name,
                 'class_name': s.class_room.name if s.class_room else '-',
                 'status_label': 'Selesai' if is_fin else (session.get_status_display() if session else 'Belum Mulai'),
-                'correct_count': session.correct_count if session else 0,
-                'wrong_count': max(0, (session.total_questions_count or 0) - (session.correct_count or 0)) if session else 0,
+                'correct_count': session.correct_n if session else 0,
+                'wrong_count': max(0, session.answered_n - session.correct_n) if session else 0,
+                'blank_count': max(0, session.total_n - session.answered_n) if session else 0,
                 'score': round(session.score, 1) if is_fin else 0.0,
                 'is_finished': is_fin,
             })
 
-        analysis_dict = calculate_distractor_analysis(exam, related_sch_ids)
-        return generate_exam_results_excel(exam, participants_data, analysis_dict['analysis_data'])
+        analysis_dict = calculate_distractor_analysis(
+            exam, related_sch_ids, student_ids=None if allowed_class_ids is None else [s.id for s in students]
+        )
+        return generate_exam_results_excel(exam, participants_data, analysis_dict['analysis_data'],
+                                           kkm=SchoolSetting.get_settings().kkm)
 
 
 class DistractorAnalysisView(View):
@@ -565,7 +555,11 @@ class DistractorAnalysisView(View):
             return redirect('accounts:login')
 
         exam = get_object_or_404(exams_visible_to(request.user).select_related('subject', 'teacher'), id=exam_id)
-        analysis = calculate_distractor_analysis(exam)
+        allowed_class_ids = _allowed_class_ids(request.user, exam)
+        analysis = calculate_distractor_analysis(
+            exam, student_ids=None if allowed_class_ids is None else list(
+                expected_students_for_exam(exam, allowed_class_ids).values_list('id', flat=True))
+        )
 
         context = {
             'active_menu': 'hasil_ujian',
@@ -607,22 +601,6 @@ class ExamCardsView(View):
             logistics_qs = logistics_qs.filter(student__class_room_id=filter_class)
 
         logistics = list(logistics_qs)
-        
-        # Fallback jika belum ada student_logistics: buat kartu dari data Student langsung
-        if not logistics:
-            students_qs = Student.objects.filter(status='aktif').select_related('class_room', 'major').order_by('class_room__name', 'full_name')
-            if filter_class != 'all' and filter_class:
-                students_qs = students_qs.filter(class_room_id=filter_class)
-            
-            logistics = [
-                StudentLogistic(
-                    student=s,
-                    room_name="RUANG 01",
-                    session_name="SESI 1",
-                    exam_period=f"{settings.exam_name} {settings.academic_year}"
-                )
-                for s in students_qs
-            ]
 
         all_rooms = list(StudentLogistic.objects.values_list('room_name', flat=True).distinct().order_by('room_name'))
         all_sessions = list(StudentLogistic.objects.values_list('session_name', flat=True).distinct().order_by('session_name'))
@@ -669,19 +647,6 @@ class AttendanceListView(View):
 
         logistics = list(logistics_qs)
 
-        # Fallback jika belum ada logistics
-        if not logistics:
-            students_qs = Student.objects.filter(status='aktif').select_related('class_room', 'major').order_by('full_name')
-            logistics = [
-                StudentLogistic(
-                    student=s,
-                    room_name="RUANG 01",
-                    session_name="SESI 1",
-                    exam_period=f"{settings.exam_name} {settings.academic_year}"
-                )
-                for s in students_qs[:36]
-            ]
-
         # Grouping by (room_name, session_name)
         groups = {}
         for item in logistics:
@@ -708,7 +673,7 @@ class AttendanceListView(View):
             'sessions': all_sessions,
             'filter_room': filter_room,
             'filter_session': filter_session,
-            'print_type': print_type,
+            'print_type': 'door' if print_type == 'door' else 'attendance',
             'is_print_mode': request.GET.get('print', 'false') == 'true',
         }
         return render(request, 'reports/attendance_list.html', context)
@@ -793,13 +758,21 @@ def logistics_generate_action(request):
         settings = SchoolSetting.get_settings()
         exam_period = f"{settings.exam_name} {settings.academic_year}"
 
-        allocated = auto_distribute_logistics(
-            levels=levels,
-            room_count=room_count,
-            capacity=capacity,
-            sessions_count=sessions_count,
-            exam_period=exam_period
-        )
+        try:
+            allocated = auto_distribute_logistics(
+                levels=levels,
+                room_count=room_count,
+                capacity=capacity,
+                sessions_count=sessions_count,
+                exam_period=exam_period
+            )
+        except LogisticsCapacityError as exc:
+            messages.error(request, str(exc))
+            if request.headers.get('HX-Request'):
+                response = HttpResponse("")
+                response['HX-Redirect'] = '/logistics/'
+                return response
+            return redirect('reports:logistics')
 
         messages.success(request, f"Berhasil mengalokasikan {allocated} siswa ke dalam {room_count} ruangan dan {sessions_count} sesi.")
         if request.headers.get('HX-Request'):
@@ -887,6 +860,12 @@ class SettingsView(View):
         settings.academic_year = request.POST.get('academic_year', settings.academic_year).strip()
         settings.semester = request.POST.get('semester', settings.semester).strip()
         settings.exam_name = request.POST.get('exam_name', settings.exam_name).strip()
+        try:
+            kkm = float(request.POST.get('kkm', settings.kkm))
+            if 0 <= kkm <= 100:
+                settings.kkm = kkm
+        except (TypeError, ValueError):
+            messages.error(request, "KKM harus angka 0 sampai 100.")
 
         # Direct URL Fields
         for url_field in ['logo_left_url', 'logo_right_url', 'watermark_url', 'school_seal_url', 'headmaster_signature_url', 'curriculum_signature_url']:

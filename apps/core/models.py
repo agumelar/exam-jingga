@@ -14,6 +14,7 @@ class SchoolSetting(models.Model):
     academic_year = models.CharField(max_length=50, default='2025/2026')
     semester = models.CharField(max_length=50, default='Ganjil')
     exam_name = models.CharField(max_length=255, default='Penilaian Akhir Semester (PAS)')
+    kkm = models.FloatField(default=75, help_text="Kriteria Ketuntasan Minimal untuk rekap nilai")
     exam_city = models.CharField(max_length=100, default='Rongga')
     exam_date = models.CharField(max_length=100, blank=True, default='')
 

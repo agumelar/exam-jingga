@@ -120,7 +120,9 @@ class StudentDashboardView(View):
                     'finished_at': fs.finished_at,
                 })
 
-        first = eligible[0] if eligible else None
+        # Ruang dan sesi siswa berasal dari alokasi logistik (yang juga tercetak di kartu)
+        from apps.reports.models import StudentLogistic
+        logistic = StudentLogistic.objects.filter(student=student).order_by('-updated_at').first() if student else None
         context = {
             'student': student,
             'student_block_reason': block_reason,
@@ -130,8 +132,8 @@ class StudentDashboardView(View):
             'available_exams': available_exams,
             'exam_history': exam_history,
             'logistics': {
-                'room_name': (first.room_name if first and first.room_name else '-'),
-                'session_name': first.session_display if first else '-',
+                'room_name': logistic.room_name if logistic else '-',
+                'session_name': logistic.session_name if logistic else '-',
             },
             'now': now,
         }

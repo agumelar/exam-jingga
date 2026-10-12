@@ -15,6 +15,11 @@ from apps.accounts.decorators import admin_required
 from apps.accounts.models import Role
 from .models import Major, ClassRoom, Teacher, Student, Subject, TeacherAssignment
 from .services.openapi_sync import master_data_sync_service
+from apps.reports.utils import excel_safe
+
+
+def excel_row(values):
+    return [excel_safe(v) for v in values]
 
 User = get_user_model()
 
@@ -124,13 +129,13 @@ class TeacherExportExcelView(View):
 
         teachers = Teacher.objects.all().order_by('full_name')
         for idx, t in enumerate(teachers, start=1):
-            ws.append([
+            ws.append(excel_row([
                 idx,
                 t.full_name,
                 t.nip or '-',
                 t.email or '-',
                 t.get_role_level_display().upper()
-            ])
+            ]))
 
         # Adjust column widths
         ws.column_dimensions['A'].width = 6
@@ -234,14 +239,14 @@ class StudentExportExcelView(View):
             cell.alignment = Alignment(horizontal="center", vertical="center")
 
         for idx, s in enumerate(qs, start=1):
-            ws.append([
+            ws.append(excel_row([
                 idx,
                 s.nis,
                 s.full_name.upper(),
                 s.class_room.name if s.class_room else '-',
                 s.email or f"{s.nis}@student.smkn1rongga.sch.id",
                 s.status
-            ])
+            ]))
 
         ws.column_dimensions['A'].width = 6
         ws.column_dimensions['B'].width = 15

@@ -287,7 +287,7 @@ M3 Elevated Schedule Card with 100% UI fidelity matching React ScheduleCard.jsx
 
     <!-- Button: Rekap Nilai & Analisis -->
     <a 
-      href="/exam-results/{{ s.id }}/"
+      href="{% url 'reports:exam_results_detail' exam_id=s.exam_id %}"
       class="w-full bg-stone-900 hover:bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white transition-colors py-3.5 rounded-2xl font-semibold text-xs tracking-wide shadow-xs flex items-center justify-center gap-2 select-none"
       title="Rekap Nilai & Analisis Butir Soal"
     >
