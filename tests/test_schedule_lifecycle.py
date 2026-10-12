@@ -442,12 +442,11 @@ def test_teacher_regenerates_own_uh_token(client):
 
 
 @pytest.mark.django_db
-def test_pengawas_regenerates_official_exam_token(client):
-    _, t = _guru('token_pengawas_owner')
-    pengawas = User.objects.create_user(username='pengawas_lc', role=Role.PENGAWAS, password='pw')
+def test_admin_regenerates_official_exam_token(client):
+    _, t = _guru('token_admin_owner')
     exam = _exam(t, exam_type='PAS', status='validated')
     s = _schedule(exam, t)
-    client.force_login(pengawas)
+    client.force_login(_admin('admin_token_pas'))
 
     res = _action(client, s, 'regenerate-token')
 

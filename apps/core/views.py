@@ -9,6 +9,13 @@ from apps.master_data.models import Student, Teacher, ClassRoom, Major
 from apps.questions.models import Question
 from apps.schedules.models import Schedule, Exam
 from apps.exam_engine.models import ExamSession
+from apps.accounts.policy import is_staff_area_user, schedules_visible_to
+
+
+def _recent_sessions_for(user):
+    return ExamSession.objects.filter(schedule__in=schedules_visible_to(user)).select_related(
+        'student', 'schedule__exam', 'student__class_room'
+    ).order_by('-started_at')[:6]
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
@@ -20,13 +27,17 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             return self.handle_no_permission()
         if not request.user.is_superuser and (getattr(request.user, 'is_student', False) or getattr(request.user, 'role', '') == 'siswa'):
             return redirect('/student/dashboard/')
+        if not is_staff_area_user(request.user):
+            from django.contrib import messages
+            from django.contrib.auth import logout
+            logout(request)
+            messages.error(request, "Akun ini belum punya peran di aplikasi ujian. Hubungi bagian kurikulum.")
+            return redirect('accounts:login')
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, *args, **kwargs):
         if request.GET.get('partial') == 'recent_sessions':
-            recent_sessions = ExamSession.objects.select_related(
-                'student', 'schedule__exam', 'student__class_room'
-            ).order_by('-started_at')[:6]
+            recent_sessions = _recent_sessions_for(request.user)
             return render(request, 'core/partials/recent_sessions_rows.html', {
                 'recent_sessions': recent_sessions,
             })
@@ -72,10 +83,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         context.update(metrics)
 
         # 4. Recent Active Schedules List
-        context['recent_schedules'] = Schedule.objects.select_related('exam', 'class_room', 'teacher').order_by('-start_time')[:5]
+        context['recent_schedules'] = schedules_visible_to(user).select_related('exam', 'class_room', 'teacher').order_by('-start_time')[:5]
 
         # 5. Recent Student Activity
-        context['recent_sessions'] = ExamSession.objects.select_related('student', 'schedule__exam', 'student__class_room').order_by('-started_at')[:6]
+        context['recent_sessions'] = _recent_sessions_for(user)
 
         return context
 

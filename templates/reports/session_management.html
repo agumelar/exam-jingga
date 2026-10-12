@@ -146,15 +146,17 @@
     </div>
   </form>
 
-  <!-- Live Polling Container (every 3 seconds) -->
+  <!-- Polling tiap 5 detik hanya saat tab terlihat, plus segera setelah aksi sesi -->
   <div
     id="monitoring-table-container"
     hx-get="{% url 'reports:session_monitoring_table' %}"
     hx-include="#filter-form"
-    hx-trigger="every 3s"
+    hx-trigger="every 5s [document.visibilityState === 'visible'], refreshMonitoring from:body"
   >
     {% include 'reports/partials/monitoring_table.html' %}
   </div>
+
+  {% include 'components/m3/toast_region.html' %}
 
 </div>
 {% endblock %}

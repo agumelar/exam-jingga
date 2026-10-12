@@ -284,36 +284,54 @@ def test_session_unlock_reset_and_force_submit_actions(client, test_setup):
 
     # 1. Unlock Action
     unlock_url = f'/session-management/unlock/{session.id}/'
-    res_unlock = client.post(unlock_url, HTTP_HX_REQUEST='true')
+    # Tanpa alasan ditolak
+    assert client.post(unlock_url, HTTP_HX_REQUEST='true').status_code == 422
+    res_unlock = client.post(unlock_url, HTTP_HX_REQUEST='true', HTTP_HX_PROMPT='Sudah dibina kurikulum')
     assert res_unlock.status_code == 200
     session.refresh_from_db()
     assert session.status == 'active'
-    assert session.violation_count == 0
+    # Jumlah pelanggaran tetap tercatat sebagai bukti pembinaan
+    assert session.violation_count == 3
 
     # 2. Force Submit Action
     # Give student answers: Q1 correct, Q2 wrong
     StudentAnswer.objects.create(
         session=session,
         question=test_setup['q1'],
-        chosen_answer='A'
+        chosen_answer='A',
+        order_number=1,
     )
     StudentAnswer.objects.create(
         session=session,
         question=test_setup['q2'],
-        chosen_answer='C'
+        chosen_answer='C',
+        order_number=2,
     )
+
+    # Reset sesi aktif: jawaban diarsipkan di log, sesi dihapus agar siswa mulai ulang
+    reset_url = f'/session-management/reset/{session.id}/'
+    res_reset = client.post(reset_url, HTTP_HX_REQUEST='true', HTTP_HX_PROMPT='Komputer siswa mati')
+    assert res_reset.status_code == 200
+    assert not ExamSession.objects.filter(id=session.id).exists()
+    from apps.reports.models import SessionActionLog
+    log = SessionActionLog.objects.get(action='reset')
+    assert len(log.answers_snapshot) == 2
+    assert log.actor == test_setup['admin_user']
+
+    session = ExamSession.objects.create(student=test_setup['student1'], schedule=test_setup['schedule'], status='active')
+    StudentAnswer.objects.create(session=session, question=test_setup['q1'], chosen_answer='A', order_number=1)
+    StudentAnswer.objects.create(session=session, question=test_setup['q2'], chosen_answer='C', order_number=2)
     force_url = f'/session-management/force-submit/{session.id}/'
-    res_force = client.post(force_url, HTTP_HX_REQUEST='true')
+    res_force = client.post(force_url, HTTP_HX_REQUEST='true', HTTP_HX_PROMPT='Waktu ruang habis')
     assert res_force.status_code == 200
     session.refresh_from_db()
     assert session.status == 'finished'
     assert session.score == 50.0  # 1 of 2 questions correct
 
-    # 3. Reset Action
+    # Sesi yang sudah selesai tidak bisa di-reset
     reset_url = f'/session-management/reset/{session.id}/'
-    res_reset = client.post(reset_url, HTTP_HX_REQUEST='true')
-    assert res_reset.status_code == 200
-    assert not ExamSession.objects.filter(id=session.id).exists()
+    assert client.post(reset_url, HTTP_HX_REQUEST='true', HTTP_HX_PROMPT='coba').status_code == 409
+    assert ExamSession.objects.filter(id=session.id).exists()
 
 
 # ==============================================================================

@@ -52,9 +52,9 @@ def test_school_setting_singleton_helper():
 
 
 def test_m3_tokens_css_exists_and_contains_definitions():
-    """Verify static/css/m3-tokens.css defines light and dark tokens and elevation."""
+    """Verify assets/css/m3-tokens.css (sumber Tailwind) defines light and dark tokens and elevation."""
     base_dir = settings.BASE_DIR
-    tokens_file = base_dir / 'static' / 'css' / 'm3-tokens.css'
+    tokens_file = base_dir / 'assets' / 'css' / 'm3-tokens.css'
     assert tokens_file.is_file()
 
     content = tokens_file.read_text(encoding='utf-8')
@@ -117,7 +117,8 @@ def test_app_layout_rendering():
         'user': user,
         'page_title': 'Dashboard Admin',
         'heading': 'Ringkasan Sistem',
-        'csrf_token': 'dummy-token'
+        'csrf_token': 'dummy-token',
+        'nav': {'is_school_admin': True, 'is_staff_area': True, 'can_manage_sessions': True},
     })
 
     assert 'Dashboard Admin' in rendered

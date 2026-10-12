@@ -6,7 +6,7 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.db.models import Q, Avg, Max, Min, Count
 from django.core.exceptions import ValidationError
-from django.http import HttpResponse, JsonResponse, HttpResponseForbidden
+from django.http import Http404, HttpResponse, JsonResponse, HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 from django.views import View
@@ -29,7 +29,16 @@ from apps.reports.utils import (
 )
 
 
-from apps.accounts.policy import is_school_admin
+from apps.accounts.policy import (
+    can_manage_sessions,
+    exams_visible_to,
+    is_school_admin,
+    is_staff_area_user,
+    is_teacher,
+    schedules_visible_to,
+    teacher_of,
+)
+from apps.reports.session_actions import SessionActionError, perform_session_action
 from apps.core.uploads import validated_image_extension
 
 
@@ -45,13 +54,18 @@ def get_user_role(user):
 
 
 def is_staff_or_admin(user):
-    """Check if user has administrative or teaching privileges."""
-    if not user.is_authenticated:
-        return False
-    if user.is_superuser:
-        return True
-    role = get_user_role(user)
-    return role in ['admin', 'kurikulum', 'guru', 'pengawas']
+    """Admin/kurikulum atau guru (area staf). Objek tetap dibatasi lewat exams_visible_to/schedules_visible_to."""
+    return is_staff_area_user(user)
+
+
+def _allowed_class_ids(user, exam):
+    """None = semua kelas (admin); untuk guru hanya kelas yang ia ajar pada mapel paket ini."""
+    if is_school_admin(user):
+        return None
+    teacher = teacher_of(user)
+    if teacher is None:
+        return []
+    return list(TeacherAssignment.objects.filter(teacher=teacher, subject=exam.subject).values_list('class_room_id', flat=True))
 
 
 # ==============================================================================
@@ -68,12 +82,9 @@ class SessionMonitoringView(View):
             return redirect('accounts:login')
 
         user_role = get_user_role(request.user)
-        schedules = Schedule.objects.select_related('exam', 'class_room', 'teacher', 'exam__subject').order_by('-start_time')
-        
-        # Scoping jika guru
-        if user_role == 'guru' and hasattr(request.user, 'teacher_profile') and request.user.teacher_profile:
-            teacher = request.user.teacher_profile
-            schedules = schedules.filter(Q(teacher=teacher) | Q(exam__teacher=teacher))
+        schedules = schedules_visible_to(request.user).select_related(
+            'exam', 'class_room', 'teacher', 'exam__subject'
+        ).order_by('-start_time')
 
         selected_schedule_id = kwargs.get('schedule_id') or request.GET.get('schedule_id', '') or request.GET.get('schedule', '')
         selected_schedule = None
@@ -122,6 +133,7 @@ class SessionMonitoringView(View):
             'filter_status': status_filter,
             'search_query': search_query,
             'user_role': user_role,
+            'can_manage_sessions': can_manage_sessions(request.user),
             **data
         }
 
@@ -262,9 +274,11 @@ class SessionMonitoringTableView(SessionMonitoringView):
         selected_schedule = None
         if selected_schedule_id:
             try:
-                selected_schedule = Schedule.objects.select_related('exam', 'class_room').get(id=selected_schedule_id)
+                selected_schedule = schedules_visible_to(request.user).select_related('exam', 'class_room').get(
+                    id=uuid.UUID(str(selected_schedule_id))
+                )
             except (Schedule.DoesNotExist, ValueError):
-                selected_schedule = None
+                raise Http404
 
         class_id = request.GET.get('class_id', '')
         room_name = request.GET.get('room_name', '')
@@ -288,80 +302,53 @@ class SessionMonitoringTableView(SessionMonitoringView):
             'filter_status': status_filter,
             'search_query': search_query,
             'user_role': user_role,
+            'can_manage_sessions': can_manage_sessions(request.user),
             **data
         }
         return render(request, 'reports/partials/monitoring_table.html', context)
 
 
-@require_POST
-def session_unlock_action(request, session_id):
-    """Buka Kunci Sesi Siswa (Set status active & violation_count 0)."""
-    if not is_staff_or_admin(request.user):
-        return JsonResponse({'success': False, 'message': 'Akses ditolak'}, status=403)
+ACTION_DONE_MESSAGES = {
+    'unlock': "Kunci sesi {name} dibuka.",
+    'reset': "Sesi {name} di-reset; siswa bisa memasukkan token lagi.",
+    'force_submit': "Sesi {name} diselesaikan dan dinilai.",
+}
 
-    session = get_object_or_404(ExamSession, id=session_id)
-    session.status = 'active'
-    session.violation_count = 0
-    session.save(update_fields=['status', 'violation_count'])
 
-    if request.headers.get('HX-Request'):
-        response = HttpResponse("OK")
-        response['HX-Trigger'] = json.dumps({
-            'sessionUpdated': {'sessionId': str(session_id), 'status': 'active'},
-            'showToast': {'type': 'success', 'message': f'Sesi {session.student.full_name} berhasil dibuka.'}
-        })
+def _session_action(request, session_id, action):
+    if not can_manage_sessions(request.user):
+        return HttpResponseForbidden("Hanya admin dan kurikulum yang bisa mengubah sesi siswa.")
+    reason = request.POST.get('reason') or request.headers.get('HX-Prompt', '')
+    try:
+        session = perform_session_action(session_id, action, request.user, reason)
+    except SessionActionError as exc:
+        response = HttpResponse(exc.message, status=exc.status)
+        response['HX-Reswap'] = 'none'
+        response['HX-Trigger'] = json.dumps({'showToast': {'message': exc.message, 'level': 'error'}})
         return response
 
-    messages.success(request, f"Sesi {session.student.full_name} berhasil dibuka kembali.")
-    return redirect(request.META.get('HTTP_REFERER', '/session-management/'))
+    message = ACTION_DONE_MESSAGES[action].format(name=session.student.full_name)
+    if request.headers.get('HX-Request'):
+        response = HttpResponse('')
+        response['HX-Trigger'] = json.dumps({'showToast': {'message': message, 'level': 'success'}, 'refreshMonitoring': True})
+        return response
+    messages.success(request, message)
+    return redirect('reports:session_monitoring')
+
+
+@require_POST
+def session_unlock_action(request, session_id):
+    return _session_action(request, session_id, 'unlock')
 
 
 @require_POST
 def session_reset_action(request, session_id):
-    """Reset sesi siswa agar dapat login ulang dari awal."""
-    if not is_staff_or_admin(request.user):
-        return JsonResponse({'success': False, 'message': 'Akses ditolak'}, status=403)
-
-    session = get_object_or_404(ExamSession, id=session_id)
-    student_name = session.student.full_name
-    # Delete answers and session to allow fresh start
-    session.student_answers.all().delete()
-    session.delete()
-
-    if request.headers.get('HX-Request'):
-        response = HttpResponse("OK")
-        response['HX-Trigger'] = json.dumps({
-            'sessionUpdated': {'sessionId': str(session_id), 'status': 'reset'},
-            'showToast': {'type': 'success', 'message': f'Sesi {student_name} berhasil di-reset.'}
-        })
-        return response
-
-    messages.success(request, f"Sesi {student_name} berhasil di-reset.")
-    return redirect(request.META.get('HTTP_REFERER', '/session-management/'))
+    return _session_action(request, session_id, 'reset')
 
 
 @require_POST
 def session_force_submit_action(request, session_id):
-    """Paksa selesai sesi siswa & kalkulasi nilai akhir."""
-    if not is_staff_or_admin(request.user):
-        return JsonResponse({'success': False, 'message': 'Akses ditolak'}, status=403)
-
-    session = get_object_or_404(ExamSession, id=session_id)
-    score = grade_exam_session(session)
-    session.status = 'finished'
-    session.finished_at = timezone.now()
-    session.save(update_fields=['status', 'score', 'finished_at'])
-
-    if request.headers.get('HX-Request'):
-        response = HttpResponse("OK")
-        response['HX-Trigger'] = json.dumps({
-            'sessionUpdated': {'sessionId': str(session_id), 'status': 'finished', 'score': score},
-            'showToast': {'type': 'success', 'message': f'Sesi {session.student.full_name} dipaksa selesai. Skor: {score}'}
-        })
-        return response
-
-    messages.success(request, f"Sesi {session.student.full_name} dipaksa selesai dengan nilai {score}.")
-    return redirect(request.META.get('HTTP_REFERER', '/session-management/'))
+    return _session_action(request, session_id, 'force_submit')
 
 
 # ==============================================================================
@@ -374,12 +361,7 @@ class ExamResultsListView(View):
         if not is_staff_or_admin(request.user):
             return redirect('accounts:login')
 
-        exams = Exam.objects.select_related('subject', 'teacher').prefetch_related('schedules').order_by('-created_at')
-        user_role = get_user_role(request.user)
-
-        if user_role == 'guru' and hasattr(request.user, 'teacher_profile') and request.user.teacher_profile:
-            teacher = request.user.teacher_profile
-            exams = exams.filter(Q(teacher=teacher) | Q(schedules__teacher=teacher)).distinct()
+        exams = exams_visible_to(request.user).select_related('subject', 'teacher').prefetch_related('schedules').order_by('-created_at')
 
         # If there are exams, redirect to the first one or display selector
         selected_exam_id = request.GET.get('exam_id')
@@ -407,15 +389,8 @@ class ExamResultsView(View):
         if not is_staff_or_admin(request.user):
             return redirect('accounts:login')
 
-        exam = get_object_or_404(Exam.objects.select_related('subject', 'teacher'), id=exam_id)
-        user_role = get_user_role(request.user)
-
-        # Scoping kelas
-        allowed_class_ids = None
-        if user_role == 'guru' and hasattr(request.user, 'teacher_profile') and request.user.teacher_profile:
-            teacher = request.user.teacher_profile
-            assignments = TeacherAssignment.objects.filter(teacher=teacher, subject=exam.subject)
-            allowed_class_ids = list(assignments.values_list('class_room_id', flat=True))
+        exam = get_object_or_404(exams_visible_to(request.user).select_related('subject', 'teacher'), id=exam_id)
+        allowed_class_ids = _allowed_class_ids(request.user, exam)
 
         # Tarik semua jadwal terkait
         related_schedules = exam.schedules.all()
@@ -535,7 +510,7 @@ class ExamResultsView(View):
             'selected_class': class_filter,
             'search_query': search_query,
             'active_tab': request.GET.get('tab', 'rekap'),
-            'all_exams': Exam.objects.select_related('subject').order_by('-created_at')[:20],
+            'all_exams': exams_visible_to(request.user).select_related('subject').order_by('-created_at')[:20],
         }
         return render(request, 'reports/exam_results.html', context)
 
@@ -546,8 +521,9 @@ class ExamResultsExportView(View):
         if not is_staff_or_admin(request.user):
             return HttpResponseForbidden("Unauthorized")
 
-        exam = get_object_or_404(Exam.objects.select_related('subject', 'teacher'), id=exam_id)
+        exam = get_object_or_404(exams_visible_to(request.user).select_related('subject', 'teacher'), id=exam_id)
         related_sch_ids = list(exam.schedules.values_list('id', flat=True))
+        allowed_class_ids = _allowed_class_ids(request.user, exam)
 
         students_qs = Student.objects.filter(status='aktif').select_related('class_room', 'major')
         if exam.exam_type in ['UH', 'PTS']:
@@ -556,6 +532,9 @@ class ExamResultsExportView(View):
                 students_qs = students_qs.filter(class_room_id__in=sch_classes)
         elif exam.level:
             students_qs = students_qs.filter(class_room__level=exam.level)
+
+        if allowed_class_ids is not None:
+            students_qs = students_qs.filter(class_room_id__in=allowed_class_ids)
 
         students = list(students_qs.order_by('class_room__name', 'full_name'))
         session_map = get_student_best_session_map(exam, related_sch_ids)
@@ -585,7 +564,7 @@ class DistractorAnalysisView(View):
         if not is_staff_or_admin(request.user):
             return redirect('accounts:login')
 
-        exam = get_object_or_404(Exam.objects.select_related('subject', 'teacher'), id=exam_id)
+        exam = get_object_or_404(exams_visible_to(request.user).select_related('subject', 'teacher'), id=exam_id)
         analysis = calculate_distractor_analysis(exam)
 
         context = {
@@ -610,7 +589,7 @@ class ExamCardsView(View):
     Mendukung filter Ruang, Sesi, dan Kelas dengan tata letak cetak A4.
     """
     def get(self, request):
-        if not is_staff_or_admin(request.user):
+        if not is_school_admin(request.user):
             return redirect('accounts:login')
 
         settings = SchoolSetting.get_settings()
@@ -673,7 +652,7 @@ class AttendanceListView(View):
     Format 2: Daftar Peserta Ruangan (Tempelan Pintu).
     """
     def get(self, request):
-        if not is_staff_or_admin(request.user):
+        if not is_school_admin(request.user):
             return redirect('accounts:login')
 
         settings = SchoolSetting.get_settings()
@@ -745,7 +724,7 @@ class LogisticsView(View):
     Mendukung pengocokan otomatis (auto-shuffle) dan export Excel.
     """
     def get(self, request):
-        if not is_staff_or_admin(request.user):
+        if not is_school_admin(request.user):
             return redirect('accounts:login')
 
         total_active_students = Student.objects.filter(status='aktif').count()
@@ -792,7 +771,7 @@ class LogisticsView(View):
 @require_POST
 def logistics_generate_action(request):
     """Endpoint untuk generate dan kocok alokasi ruang & sesi siswa."""
-    if not is_staff_or_admin(request.user):
+    if not is_school_admin(request.user):
         return JsonResponse({'success': False, 'message': 'Akses ditolak'}, status=403)
 
     try:
@@ -837,7 +816,7 @@ def logistics_generate_action(request):
 class LogisticsExportView(View):
     """Export Excel data alokasi logistik ruangan siswa."""
     def get(self, request):
-        if not is_staff_or_admin(request.user):
+        if not is_school_admin(request.user):
             return HttpResponseForbidden("Unauthorized")
 
         filter_room = request.GET.get('room', 'all')

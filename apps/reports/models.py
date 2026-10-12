@@ -43,3 +43,37 @@ class StudentLogistic(models.Model):
     def __str__(self):
         std_name = self.student.full_name if self.student else "Siswa"
         return f"{std_name} - {self.room_name} ({self.session_name})"
+
+
+class SessionActionLog(models.Model):
+    """
+    Jejak buka kunci, reset, dan paksa selesai sesi siswa oleh admin/kurikulum.
+    Reset menghapus sesi agar siswa bisa mulai ulang, jadi isi lembar jawabannya disimpan di sini dulu.
+    """
+    ACTION_CHOICES = [
+        ('unlock', 'Buka Kunci'),
+        ('reset', 'Reset Sesi'),
+        ('force_submit', 'Paksa Selesai'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    reason = models.TextField()
+    actor = models.ForeignKey('accounts.CustomUser', on_delete=models.SET_NULL, null=True, related_name='session_actions')
+    student = models.ForeignKey('master_data.Student', on_delete=models.SET_NULL, null=True, related_name='session_actions')
+    schedule = models.ForeignKey('schedules.Schedule', on_delete=models.SET_NULL, null=True, related_name='session_actions')
+    session_id_snapshot = models.UUIDField(help_text="Id sesi saat aksi dilakukan (sesi bisa sudah dihapus oleh reset)")
+    previous_status = models.CharField(max_length=20)
+    previous_violation_count = models.IntegerField(default=0)
+    previous_score = models.FloatField(default=0.0)
+    answers_snapshot = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'session_action_logs'
+        ordering = ['-created_at']
+        verbose_name = 'Log Aksi Sesi'
+        verbose_name_plural = 'Log Aksi Sesi'
+
+    def __str__(self):
+        return f"{self.get_action_display()} oleh {self.actor_id} ({self.created_at:%Y-%m-%d %H:%M})"

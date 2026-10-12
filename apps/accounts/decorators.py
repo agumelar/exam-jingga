@@ -62,7 +62,7 @@ def admin_required(view_func):
 
 def teacher_required(view_func):
     """
-    Decorator requiring Teacher (Guru), Proctor (Pengawas), Kurikulum, or Admin role.
+    Decorator requiring Guru, Kurikulum, or Admin role (sekolah tidak memakai peran pengawas).
     """
     return role_required([
         Role.ADMIN,
@@ -70,7 +70,6 @@ def teacher_required(view_func):
         Role.DATA_ADMIN,
         Role.KURIKULUM,
         Role.GURU,
-        Role.PENGAWAS,
     ])(view_func)
 
 

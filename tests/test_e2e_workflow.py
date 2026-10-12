@@ -316,18 +316,19 @@ def test_full_cbt_e2e_workflow_lifecycle():
     assert exam_session.violation_count == 2
     assert exam_session.status == 'locked'
 
-    # Teacher/Admin Unlocks Session
+    # Kurikulum/admin membuka kunci setelah pembinaan (alasan wajib, pelanggaran tetap tercatat)
     admin_client = Client()
     admin_client.force_login(admin_user)
 
     unlock_resp = admin_client.post(
         f'/session-management/unlock/{exam_session.id}/',
-        HTTP_HX_REQUEST='true'
+        HTTP_HX_REQUEST='true',
+        HTTP_HX_PROMPT='Sudah dibina kurikulum',
     )
     assert unlock_resp.status_code == 200
     exam_session.refresh_from_db()
     assert exam_session.status == 'active'
-    assert exam_session.violation_count == 0
+    assert exam_session.violation_count == 2
 
     # Student Polls Status Check after unlock
     check_status_resp = student_client.get(

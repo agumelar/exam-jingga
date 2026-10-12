@@ -76,7 +76,7 @@ Strictly follows official M3 specifications (m3.material.io):
       </a>
 
       <!-- SECTION: AKADEMIK -->
-      {% if not user.is_student and user.role != 'siswa' %}
+      {% if nav.is_staff_area %}
         <hr class="border-t border-stone-200/80 dark:border-stone-800/80 my-2 mx-3">
         
         <div class="px-4 py-1 text-xs font-semibold tracking-wider text-stone-500 dark:text-stone-400 uppercase">
@@ -109,7 +109,7 @@ Strictly follows official M3 specifications (m3.material.io):
       {% endif %}
 
       <!-- SECTION: MASTER DATA (ADMIN & KURIKULUM) -->
-      {% if user.is_admin or user.role == 'admin' or user.role == 'kurikulum' or user.is_superuser %}
+      {% if nav.is_school_admin %}
         <hr class="border-t border-stone-200/80 dark:border-stone-800/80 my-2 mx-3">
 
         <div class="px-4 py-1 text-xs font-semibold tracking-wider text-stone-500 dark:text-stone-400 uppercase">
@@ -209,7 +209,7 @@ Strictly follows official M3 specifications (m3.material.io):
       </div>
 
       <!-- Monitoring Sesi -->
-      {% if not user.is_student and user.role != 'siswa' %}
+      {% if nav.is_staff_area %}
         <a 
           href="/session-management/"
           class="flex items-center justify-between h-12 px-4 rounded-full text-sm font-medium transition-all duration-200 {% if active_menu == 'sesi' %}bg-orange-100 text-orange-950 dark:bg-orange-950/80 dark:text-orange-200 font-semibold shadow-xs{% else %}text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60{% endif %}"
@@ -238,7 +238,7 @@ Strictly follows official M3 specifications (m3.material.io):
         </a>
       {% endif %}
 
-      {% if user.is_admin or user.role == 'admin' or user.role == 'kurikulum' or user.is_superuser %}
+      {% if nav.is_school_admin %}
         <!-- Kartu Peserta -->
         <a 
           href="/kartu-peserta/"

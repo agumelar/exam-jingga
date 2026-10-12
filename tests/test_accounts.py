@@ -69,14 +69,8 @@ def test_custom_user_roles_and_properties():
     assert teacher.is_curriculum is False
     assert str(teacher) == 'Budi Santoso, S.Pd (Guru)'
 
-    # Pengawas
-    proctor = User.objects.create_user(
-        username='pengawas_lab',
-        full_name='Cici Pengawas',
-        role=Role.PENGAWAS
-    )
-    assert proctor.is_teacher is True
-    assert proctor.is_student is False
+    # Sekolah tidak memakai peran pengawas
+    assert not hasattr(Role, 'PENGAWAS')
 
     # Kurikulum
     curriculum = User.objects.create_user(

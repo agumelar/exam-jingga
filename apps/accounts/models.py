@@ -7,7 +7,6 @@ class Role(models.TextChoices):
     ADMIN = 'admin', 'Admin'
     KURIKULUM = 'kurikulum', 'Kurikulum'
     GURU = 'guru', 'Guru'
-    PENGAWAS = 'pengawas', 'Pengawas'
     SISWA = 'siswa', 'Siswa'
     PLATFORM_ADMIN = 'platform_admin', 'Platform Admin'
     DATA_ADMIN = 'data_admin', 'Data Admin'
@@ -50,7 +49,7 @@ class CustomUser(AbstractUser):
 
     @property
     def is_teacher(self):
-        return self.role in [Role.GURU, Role.PENGAWAS]
+        return self.role == Role.GURU
 
     @property
     def is_admin(self):

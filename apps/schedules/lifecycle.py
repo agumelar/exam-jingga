@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from django.db import transaction
 from django.utils import timezone
 
-from apps.accounts.models import Role
 from apps.schedules.models import Exam, Schedule
 from apps.schedules.utils import (
     ADMIN_ROLES,
@@ -202,11 +201,10 @@ def unlock_exam(exam_id, actor, note):
 
 
 def can_regenerate_token(exam, actor):
+    """UH: guru pemilik paket. Ujian resmi: hanya admin/kurikulum."""
     if actor.is_admin:
         return True
-    if exam.exam_type == 'UH':
-        return is_exam_member(exam, actor.teacher)
-    return actor.role == Role.PENGAWAS
+    return exam.exam_type == 'UH' and is_exam_member(exam, actor.teacher)
 
 
 def regenerate_token(exam_id, actor):
