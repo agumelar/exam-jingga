@@ -319,7 +319,7 @@ class StudentImportView(View):
         ]
         context = {
             'classes': classes,
-            'classes_json': json.dumps(classes_data),
+            'classes_json': classes_data,
             'classes_count': classes.count(),
             'page_title': 'Import Siswa',
             'page_subtitle': 'Unggah Berkas Excel (.xlsx) untuk Impor Data Siswa Massal',
@@ -391,7 +391,7 @@ class StudentImportView(View):
                     continue
 
                 email = f"{nis}@student.smkn1rongga.sch.id"
-                user, _ = User.objects.get_or_create(
+                user, user_created = User.objects.get_or_create(
                     username=nis,
                     defaults={
                         'role': Role.SISWA,
@@ -403,7 +403,9 @@ class StudentImportView(View):
                 user.full_name = full_name
                 user.role = Role.SISWA
                 user.nis = nis
-                user.set_password(f"jingga{nis}")
+                if user_created:
+                    # Siswa login lewat SSO (username = NIS); akun lokal tidak punya kata sandi
+                    user.set_unusable_password()
                 user.save()
 
                 _, s_created = Student.objects.update_or_create(
@@ -744,156 +746,140 @@ class SyncMasterDataView(View):
 
         return JsonResponse(context)
 
-    def get(self, request, *args, **kwargs):
-        return self.post(request, *args, **kwargs)
+
+
+def _normalize_student_status(raw):
+    value = str(raw or 'aktif').strip().lower()
+    return 'aktif' if value in ('aktif', 'active') else value
+
+
+def _parse_uuid(value):
+    import uuid
+    try:
+        return uuid.UUID(str(value)) if value else None
+    except (ValueError, TypeError, AttributeError):
+        return None
 
 
 @method_decorator(__import__('django.views.decorators.csrf', fromlist=['csrf_exempt']).csrf_exempt, name='dispatch')
 class WebhookSyncView(View):
     """
-    Endpoint Webhook Real-Time dari School Data Platform (POST /master/webhook/sync/).
-    Menerima sinyal mutasi data (create, update, delete) siswa, staf, dan rombel secara instan.
-    Header Keamanan: x-api-key: <WEBHOOK_SECRET_KEY>
+    Endpoint Webhook Real-Time dari School Data Platform (POST /api/webhook/sync/).
+    Menerima mutasi siswa dan staf. Header keamanan: x-api-key: <WEBHOOK_SECRET_KEY>.
+
+    Webhook hanya menyalin data identitas. Peran admin/kurikulum datang dari SSO Keycloak,
+    dan akun tidak pernah diberi kata sandi lokal karena semua peran login lewat SSO.
     """
     def post(self, request, *args, **kwargs):
-        import json
+        import hmac
+        import logging
         from django.conf import settings
-        from django.contrib.auth import get_user_model
-        from apps.accounts.models import Role
 
-        api_key = request.headers.get('x-api-key') or request.META.get('HTTP_X_API_KEY')
-        expected_key = getattr(settings, 'WEBHOOK_SECRET_KEY', 'exam-jingga-webhook-secret-key-2026')
-
-        if not api_key or api_key != expected_key:
+        logger = logging.getLogger(__name__)
+        api_key = request.headers.get('x-api-key') or ''
+        expected_key = getattr(settings, 'WEBHOOK_SECRET_KEY', '') or ''
+        if not expected_key or not hmac.compare_digest(api_key.encode(), expected_key.encode()):
             return JsonResponse({'error': 'Unauthorized: Invalid API Key'}, status=401)
 
         try:
             body = json.loads(request.body.decode('utf-8'))
-        except Exception as e:
-            return JsonResponse({'error': f'Invalid JSON body: {e}'}, status=400)
+        except (ValueError, UnicodeDecodeError):
+            return JsonResponse({'error': 'Invalid JSON body'}, status=400)
 
         action = str(body.get('action') or 'update').lower()
         item_type = str(body.get('type') or '').lower()
         data = body.get('data') or {}
-
         if not item_type or not data:
             return JsonResponse({'error': 'Missing type or data in payload'}, status=400)
 
-        User = get_user_model()
-
         try:
             if item_type in ['student', 'siswa']:
-                nis = str(data.get('nis') or '').strip()
-                if not nis:
-                    return JsonResponse({'error': 'NIS is required for student'}, status=400)
+                return self._sync_student(action, data)
+            if item_type in ['staff', 'teacher', 'guru']:
+                return self._sync_staff(action, data)
+            return JsonResponse({'error': f'Unknown type: {item_type}'}, status=400)
+        except Exception:
+            logger.exception("Webhook sync gagal untuk type=%s action=%s", item_type, action)
+            return JsonResponse({'error': 'Sync processing failed'}, status=500)
 
-                if action == 'delete':
-                    Student.objects.filter(nis=nis).update(status='keluar')
-                    return JsonResponse({'status': 'success', 'message': f'Student {nis} marked as inactive'})
+    def _sync_student(self, action, data):
+        User = get_user_model()
+        nis = str(data.get('nis') or '').strip()
+        if not nis:
+            return JsonResponse({'error': 'NIS is required for student'}, status=400)
 
-                full_name = data.get('nama_siswa') or data.get('fullName') or data.get('full_name') or 'Siswa'
-                sso_id_str = data.get('id') or data.get('sso_id')
-                sso_uuid = None
-                if sso_id_str:
-                    try:
-                        import uuid
-                        sso_uuid = uuid.UUID(str(sso_id_str))
-                    except (ValueError, TypeError):
-                        pass
+        if action == 'delete':
+            Student.objects.filter(nis=nis).update(status='keluar')
+            User.objects.filter(username=nis, is_superuser=False).update(is_active=False)
+            return JsonResponse({'status': 'success', 'message': f'Student {nis} marked as inactive'})
 
-                # Resolve class
-                class_id = data.get('kelas_id') or data.get('classGroupId')
-                class_name = data.get('class_name') or data.get('kelas') or data.get('rombel')
-                matched_class = None
-                if class_id:
-                    matched_class = ClassRoom.objects.filter(id=class_id).first()
-                if not matched_class and class_name:
-                    matched_class = ClassRoom.objects.filter(name__iexact=str(class_name).strip()).first()
+        full_name = data.get('nama_siswa') or data.get('fullName') or data.get('full_name') or 'Siswa'
+        sso_uuid = _parse_uuid(data.get('id') or data.get('sso_id'))
+        status = _normalize_student_status(data.get('status_siswa') or data.get('status'))
+        email = data.get('email') or f'{nis}@student.smkn1rongga.sch.id'
 
-                user, _ = User.objects.get_or_create(
-                    username=nis,
-                    defaults={
-                        'nis': nis,
-                        'full_name': full_name,
-                        'email': data.get('email') or f'{nis}@student.smkn1rongga.sch.id',
-                        'role': Role.SISWA,
-                        'sso_id': sso_uuid
-                    }
-                )
-                if user:
-                    user.full_name = full_name
-                    if sso_uuid and not user.sso_id:
-                        user.sso_id = sso_uuid
-                    user.save(update_fields=['full_name', 'sso_id'])
+        class_name = data.get('class_name') or data.get('kelas') or data.get('rombel')
+        matched_class = None
+        class_uuid = _parse_uuid(data.get('kelas_id') or data.get('classGroupId'))
+        if class_uuid:
+            matched_class = ClassRoom.objects.filter(id=class_uuid).first()
+        if not matched_class and class_name:
+            matched_class = ClassRoom.objects.filter(name__iexact=str(class_name).strip()).first()
 
-                Student.objects.update_or_create(
-                    nis=nis,
-                    defaults={
-                        'user': user,
-                        'full_name': full_name,
-                        'class_room': matched_class,
-                        'status': data.get('status_siswa') or data.get('status') or 'aktif',
-                        'email': data.get('email') or f'{nis}@student.smkn1rongga.sch.id',
-                        'sso_id': sso_uuid
-                    }
-                )
+        user = User.objects.filter(username=nis).first()
+        if user is None:
+            user = User(username=nis, nis=nis, full_name=full_name, email=email, role=Role.SISWA, sso_id=sso_uuid)
+            user.set_unusable_password()
+        if not user.is_superuser:
+            user.full_name = full_name
+            if sso_uuid and not user.sso_id:
+                user.sso_id = sso_uuid
+            user.is_active = status == 'aktif'
+            user.save()
 
-            elif item_type in ['staff', 'teacher', 'guru']:
-                nip = str(data.get('nip') or '').strip() or None
-                email = (data.get('email') or f"{nip or 'guru'}@smkn1rongga.sch.id").lower().strip()
-                full_name = data.get('fullName') or data.get('full_name') or data.get('name') or 'Guru'
+        defaults = {'user': user, 'full_name': full_name, 'status': status, 'email': email}
+        if sso_uuid:
+            defaults['sso_id'] = sso_uuid
+        if matched_class or not class_name:
+            defaults['class_room'] = matched_class
+        Student.objects.update_or_create(nis=nis, defaults=defaults)
+        return JsonResponse({'status': 'success', 'message': 'Student data synced successfully'})
 
-                if action == 'delete':
-                    Teacher.objects.filter(email=email).delete()
-                    return JsonResponse({'status': 'success', 'message': f'Staff {email} deleted'})
+    def _sync_staff(self, action, data):
+        User = get_user_model()
+        nip = str(data.get('nip') or '').strip() or None
+        email = str(data.get('email') or '').lower().strip()
+        if not email and not nip:
+            return JsonResponse({'error': 'email or nip is required for staff'}, status=400)
+        if not email:
+            email = f"{nip}@smkn1rongga.sch.id"
 
-                sso_id_str = data.get('id') or data.get('sso_id')
-                sso_uuid = None
-                if sso_id_str:
-                    try:
-                        import uuid
-                        sso_uuid = uuid.UUID(str(sso_id_str))
-                    except (ValueError, TypeError):
-                        pass
+        teacher = Teacher.objects.filter(email__iexact=email).first()
+        if action == 'delete':
+            # Guru tidak dihapus: bank soal dan riwayat ujiannya tetap utuh, hanya aksesnya dicabut
+            if teacher and teacher.user_id:
+                User.objects.filter(pk=teacher.user_id, is_superuser=False).update(is_active=False)
+            return JsonResponse({'status': 'success', 'message': f'Staff {email} deactivated'})
 
-                raw_role = (data.get('ptkType') or data.get('role_level') or 'guru').lower()
-                role_level = 'admin' if any(k in raw_role for k in ['admin', 'kepala']) else ('kurikulum' if 'kurikulum' in raw_role else 'guru')
-                user_role = Role.ADMIN if role_level == 'admin' else (Role.KURIKULUM if role_level == 'kurikulum' else Role.GURU)
+        full_name = data.get('fullName') or data.get('full_name') or data.get('name') or 'Guru'
+        sso_uuid = _parse_uuid(data.get('id') or data.get('sso_id'))
+        raw_role = str(data.get('ptkType') or data.get('role_level') or '').strip().lower()
+        role_level = 'kurikulum' if raw_role == 'kurikulum' else 'guru'
 
-                username = (email.split('@')[0] if email else nip or 'guru').replace('.', '_')
-                user = User.objects.filter(email__iexact=email).first() or User.objects.filter(username=username).first()
-                if user:
-                    user.full_name = full_name
-                    user.role = user_role
-                    user.is_staff = True
-                    if sso_uuid:
-                        user.sso_id = sso_uuid
-                    user.save()
-                else:
-                    user = User.objects.create(
-                        username=username,
-                        email=email,
-                        full_name=full_name,
-                        role=user_role,
-                        sso_id=sso_uuid,
-                        is_staff=True
-                    )
-                    user.set_password('Jingga123')
-                    user.save()
+        username = email.split('@')[0].replace('.', '_')
+        user = User.objects.filter(email__iexact=email).first() or User.objects.filter(username=username).first()
+        if user is None:
+            user = User(username=username, email=email, full_name=full_name, role=Role.GURU, sso_id=sso_uuid)
+            user.set_unusable_password()
+            user.save()
+        elif not user.is_superuser:
+            user.full_name = full_name
+            if sso_uuid and not user.sso_id:
+                user.sso_id = sso_uuid
+            user.save(update_fields=['full_name', 'sso_id'])
 
-                Teacher.objects.update_or_create(
-                    email=email,
-                    defaults={
-                        'user': user,
-                        'full_name': full_name,
-                        'nip': nip,
-                        'role_level': role_level,
-                        'sso_id': sso_uuid
-                    }
-                )
-
-            return JsonResponse({'status': 'success', 'message': f'{item_type.capitalize()} data synced successfully'})
-
-        except Exception as exc:
-            return JsonResponse({'error': f'Sync processing failed: {exc}'}, status=500)
-
+        defaults = {'user': user, 'full_name': full_name, 'nip': nip, 'role_level': role_level}
+        if sso_uuid:
+            defaults['sso_id'] = sso_uuid
+        Teacher.objects.update_or_create(email=email, defaults=defaults)
+        return JsonResponse({'status': 'success', 'message': 'Staff data synced successfully'})

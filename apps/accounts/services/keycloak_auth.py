@@ -165,7 +165,6 @@ def determine_user_role(payload: dict, username: str, email: str) -> str:
     realm_roles = payload.get('realm_access', {}).get('roles', []) or []
     client_roles = payload.get('resource_access', {}).get(KEYCLOAK_CLIENT_ID, {}).get('roles', []) or []
     all_roles = [str(r).lower() for r in (realm_roles + client_roles)]
-    uname_lower = username.lower()
     email_lower = email.lower()
 
     # 1. Platform Admin & Data Admin
@@ -178,14 +177,13 @@ def determine_user_role(payload: dict, username: str, email: str) -> str:
     if 'kurikulum' in all_roles:
         return Role.KURIKULUM
 
-    # 3. Admin / Superadmin
-    has_admin_keyword = any(r in all_roles for r in ['admin', 'superadmin', 'administrator'])
-    if has_admin_keyword or uname_lower == 'admin' or 'admin' in uname_lower:
+    # 3. Admin: hanya dari role Keycloak yang persis, bukan dari pola username
+    if any(r in all_roles for r in ['admin', 'superadmin', 'administrator']):
         return Role.ADMIN
 
-    # 4. Pengawas
+    # Sekolah tidak memakai peran pengawas; klaim 'pengawas' diperlakukan sebagai guru
     if 'pengawas' in all_roles:
-        return Role.PENGAWAS
+        return Role.GURU
 
     # 5. Siswa (Explicit role 'student'/'siswa' or username is NIS digits 4-12)
     is_likely_nis = bool(re.match(r'^\d{4,12}$', username))
@@ -300,6 +298,10 @@ def parse_and_sync_user(tokens: dict):
     # 3. Lookup by email
     if not user and email:
         user = User.objects.filter(email__iexact=email).first()
+
+    # Superuser lokal adalah jalur darurat; SSO tidak boleh menautkan diri hanya karena username/email sama
+    if user and user.is_superuser and user.sso_id != sso_uuid:
+        raise ValueError("Akun ini adalah superuser lokal dan tidak bisa ditautkan ke SSO.")
 
     is_staff_role = role in [Role.ADMIN, Role.PLATFORM_ADMIN, Role.DATA_ADMIN, Role.KURIKULUM]
 

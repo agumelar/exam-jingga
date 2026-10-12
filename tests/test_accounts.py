@@ -348,13 +348,13 @@ def test_parse_and_sync_updates_existing_user():
 
 @pytest.mark.django_db
 def test_login_view_unauthenticated_renders_page(client: Client):
-    """Login view renders the M3 login page with direct login form and SSO option."""
+    """Login page offers SSO only; there is no password form for any role."""
     response = client.get(reverse('accounts:login'))
     assert response.status_code == 200
     assert 'EXAM' in response.content.decode()
     assert 'JINGGA' in response.content.decode()
-    assert 'Masuk dengan SSO SMKN 1 Rongga' in response.content.decode()
-    assert 'Opsi Login Manual' in response.content.decode()
+    assert 'Masuk dengan SSO Sekolah' in response.content.decode()
+    assert 'name="password"' not in response.content.decode()
 
 
 
@@ -442,35 +442,6 @@ def test_sso_callback_view_state_mismatch_fails(client: Client):
 
     assert response.status_code == 200
     assert 'Validasi keamanan SSO gagal' in response.content.decode()
-
-
-@pytest.mark.django_db
-def test_local_login_view_success_and_failure(client: Client):
-    """Verify emergency local admin login authentication."""
-    User = get_user_model()
-    admin = User.objects.create_user(
-        username='local_admin',
-        password='StrongPassword123!',
-        role=Role.ADMIN,
-        full_name='Local Administrator'
-    )
-
-    # Failed login (wrong password)
-    fail_res = client.post(reverse('accounts:local_login'), {
-        'username': 'local_admin',
-        'password': 'WrongPassword'
-    }, follow=True)
-    assert fail_res.status_code == 200
-    assert 'salah' in fail_res.content.decode().lower()
-
-    # Successful login
-    success_res = client.post(reverse('accounts:local_login'), {
-        'username': 'local_admin',
-        'password': 'StrongPassword123!',
-        'next': '/dashboard/'
-    })
-    assert success_res.status_code == 302
-    assert success_res.url == '/dashboard/'
 
 
 @pytest.mark.django_db

@@ -35,6 +35,7 @@ if [ "${RUN_LOCAL:-0}" = "1" ] || [ -d "/opt/exam-jingga" ] && [ "$(hostname)" !
 
     echo "🗄️ [3/6] Running database migrations on PostgreSQL..."
     python manage.py migrate --noinput
+    python manage.py createcachetable
 
     echo "📦 [4/6] Collecting static assets & optimizing WhiteNoise cache..."
     python manage.py collectstatic --noinput

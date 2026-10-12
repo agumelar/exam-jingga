@@ -113,6 +113,6 @@ Test suite `tests/test_e2e_workflow.py` mensimulasikan siklus penuh asesmen seko
 ## 🏛️ 7. Integrasi Keycloak SSO & Master Data Hub (School Data Platform)
 * **Pilar 1 - OIDC PKCE Login**: Terhubung ke `https://sso.smkn1rongga.sch.id/realms/sekolah` dengan `prompt=login` (anti-tabrak sesi di lab komputer), pemetaan klaim `student` -> `Role.SISWA`, `ptk` -> `Role.GURU`/`Role.ADMIN`, dan auto-linking ke profil `Student` / `Teacher`.
 * **Pilar 2 - M2M Client Credentials Sync**: Service `MasterDataSyncService` mendukung pengambilan token M2M dari Keycloak dan paginasi otomatis 722+ siswa aktif dari `GET https://data.smkn1rongga.sch.id/v1/students` serta guru dari `GET /v1/staff`.
-* **Pilar 3 - Real-time Webhook Receiver**: Endpoint `POST https://exam.smkn1rongga.sch.id/api/webhook/sync/` terproteksi `x-api-key: exam-jingga-webhook-secret-key-2026` untuk menerima sinyal mutasi data (tambah siswa baru, mutasi rombel, update data guru) secara instan dari panel [Data Admin](https://data-admin.smkn1rongga.sch.id).
+* **Pilar 3 - Real-time Webhook Receiver**: Endpoint `POST https://exam.smkn1rongga.sch.id/api/webhook/sync/` terproteksi header `x-api-key` (nilai di `WEBHOOK_SECRET_KEY` pada `.env` VPS, tidak ditulis di repo) untuk menerima sinyal mutasi data (tambah siswa baru, mutasi rombel, update data guru) secara instan dari panel [Data Admin](https://data-admin.smkn1rongga.sch.id).
 
 

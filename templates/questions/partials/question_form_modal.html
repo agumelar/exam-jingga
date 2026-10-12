@@ -1,8 +1,8 @@
 {% load static %}
 
 <!-- M3 QUESTION FORM MODAL (CREATE / EDIT) -->
-<script id="modal-subjects-data" type="application/json">{{ subjects_json|safe }}</script>
-<script id="modal-teachers-data" type="application/json">{{ teachers_json|safe }}</script>
+{{ subjects_json|json_script:"modal-subjects-data" }}
+{{ teachers_json|json_script:"modal-teachers-data" }}
 <script>
 window.questionModalData = function(initial) {
   var teachers = window.BANK_SOAL_TEACHERS || [];

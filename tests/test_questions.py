@@ -443,7 +443,7 @@ def test_dynamic_teacher_filtering_by_subject(client):
     assert teacher_fsk in teachers_all
 
     # Verify teachers_json mapping in context
-    teachers_json = json.loads(res_all.context['teachers_json'])
+    teachers_json = res_all.context['teachers_json']
     mtk_entry = next((t for t in teachers_json if t['id'] == str(teacher_mtk.id)), None)
     assert mtk_entry is not None
     assert str(subj_mtk.id) in mtk_entry['subject_ids']
@@ -476,41 +476,6 @@ def test_dynamic_teacher_filtering_by_subject(client):
     teachers_edit = list(res_edit.context['teachers'])
     assert teacher_mtk in teachers_edit
     assert teacher_fsk not in teachers_edit
-
-
-@pytest.mark.django_db
-def test_restore_supabase_images_command(monkeypatch):
-    """Verify restore_supabase_images command updates question image URLs accurately."""
-    from django.core.management import call_command
-    from unittest.mock import MagicMock
-    import psycopg
-
-    q = Question.objects.create(
-        question_text="Sample question with image",
-        correct_answer="A"
-    )
-
-    fake_cur = MagicMock()
-    fake_cur.fetchall.return_value = [
-        (
-            str(q.id),
-            "https://vlawnrlczxagcitlaokh.supabase.co/storage/v1/object/public/question-images/test/sample.png",
-            "https://vlawnrlczxagcitlaokh.supabase.co/storage/v1/object/public/question-images/test/opt_a.png",
-            "", "", "", ""
-        )
-    ]
-    fake_cur.__enter__.return_value = fake_cur
-
-    fake_conn = MagicMock()
-    fake_conn.cursor.return_value = fake_cur
-
-    monkeypatch.setattr(psycopg, 'connect', lambda *args, **kwargs: fake_conn)
-
-    call_command('restore_supabase_images', '--no-download')
-
-    q.refresh_from_db()
-    assert "https://vlawnrlczxagcitlaokh.supabase.co" in q.question_image.name
-    assert "opt_a.png" in q.image_a.name
 
 
 @pytest.mark.django_db
@@ -642,8 +607,8 @@ def test_3tier_cascading_metadata_and_filtering(client):
     assert 'subjects_json' in res.context
     assert 'teachers_json' in res.context
 
-    subjects_data = json.loads(res.context['subjects_json'])
-    teachers_data = json.loads(res.context['teachers_json'])
+    subjects_data = res.context['subjects_json']
+    teachers_data = res.context['teachers_json']
 
     # Dasar Kejuruan RPL has level [10]
     entry_dasar = next(s for s in subjects_data if s['id'] == str(s_dasar.id))

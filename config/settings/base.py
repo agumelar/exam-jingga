@@ -15,11 +15,9 @@ apps_dir = str(BASE_DIR / 'apps')
 if apps_dir not in sys.path:
     sys.path.insert(0, apps_dir)
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get(
-    'DJANGO_SECRET_KEY',
-    'django-insecure-exam-jingga-dath-stack-2026-reengineering-key'
-)
+# Tanpa nilai bawaan: development.py mengisi kunci lokal, production.py menolak start bila kosong.
+# .env VPS memakai nama SECRET_KEY, jadi keduanya dibaca.
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY') or os.environ.get('SECRET_KEY', '')
 
 # Application definition
 DJANGO_APPS = [
@@ -119,6 +117,10 @@ LOGIN_URL = 'accounts:login'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = 'accounts:login'
 
+# Komputer lab dipakai bergantian: sesi berakhir saat browser ditutup dan paling lama 10 jam.
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_AGE = 10 * 60 * 60
+
 # Keycloak SSO Configuration
 KEYCLOAK_URL = os.environ.get('KEYCLOAK_URL', 'https://sso.smkn1rongga.sch.id').rstrip('/')
 KEYCLOAK_REALM = os.environ.get('KEYCLOAK_REALM', 'sekolah')
@@ -127,6 +129,6 @@ KEYCLOAK_CLIENT_SECRET = os.environ.get('KEYCLOAK_CLIENT_SECRET', '')
 
 # Data Master Pusat OpenAPI URL & Webhook Secret
 DATA_MASTER_BASE_URL = os.environ.get('DATA_MASTER_BASE_URL', 'https://data.smkn1rongga.sch.id').rstrip('/')
-WEBHOOK_SECRET_KEY = os.environ.get('WEBHOOK_SECRET_KEY', 'exam-jingga-webhook-secret-key-2026')
+WEBHOOK_SECRET_KEY = os.environ.get('WEBHOOK_SECRET_KEY', '')
 
 

@@ -2,6 +2,7 @@ import json
 import uuid
 import pytest
 from unittest.mock import patch, MagicMock
+from django.conf import settings
 from django.urls import reverse
 from django.test import RequestFactory
 from django.contrib.auth import get_user_model
@@ -181,7 +182,7 @@ def test_webhook_sync_view_create_and_update():
         '/api/webhook/sync/',
         data=json.dumps(student_data),
         content_type='application/json',
-        HTTP_X_API_KEY='exam-jingga-webhook-secret-key-2026'
+        HTTP_X_API_KEY=settings.WEBHOOK_SECRET_KEY
     )
     resp_valid = view(req_valid)
     assert resp_valid.status_code == 200
@@ -211,7 +212,7 @@ def test_webhook_sync_view_create_and_update():
         '/api/webhook/sync/',
         data=json.dumps(staff_data),
         content_type='application/json',
-        HTTP_X_API_KEY='exam-jingga-webhook-secret-key-2026'
+        HTTP_X_API_KEY=settings.WEBHOOK_SECRET_KEY
     )
     resp_staff = view(req_staff)
     assert resp_staff.status_code == 200

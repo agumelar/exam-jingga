@@ -422,9 +422,15 @@ def test_full_cbt_e2e_workflow_lifecycle():
 
 
 @pytest.mark.django_db
-def test_production_settings_configuration_integrity():
+def test_production_settings_configuration_integrity(monkeypatch):
     """Verify production settings properties and WhiteNoise storage configuration."""
+    import importlib
+    monkeypatch.setenv('SECRET_KEY', 'test-production-secret')
+    monkeypatch.setenv('WEBHOOK_SECRET_KEY', 'test-production-webhook')
+    import config.settings.base as base_settings
+    importlib.reload(base_settings)
     from config.settings import production as prod_settings
+    prod_settings = importlib.reload(prod_settings)
     
     assert prod_settings.DEBUG is False
     assert prod_settings.STORAGES['staticfiles']['BACKEND'] in [

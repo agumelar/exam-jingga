@@ -12,7 +12,6 @@ urlpatterns = [
     path('auth/callback/', lambda r: __import__('apps.accounts.views', fromlist=['sso_callback_view']).sso_callback_view(r)),
     path('login/', lambda r: __import__('apps.accounts.views', fromlist=['login_view']).login_view(r), name='login_alias'),
     path('logout/', lambda r: __import__('apps.accounts.views', fromlist=['logout_view']).logout_view(r), name='logout_alias'),
-    path('local-login/', lambda r: __import__('apps.accounts.views', fromlist=['local_login_view']).local_login_view(r), name='local_login_alias'),
     path('api/webhook/sync/', __import__('django.views.decorators.csrf', fromlist=['csrf_exempt']).csrf_exempt(__import__('apps.master_data.views', fromlist=['WebhookSyncView']).WebhookSyncView.as_view()), name='api_webhook_sync'),
     path('master/', include('apps.master_data.urls', namespace='master_data')),
     path('bank-soal/', include('apps.questions.urls', namespace='questions')),

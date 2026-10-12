@@ -314,7 +314,8 @@ class MasterDataSyncService:
                 email = (t.get('email') or f"{nip or 'guru'}@smkn1rongga.sch.id").lower().strip()
                 raw_role = (t.get('ptkType') or t.get('role_level') or t.get('role') or 'guru').lower()
                 
-                role_level = 'admin' if any(k in raw_role for k in ['admin', 'kepala']) else ('kurikulum' if 'kurikulum' in raw_role else 'guru')
+                # Data master hanya informasi jabatan; peran admin/kurikulum di aplikasi datang dari SSO
+                role_level = 'kurikulum' if raw_role.strip() == 'kurikulum' else 'guru'
 
                 sso_id_str = t.get('id') or t.get('sso_id')
                 sso_id = None
@@ -333,26 +334,22 @@ class MasterDataSyncService:
                 if not user:
                     user = User.objects.filter(username=username).first()
 
-                user_role = Role.ADMIN if role_level == 'admin' else (Role.KURIKULUM if role_level == 'kurikulum' else Role.GURU)
-
                 if user:
-                    user.full_name = full_name
-                    user.email = email
-                    user.role = user_role
-                    user.is_staff = True
-                    if sso_id and not user.sso_id:
-                        user.sso_id = sso_id
-                    user.save()
+                    if not user.is_superuser:
+                        user.full_name = full_name
+                        user.email = email
+                        if sso_id and not user.sso_id:
+                            user.sso_id = sso_id
+                        user.save()
                 else:
-                    user = User.objects.create(
+                    user = User(
                         username=username,
                         email=email,
                         full_name=full_name,
-                        role=user_role,
+                        role=Role.GURU,
                         sso_id=sso_id,
-                        is_staff=True
                     )
-                    user.set_password("Jingga123")
+                    user.set_unusable_password()
                     user.save()
 
                 teacher, _ = Teacher.objects.update_or_create(
@@ -430,7 +427,6 @@ class MasterDataSyncService:
                 raw_status = str(s.get('status') or 'aktif').lower()
                 status = 'aktif' if raw_status in ['active', 'aktif'] else raw_status
                 email = s.get('email') or f"{nis}@student.smkn1rongga.sch.id"
-                password_plain = s.get('password_plain') or f"jingga{nis}"
 
                 sso_id_str = s.get('id') or s.get('sso_id')
                 sso_id = None
@@ -447,15 +443,16 @@ class MasterDataSyncService:
                     user = User.objects.filter(username=nis).first()
 
                 if user:
-                    user.full_name = full_name
-                    user.nis = nis
-                    user.email = email
-                    user.role = Role.SISWA
-                    if sso_id and not user.sso_id:
-                        user.sso_id = sso_id
-                    user.save()
+                    if not user.is_superuser:
+                        user.full_name = full_name
+                        user.nis = nis
+                        user.email = email
+                        user.role = Role.SISWA
+                        if sso_id and not user.sso_id:
+                            user.sso_id = sso_id
+                        user.save()
                 else:
-                    user = User.objects.create(
+                    user = User(
                         username=nis,
                         nis=nis,
                         full_name=full_name,
@@ -463,7 +460,7 @@ class MasterDataSyncService:
                         role=Role.SISWA,
                         sso_id=sso_id
                     )
-                    user.set_password(password_plain)
+                    user.set_unusable_password()
                     user.save()
 
                 student, _ = Student.objects.update_or_create(
@@ -475,7 +472,6 @@ class MasterDataSyncService:
                         'major': matched_major,
                         'status': status,
                         'email': email,
-                        'password_plain': password_plain,
                         'sso_id': sso_id
                     }
                 )

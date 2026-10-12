@@ -125,7 +125,7 @@
                 }"
                 class="leading-relaxed break-words {% if opt.is_selected %}text-stone-900 dark:text-white font-semibold{% else %}text-stone-800 dark:text-stone-200 font-medium{% endif %}"
               >
-                {{ opt.text|safe }}
+                {{ opt.text|linebreaksbr }}
               </div>
               {% if opt.image_url %}
                 <img 

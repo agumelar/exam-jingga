@@ -235,9 +235,7 @@
 
 </div>
 
-<script id="registered-classes-data" type="application/json">
-  {{ classes_json|default:'[]'|safe }}
-</script>
+{{ classes_json|default:"[]"|json_script:"registered-classes-data" }}
 
 <script>
 function importStudentsData() {

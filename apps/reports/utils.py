@@ -386,7 +386,7 @@ def generate_logistics_excel(logistics_qs):
     ws.append([f"Waktu Unduh: {timezone.now().strftime('%d-%m-%Y %H:%M')} WIB"])
     ws.append([])
 
-    headers = ["No", "NIS", "Nama Lengkap Siswa", "Kelas", "Ruangan", "Sesi", "Password Plain"]
+    headers = ["No", "NIS", "Nama Lengkap Siswa", "Kelas", "Ruangan", "Sesi"]
     ws.append(headers)
 
     header_row_idx = 4
@@ -405,7 +405,6 @@ def generate_logistics_excel(logistics_qs):
             log.student.class_room.name if log.student and log.student.class_room else '',
             log.room_name,
             log.session_name,
-            log.student.password_plain if log.student else ''
         ]
         ws.append(row_data)
         current_row = header_row_idx + idx

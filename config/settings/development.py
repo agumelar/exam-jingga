@@ -5,6 +5,9 @@ from .base import *  # noqa: F401, F403
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
+SECRET_KEY = SECRET_KEY or 'django-insecure-local-development-only'  # noqa: F405
+WEBHOOK_SECRET_KEY = WEBHOOK_SECRET_KEY or 'local-development-webhook-key'  # noqa: F405
+
 ALLOWED_HOSTS = ['*']
 
 # Database (SQLite for local development)

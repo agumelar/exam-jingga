@@ -126,7 +126,6 @@ class Student(models.Model):
     )
     status = models.CharField(max_length=50, default='aktif', help_text="Status Siswa (aktif, mutasi, lulus, dll)")
     email = models.CharField(max_length=255, null=True, blank=True)
-    password_plain = models.CharField(max_length=100, blank=True, default='', help_text="Password default / kartu peserta")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

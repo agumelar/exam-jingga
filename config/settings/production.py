@@ -1,8 +1,12 @@
 """Production settings for Exam Jingga DATH Stack project."""
 import os
+from django.core.exceptions import ImproperlyConfigured
 from .base import *  # noqa: F401, F403
 
 DEBUG = False
+
+if not SECRET_KEY:  # noqa: F405
+    raise ImproperlyConfigured("SECRET_KEY (atau DJANGO_SECRET_KEY) wajib diisi di .env produksi.")
 
 # Allowed hosts configuration
 ALLOWED_HOSTS = [
@@ -81,10 +85,18 @@ DATA_MASTER_BASE_URL = os.environ.get(
     'DATA_MASTER_BASE_URL',
     'https://data.smkn1rongga.sch.id'
 ).rstrip('/')
-WEBHOOK_SECRET_KEY = os.environ.get(
-    'WEBHOOK_SECRET_KEY',
-    'exam-jingga-webhook-secret-key-2026'
-)
+WEBHOOK_SECRET_KEY = os.environ.get('WEBHOOK_SECRET_KEY', '')
+if not WEBHOOK_SECRET_KEY:
+    raise ImproperlyConfigured("WEBHOOK_SECRET_KEY wajib diisi di .env produksi.")
+
+# Cache bersama antar worker Gunicorn (dipakai pembatas percobaan login darurat dan metrik dashboard).
+# Tabelnya dibuat oleh `python manage.py createcachetable` saat deploy.
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+        'LOCATION': 'django_cache',
+    }
+}
 
 # Production Logging Configuration
 LOGGING = {

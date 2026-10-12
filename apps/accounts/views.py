@@ -2,10 +2,12 @@
 import logging
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
+from django.core.cache import cache
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
-from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.http import require_http_methods
 
 
 from apps.accounts.services.keycloak_auth import (
@@ -36,13 +38,9 @@ def login_view(request):
 
 
 class LoginView(View):
-    """Class-based view wrapper for login_view."""
+    """Class-based wrapper for login_view."""
     def get(self, request, *args, **kwargs):
         return login_view(request)
-
-    def post(self, request, *args, **kwargs):
-        return local_login_view(request)
-
 
 
 def sso_login_redirect_view(request):
@@ -106,7 +104,7 @@ def sso_callback_view(request):
         return redirect('accounts:login')
 
     if not user.is_active:
-        messages.error(request, "Akun ujian Anda dinonaktifkan oleh sekolah. Silakan hubungi proktor/administrator!")
+        messages.error(request, "Akun ujian Anda dinonaktifkan oleh sekolah. Silakan hubungi bagian kurikulum.")
         return redirect('accounts:login')
 
     # Log user in
@@ -120,55 +118,78 @@ def sso_callback_view(request):
     request.session.pop('kc_code_verifier', None)
     request.session.pop('kc_target_path', None)
 
-    # Redirect to target path or dashboard
-    if target_path and target_path.startswith('/'):
-        return redirect(target_path)
+    safe_target = _safe_next(request, target_path)
+    if safe_target:
+        return redirect(safe_target)
 
     if user.is_student:
         return redirect('/student/dashboard/')
     return redirect('/dashboard/')
 
 
-@require_POST
-def local_login_view(request):
+EMERGENCY_MAX_FAILURES = 5
+EMERGENCY_LOCK_SECONDS = 15 * 60
+
+
+def _safe_next(request, target_path):
+    if target_path and url_has_allowed_host_and_scheme(
+        target_path, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return target_path
+    return None
+
+
+def _client_ip(request):
+    forwarded = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    return forwarded.split(',')[0].strip() if forwarded else request.META.get('REMOTE_ADDR', '')
+
+
+def _throttle_keys(request, username):
+    return [f"emergency-login:ip:{_client_ip(request)}", f"emergency-login:user:{username.lower()}"]
+
+
+@require_http_methods(['GET', 'POST'])
+def emergency_login_view(request):
     """
-    Handles emergency local login for superusers and local administrators.
+    Jalur login darurat bila SSO Keycloak tidak bisa diakses. Hanya superuser yang bisa masuk;
+    akun lain tidak punya kata sandi lokal karena semua peran login lewat SSO.
     """
+    context = {'next': request.POST.get('next') or request.GET.get('next', '')}
+    if request.method == 'GET':
+        return render(request, 'accounts/emergency_login.html', context)
+
     username = request.POST.get('username', '').strip()
     password = request.POST.get('password', '')
-    target_path = request.POST.get('next') or request.GET.get('next')
+    keys = _throttle_keys(request, username)
 
-    if not username or not password:
-        messages.error(request, "Username dan kata sandi wajib diisi.")
-        return redirect('accounts:login')
+    if any(cache.get(key, 0) >= EMERGENCY_MAX_FAILURES for key in keys):
+        context['error'] = "Terlalu banyak percobaan gagal. Coba lagi dalam 15 menit."
+        return render(request, 'accounts/emergency_login.html', context, status=429)
 
-    user = authenticate(request, username=username, password=password)
+    user = authenticate(request, username=username, password=password) if username and password else None
+    if user is None or not user.is_superuser or not user.is_active:
+        for key in keys:
+            cache.set(key, cache.get(key, 0) + 1, EMERGENCY_LOCK_SECONDS)
+        logger.warning("Login darurat gagal untuk username=%s ip=%s", username, _client_ip(request))
+        context['error'] = "Username atau kata sandi salah, atau akun ini bukan superuser."
+        return render(request, 'accounts/emergency_login.html', context)
 
-    if user is not None:
-        if not user.is_active:
-            messages.error(request, "Akun lokal ini telah dinonaktifkan.")
-            return redirect('accounts:login')
-
-        login(request, user)
-
-        if target_path and target_path.startswith('/'):
-            return redirect(target_path)
-
-        if user.is_student:
-            return redirect('/student/dashboard/')
-        return redirect('/dashboard/')
-
-    messages.error(request, "Username atau kata sandi administrator lokal salah.")
-    return redirect('accounts:login')
+    for key in keys:
+        cache.delete(key)
+    login(request, user)
+    logger.warning("Login darurat superuser berhasil: %s ip=%s", user.username, _client_ip(request))
+    return redirect(_safe_next(request, context['next']) or '/dashboard/')
 
 
 def logout_view(request):
-    """
-    Logs out of Django session and redirects directly to login page with flash message.
-    """
+    """Keluar dari sesi Django dan sesi Keycloak, supaya siswa berikutnya di komputer lab tidak ikut masuk."""
+    id_token = request.session.get('kc_id_token')
     logout(request)
-    messages.info(request, "Anda telah berhasil keluar dari sistem.")
-    return redirect('accounts:login')
+    if not id_token:
+        # Login darurat tidak punya sesi Keycloak; tetap bisa keluar walau SSO sedang mati
+        return redirect('accounts:login')
+    post_logout = request.build_absolute_uri(reverse('accounts:login'))
+    return redirect(get_logout_url(redirect_uri=post_logout, id_token_hint=id_token))
 
 
 # Backward compatibility alias

@@ -80,8 +80,7 @@ def test_setup():
         nis='10001',
         full_name='Ahmad Siswa',
         class_room=classroom_12,
-        major=major,
-        password_plain='pass123'
+        major=major
     )
 
     student2_user = User.objects.create_user(
@@ -95,8 +94,7 @@ def test_setup():
         nis='10002',
         full_name='Budi Siswa',
         class_room=classroom_12,
-        major=major,
-        password_plain='pass456'
+        major=major
     )
 
     student3_user = User.objects.create_user(
@@ -110,8 +108,7 @@ def test_setup():
         nis='10003',
         full_name='Citra Siswa',
         class_room=classroom_11,
-        major=major,
-        password_plain='pass789'
+        major=major
     )
 
     # Questions (Bank Soal)
@@ -444,7 +441,8 @@ def test_exam_cards_view_rendering(client, test_setup):
     content = response.content.decode()
     assert 'Kartu Peserta Ujian' in content
     assert 'Ahmad Siswa' in content
-    assert 'pass123' in content
+    assert 'Login SSO' in content
+    assert 'pass123' not in content
     assert 'Lab RPL 1' in content
 
 

@@ -42,8 +42,8 @@
 {% endblock %}
 
 {% block app_content %}
-<script id="bank-soal-subjects-data" type="application/json">{{ subjects_json|safe }}</script>
-<script id="bank-soal-teachers-data" type="application/json">{{ teachers_json|safe }}</script>
+{{ subjects_json|json_script:"bank-soal-subjects-data" }}
+{{ teachers_json|json_script:"bank-soal-teachers-data" }}
 <script>
 window.BANK_SOAL_SUBJECTS = (function() {
   try {

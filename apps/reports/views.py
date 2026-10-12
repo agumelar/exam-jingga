@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.db.models import Q, Avg, Max, Min, Count
+from django.core.exceptions import ValidationError
 from django.http import HttpResponse, JsonResponse, HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
@@ -26,6 +27,10 @@ from apps.reports.utils import (
     generate_exam_results_excel,
     generate_logistics_excel
 )
+
+
+from apps.accounts.policy import is_school_admin
+from apps.core.uploads import validated_image_extension
 
 
 def get_user_role(user):
@@ -858,7 +863,7 @@ class SettingsView(View):
     Sesuai 100% dengan Settings.jsx.
     """
     def get(self, request):
-        if not is_staff_or_admin(request.user):
+        if not is_school_admin(request.user):
             return redirect('accounts:login')
 
         settings = SchoolSetting.get_settings()
@@ -871,8 +876,8 @@ class SettingsView(View):
         return render(request, 'reports/settings.html', context)
 
     def post(self, request):
-        if not is_staff_or_admin(request.user):
-            return HttpResponseForbidden("Unauthorized")
+        if not is_school_admin(request.user):
+            return HttpResponseForbidden("Hanya admin dan kurikulum yang bisa mengubah pengaturan sekolah.")
 
         settings = SchoolSetting.get_settings()
 
@@ -914,7 +919,13 @@ class SettingsView(View):
         for file_field in ['file_logo_left', 'file_logo_right', 'file_watermark', 'file_seal', 'file_sig_headmaster', 'file_sig_curriculum']:
             if file_field in request.FILES:
                 uploaded_file = request.FILES[file_field]
-                filename = f"settings/{file_field}_{uuid.uuid4().hex[:8]}_{uploaded_file.name}"
+                try:
+                    extension = validated_image_extension(uploaded_file)
+                except ValidationError as exc:
+                    messages.error(request, f"{file_field}: {exc.messages[0]}")
+                    continue
+                # Nama file dibuat ulang dari isi gambar; nama asli dari pengguna tidak dipakai
+                filename = f"settings/{file_field}_{uuid.uuid4().hex}.{extension}"
                 saved_path = default_storage.save(filename, ContentFile(uploaded_file.read()))
                 media_url = default_storage.url(saved_path)
 

@@ -1,0 +1,37 @@
+{% extends 'layouts/auth.html' %}
+
+{% block title %}Login Darurat - EXAM JINGGA{% endblock %}
+
+{% block auth_form %}
+  <div class="space-y-4">
+    <div class="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-sm text-amber-900 dark:text-amber-100">
+      <p class="font-semibold">Login darurat superuser</p>
+      <p class="mt-1 leading-snug">Dipakai hanya saat SSO sekolah tidak bisa diakses. Setiap percobaan tercatat di log server.</p>
+    </div>
+
+    {% if error %}
+      <p class="p-3 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-300 dark:border-red-800 text-sm text-red-800 dark:text-red-200" role="alert">{{ error }}</p>
+    {% endif %}
+
+    <form method="post" action="{% url 'accounts:emergency_login' %}" class="space-y-3">
+      {% csrf_token %}
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+      <div>
+        <label for="em-username" class="block text-sm font-semibold text-stone-800 dark:text-stone-200 mb-1">Username</label>
+        <input id="em-username" type="text" name="username" required autocomplete="username"
+          class="w-full px-3 py-2.5 text-sm rounded-xl bg-white dark:bg-stone-800 border border-stone-300 dark:border-stone-600 text-stone-900 dark:text-white focus-visible:outline-2 focus-visible:outline-orange-600">
+      </div>
+      <div>
+        <label for="em-password" class="block text-sm font-semibold text-stone-800 dark:text-stone-200 mb-1">Kata sandi</label>
+        <input id="em-password" type="password" name="password" required autocomplete="current-password"
+          class="w-full px-3 py-2.5 text-sm rounded-xl bg-white dark:bg-stone-800 border border-stone-300 dark:border-stone-600 text-stone-900 dark:text-white focus-visible:outline-2 focus-visible:outline-orange-600">
+      </div>
+      <button type="submit"
+        class="min-h-11 w-full bg-stone-800 hover:bg-stone-900 dark:bg-stone-200 dark:hover:bg-white dark:text-stone-900 text-white font-semibold text-sm rounded-xl transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600">
+        Masuk sebagai superuser
+      </button>
+    </form>
+
+    <a href="{% url 'accounts:login' %}" class="block text-center text-sm text-stone-700 dark:text-stone-300 underline">Kembali ke login SSO</a>
+  </div>
+{% endblock %}

@@ -97,13 +97,11 @@ def test_student_model_crud():
         class_room=classroom,
         status='aktif',
         email='22231001@student.smkn1rongga.sch.id',
-        password_plain='jingga22231001'
     )
     assert str(student) == '22231001 - Ahmad Fauzan'
     assert student.major == major
     assert student.class_room == classroom
     assert student.user == user
-    assert student.password_plain == 'jingga22231001'
 
 
 @pytest.mark.django_db
@@ -253,11 +251,11 @@ def test_openapi_sync_teachers_service():
     assert res['count'] == 2
 
     # Check Teacher & CustomUser creation
+    # Data master tidak lagi memberi peran admin; peran admin datang dari role SSO Keycloak
     t_admin = Teacher.objects.get(email='supriyadi@smkn1rongga.sch.id')
-    assert t_admin.role_level == 'admin'
     assert t_admin.user is not None
-    assert t_admin.user.role == Role.ADMIN
-    assert t_admin.user.is_admin is True
+    assert t_admin.user.role == Role.GURU
+    assert t_admin.user.has_usable_password() is False
 
     t_guru = Teacher.objects.get(email='dewi@smkn1rongga.sch.id')
     assert t_guru.role_level == 'guru'
@@ -297,7 +295,7 @@ def test_openapi_sync_students_service():
     assert s1.user is not None
     assert s1.user.username == '23241001'
     assert s1.user.role == Role.SISWA
-    assert s1.user.check_password('jingga23241001') is True
+    assert s1.user.has_usable_password() is False
 
 
 @pytest.mark.django_db
@@ -694,7 +692,7 @@ def test_student_import_template_and_process(client):
     assert s1.full_name == "SISWA TEST IMPORT 1"
     assert s1.class_room == classroom
     assert s1.user is not None
-    assert s1.user.check_password("jingga999001")
+    assert s1.user.has_usable_password() is False
 
     s2 = Student.objects.filter(nis="999002").first()
     assert s2 is not None
