@@ -379,13 +379,27 @@ def parse_and_sync_user(tokens: dict):
                     student.sso_id = sso_uuid
                 student.save(update_fields=['user', 'full_name', 'sso_id'])
         elif user.is_teacher or user.is_admin or user.is_curriculum:
-            teacher = (sso_uuid and Teacher.objects.filter(sso_id=sso_uuid).first()) or Teacher.objects.filter(email__iexact=user.email).first() or Teacher.objects.filter(nip=user.username).first()
+            # Username Keycloak guru adalah NIP; akun lama Exam tetap memakai nama pendeknya
+            token_nip = username if re.fullmatch(r'\d{16,18}', username) else None
+            teacher = (
+                (sso_uuid and Teacher.objects.filter(sso_id=sso_uuid).first())
+                or (token_nip and Teacher.objects.filter(nip=token_nip).first())
+                or Teacher.objects.filter(email__iexact=user.email).first()
+                or Teacher.objects.filter(nip=user.username).first()
+            )
             if teacher:
                 teacher.user = user
                 teacher.full_name = user.full_name or teacher.full_name
                 if sso_uuid:
                     teacher.sso_id = sso_uuid
-                teacher.save(update_fields=['user', 'full_name', 'sso_id'])
+                fields = ['user', 'full_name', 'sso_id']
+                if token_nip and teacher.nip != token_nip:
+                    if Teacher.objects.filter(nip=token_nip).exclude(pk=teacher.pk).exists():
+                        logger.warning(f"NIP SSO {user.username} sudah dipakai guru lain; NIP tidak diubah.")
+                    else:
+                        teacher.nip = token_nip
+                        fields.append('nip')
+                teacher.save(update_fields=fields)
     except Exception as exc:
         logger.warning(f"Tidak dapat menautkan profil master data untuk {user.username}: {exc}")
 

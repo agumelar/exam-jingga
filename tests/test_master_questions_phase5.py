@@ -77,14 +77,6 @@ def test_staff_without_email_or_nip_is_skipped():
     assert not Teacher.objects.exists()
 
 
-@pytest.mark.django_db
-def test_teacher_email_change_updates_same_record():
-    sso = uuid.uuid4()
-    service = MasterDataSyncService()
-    service.sync_teachers(raw_staff=[{'id': str(sso), 'full_name': 'Guru', 'email': 'lama@smkn1rongga.sch.id'}])
-    service.sync_teachers(raw_staff=[{'id': str(sso), 'full_name': 'Guru', 'email': 'baru@smkn1rongga.sch.id'}])
-    assert Teacher.objects.count() == 1
-    assert Teacher.objects.get().email == 'baru@smkn1rongga.sch.id'
 
 
 # ==============================================================================

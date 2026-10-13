@@ -144,25 +144,26 @@ def test_requests_large_pages():
 
 
 # ==============================================================================
-# Sinkron guru dimatikan sampai ada kunci NIP yang tertaut ke akun SSO guru
+# Sinkron guru aktif lagi, berbasis NIP (lihat tests/test_teacher_nip.py)
 # ==============================================================================
 
 @pytest.mark.django_db
-def test_teacher_sync_button_is_refused(client):
+def test_teacher_sync_button_runs_nip_matching(client):
     client.force_login(User.objects.create_user(username='admin_sync2', role='admin', is_staff=True))
-    with patch.object(MasterDataSyncService, 'sync_teachers') as sync_teachers:
+    report = {'success': True, 'count': 1, 'unmatched': [], 'message': '1 guru pusat cocok dengan guru Exam lewat NIP.'}
+    with patch.object(MasterDataSyncService, 'sync_teachers', return_value=report) as sync_teachers:
         res = client.post(reverse('master_data:sync'), {'type': 'teachers'}, HTTP_HX_REQUEST='true')
-    sync_teachers.assert_not_called()
-    assert 'Sinkron guru dinonaktifkan' in res.content.decode()
+    sync_teachers.assert_called_once()
+    assert 'cocok dengan guru Exam lewat NIP' in res.content.decode()
 
 
 @pytest.mark.django_db
-def test_sync_all_skips_teachers():
+def test_sync_all_includes_teacher_report():
     service = MasterDataSyncService()
     feed = [{'id': 'id-1', 'nis': '5501', 'fullName': 'Siswa', 'status': 'ACTIVE'}]
-    with patch.object(MasterDataSyncService, 'fetch_all_students_paginated', return_value=feed), \
-            patch.object(MasterDataSyncService, 'sync_teachers') as sync_teachers:
+    report = {'success': True, 'count': 0, 'unmatched': ['Guru Baru'], 'message': 'Guru Baru belum tertaut.'}
+    with patch.object(MasterDataSyncService, 'fetch_all_students_paginated', return_value=feed),             patch.object(MasterDataSyncService, 'sync_teachers', return_value=report) as sync_teachers:
         res = service.sync_all()
-    sync_teachers.assert_not_called()
+    sync_teachers.assert_called_once()
     assert res['students_count'] == 1
-    assert 'guru tidak disinkron' in res['message']
+    assert 'Guru Baru belum tertaut' in res['message']

@@ -226,41 +226,22 @@ def test_openapi_sync_classes_service():
 
 @pytest.mark.django_db
 def test_openapi_sync_teachers_service():
-    """Verify sync_teachers creates Teacher records and CustomUser accounts."""
+    """sync_teachers mencocokkan lewat NIP dan tidak membuat guru maupun akun."""
     service = MasterDataSyncService()
-
+    Teacher.objects.create(full_name='Dewi Sartika, S.Kom', nip='198203152010012005', email='dewi@smkn1rongga.sch.id')
     mock_staff = [
-        {
-            'id': str(uuid.uuid4()),
-            'nip': '197508102005011002',
-            'full_name': 'Drs. Supriyadi, M.Pd',
-            'email': 'supriyadi@smkn1rongga.sch.id',
-            'role_level': 'admin'
-        },
-        {
-            'id': str(uuid.uuid4()),
-            'nip': '198203152010012005',
-            'full_name': 'Dewi Sartika, S.Kom',
-            'email': 'dewi@smkn1rongga.sch.id',
-            'role_level': 'guru'
-        }
+        {'id': str(uuid.uuid4()), 'nip': '198203152010012005', 'fullName': 'Dewi Sartika', 'ptkType': 'Guru'},
+        {'id': str(uuid.uuid4()), 'nip': '197508102005011002', 'fullName': 'Supriyadi', 'ptkType': 'Guru'},
     ]
+    users_before = User.objects.count()
 
     res = service.sync_teachers(raw_staff=mock_staff)
+
     assert res['success'] is True
-    assert res['count'] == 2
-
-    # Check Teacher & CustomUser creation
-    # Data master tidak lagi memberi peran admin; peran admin datang dari role SSO Keycloak
-    t_admin = Teacher.objects.get(email='supriyadi@smkn1rongga.sch.id')
-    assert t_admin.user is not None
-    assert t_admin.user.role == Role.GURU
-    assert t_admin.user.has_usable_password() is False
-
-    t_guru = Teacher.objects.get(email='dewi@smkn1rongga.sch.id')
-    assert t_guru.role_level == 'guru'
-    assert t_guru.user.role == Role.GURU
-
+    assert res['count'] == 1
+    assert res['unmatched'] == ['Supriyadi']
+    assert Teacher.objects.count() == 1
+    assert User.objects.count() == users_before
 
 @pytest.mark.django_db
 def test_openapi_sync_students_service():

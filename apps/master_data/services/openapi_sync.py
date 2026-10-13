@@ -12,14 +12,6 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
-# Akun guru di Exam memakai username SSO (huruf) dan belum menyimpan NIP, sedangkan data staf pusat
-# hanya punya NIP; mencocokkan keduanya sekarang akan membuat guru ganda.
-TEACHER_SYNC_DISABLED_REASON = (
-    "Sinkron guru dinonaktifkan sementara karena akun guru di Exam belum tertaut ke NIP data pusat. "
-    "Tambah atau ubah guru lewat Master Guru."
-)
-
-
 class SyncSourceError(RuntimeError):
     """Data pusat tidak bisa dibaca (token, izin, jaringan, atau isi kosong); sinkron dibatalkan."""
 
@@ -309,14 +301,18 @@ class MasterDataSyncService:
 
     def sync_teachers(self, raw_staff=None, bearer_token=None, on_progress=None):
         """
-        3. Tarik Data Guru & GTK dari Pusat (GET /v1/staff)
+        3. Cocokkan Data Guru Pusat (GET /v1/staff) dengan guru Exam lewat NIP.
+
+        NIP adalah kunci identitas guru (username Keycloak guru juga NIP). Sinkron ini tidak membuat
+        guru atau akun: guru pusat yang belum ada di Exam dilaporkan agar admin menambahkannya
+        lewat Master Guru, karena guru lama di Exam baru ber-NIP setelah login SSO atau fill_teacher_nip.
         """
         if on_progress:
             on_progress("Menghubungkan ke data.smkn1rongga.sch.id/v1/staff...")
 
         if raw_staff is None:
             try:
-                raw_staff = self.fetch_master_api('/v1/staff', bearer_token=bearer_token)
+                raw_staff = self.fetch_master_api('/v1/staff', params={'pageSize': 1000}, bearer_token=bearer_token)
             except SyncSourceError:
                 raise
             except Exception as e:
@@ -324,78 +320,27 @@ class MasterDataSyncService:
             if not raw_staff:
                 raise SyncSourceError("Data pusat mengembalikan 0 guru; sinkron dibatalkan agar data Exam tidak berubah.")
 
-        if on_progress:
-            on_progress(f"Memproses {len(raw_staff)} Guru & Tenaga Pendidik...")
+        exam_nips = set(Teacher.objects.exclude(nip=None).exclude(nip='').values_list('nip', flat=True))
+        matched, unmatched = [], []
+        for t in raw_staff:
+            nip = str(t.get('nip') or '').strip()
+            name = t.get('fullName') or t.get('full_name') or t.get('name') or '-'
+            if not nip:
+                continue
+            if nip in exam_nips:
+                matched.append(name)
+            elif str(t.get('ptkType') or '').strip().lower() == 'guru':
+                unmatched.append(name)
 
-        synced_teachers = []
-        with transaction.atomic():
-            for t in (raw_staff or []):
-                full_name = t.get('fullName') or t.get('full_name') or t.get('name') or 'Guru'
-                nip = str(t.get('nip') or '').strip() or None
-                raw_email = str(t.get('email') or '').lower().strip()
-                if not raw_email and not nip:
-                    # Tanpa email dan NIP tidak ada kunci unik; dulu semua baris ini tergabung ke satu akun
-                    logger.warning("Lewati staf tanpa email dan NIP: %s", full_name)
-                    continue
-                email = raw_email or f"{nip}@smkn1rongga.sch.id"
-                raw_role = (t.get('ptkType') or t.get('role_level') or t.get('role') or 'guru').lower()
-                
-                # Data master hanya informasi jabatan; peran admin/kurikulum di aplikasi datang dari SSO
-                role_level = 'kurikulum' if raw_role.strip() == 'kurikulum' else 'guru'
-
-                sso_id_str = t.get('id') or t.get('sso_id')
-                sso_id = None
-                if sso_id_str:
-                    try:
-                        sso_id = uuid.UUID(str(sso_id_str))
-                    except (ValueError, TypeError):
-                        sso_id = None
-
-                username = (email.split('@')[0] if email else nip or f"guru_{uuid.uuid4().hex[:6]}").replace('.', '_')
-                user = None
-                if sso_id:
-                    user = User.objects.filter(sso_id=sso_id).first()
-                if not user and email:
-                    user = User.objects.filter(email__iexact=email).first()
-                if not user:
-                    user = User.objects.filter(username=username).first()
-
-                if user:
-                    if not user.is_superuser:
-                        user.full_name = full_name
-                        user.email = email
-                        if sso_id and not user.sso_id:
-                            user.sso_id = sso_id
-                        user.save()
-                else:
-                    user = User(
-                        username=username,
-                        email=email,
-                        full_name=full_name,
-                        role=Role.GURU,
-                        sso_id=sso_id,
-                    )
-                    user.set_unusable_password()
-                    user.save()
-
-                teacher = (sso_id and Teacher.objects.filter(sso_id=sso_id).first()) or Teacher.objects.filter(email__iexact=email).first()
-                if teacher is None:
-                    teacher = Teacher(email=email)
-                teacher.email = email
-                teacher.user = user
-                teacher.full_name = full_name
-                teacher.nip = nip
-                teacher.role_level = role_level
-                if sso_id:
-                    teacher.sso_id = sso_id
-                teacher.save()
-                synced_teachers.append(teacher)
-
+        message = f"{len(matched)} guru pusat cocok dengan guru Exam lewat NIP."
+        if unmatched:
+            message += (f" {len(unmatched)} guru pusat belum tertaut di Exam (tambahkan lewat Master Guru, "
+                        f"atau tunggu guru tersebut login SSO): {', '.join(sorted(unmatched))}.")
         return {
             'success': True,
-            'count': len(synced_teachers),
-            'teachers': synced_teachers,
-            'message': f"Berhasil menyinkronkan {len(synced_teachers)} Data Guru & GTK."
+            'count': len(matched),
+            'unmatched': sorted(unmatched),
+            'message': message,
         }
 
     def sync_students(self, raw_students=None, bearer_token=None, on_progress=None):
@@ -539,18 +484,18 @@ class MasterDataSyncService:
         majors_res = self.sync_majors(raw_students=raw_students, bearer_token=bearer_token, on_progress=on_progress)
         classes_res = self.sync_classes(raw_students=raw_students, bearer_token=bearer_token, on_progress=on_progress)
         students_res = self.sync_students(raw_students=raw_students, bearer_token=bearer_token, on_progress=on_progress)
+        teachers_res = self.sync_teachers(bearer_token=bearer_token, on_progress=on_progress)
 
         return {
             'success': True,
             'majors_count': majors_res.get('count', 0),
             'classes_count': classes_res.get('count', 0),
-            'teachers_count': 0,
+            'teachers_count': teachers_res.get('count', 0),
             'students_count': students_res.get('count', 0),
             'message': (
                 f"Data Master diperbarui dari {self.base_url}. "
                 f"{students_res.get('count', 0)} Siswa Terdaftar, "
-                f"{classes_res.get('count', 0)} Rombel Kelas. "
-                f"Data guru tidak disinkron: {TEACHER_SYNC_DISABLED_REASON}"
+                f"{classes_res.get('count', 0)} Rombel Kelas. {teachers_res.get('message', '')}"
             )
         }
 
