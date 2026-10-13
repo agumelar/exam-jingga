@@ -158,27 +158,45 @@ def parse_jwt_payload(token: str) -> dict:
         return {}
 
 
+def _roles_from(payload: dict) -> tuple[list, list]:
+    realm_roles = (payload.get('realm_access') or {}).get('roles') or []
+    client_roles = ((payload.get('resource_access') or {}).get(KEYCLOAK_CLIENT_ID) or {}).get('roles') or []
+    return [str(r).lower() for r in realm_roles], [str(r).lower() for r in client_roles]
+
+
+def merge_role_claims(*payloads: dict) -> dict:
+    """Gabungkan role dari ID token dan access token; mapper role bawaan Keycloak hanya mengisi access token."""
+    realm, client = [], []
+    for payload in payloads:
+        r, c = _roles_from(payload or {})
+        realm += [x for x in r if x not in realm]
+        client += [x for x in c if x not in client]
+    return {'realm_access': {'roles': realm}, 'resource_access': {KEYCLOAK_CLIENT_ID: {'roles': client}}}
+
+
 def determine_user_role(payload: dict, username: str, email: str) -> str:
     """
-    Determine institutional role from Keycloak realm roles, client roles, username pattern, and email domain.
+    Determine institutional role from Keycloak roles, username pattern, and email domain.
+
+    Realm `sekolah` dipakai bersama aplikasi lain (ASIK), jadi peran admin Exam hanya
+    diberikan lewat client role `exam-jingga`. Role realm hanya dipakai untuk guru/siswa.
     """
-    realm_roles = payload.get('realm_access', {}).get('roles', []) or []
-    client_roles = payload.get('resource_access', {}).get(KEYCLOAK_CLIENT_ID, {}).get('roles', []) or []
-    all_roles = [str(r).lower() for r in (realm_roles + client_roles)]
+    realm_roles, client_roles = _roles_from(payload)
+    all_roles = realm_roles + client_roles
     email_lower = email.lower()
 
     # 1. Platform Admin & Data Admin
-    if 'platform_admin' in all_roles:
+    if 'platform_admin' in client_roles:
         return Role.PLATFORM_ADMIN
-    if 'data_admin' in all_roles:
+    if 'data_admin' in client_roles:
         return Role.DATA_ADMIN
 
     # 2. Kurikulum
-    if 'kurikulum' in all_roles:
+    if 'kurikulum' in client_roles:
         return Role.KURIKULUM
 
-    # 3. Admin: hanya dari role Keycloak yang persis, bukan dari pola username
-    if any(r in all_roles for r in ['admin', 'superadmin', 'administrator']):
+    # 3. Admin: hanya dari client role yang persis, bukan dari pola username
+    if any(r in client_roles for r in ['admin', 'superadmin', 'administrator']):
         return Role.ADMIN
 
     # Sekolah tidak memakai peran pengawas; klaim 'pengawas' diperlakukan sebagai guru
@@ -255,8 +273,9 @@ def parse_and_sync_user(tokens: dict):
     access_token = tokens.get('access_token')
 
     payload = parse_jwt_payload(id_token) if id_token else {}
-    if not payload and access_token:
-        payload = parse_jwt_payload(access_token)
+    access_payload = parse_jwt_payload(access_token) if access_token else {}
+    if not payload:
+        payload = access_payload
 
     if not payload:
         raise ValueError("Token otorisasi Keycloak tidak valid atau kosong.")
@@ -281,7 +300,7 @@ def parse_and_sync_user(tokens: dict):
         or username
     )
 
-    role = determine_user_role(payload, username, email)
+    role = determine_user_role(merge_role_claims(payload, access_payload), username, email)
     is_likely_nis = bool(re.match(r'^\d{4,12}$', username))
 
     User = get_user_model()

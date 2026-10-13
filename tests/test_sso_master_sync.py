@@ -48,11 +48,11 @@ def test_determine_user_role_mappings():
     assert role2 == Role.GURU
 
     # 3. Kurikulum
-    role3 = determine_user_role({'realm_access': {'roles': ['ptk', 'kurikulum']}}, 'kurikulum_user', 'kurikulum@smkn1rongga.sch.id')
+    role3 = determine_user_role({'realm_access': {'roles': ['ptk']}, 'resource_access': {'exam-jingga': {'roles': ['kurikulum']}}}, 'kurikulum_user', 'kurikulum@smkn1rongga.sch.id')
     assert role3 == Role.KURIKULUM
 
     # 4. Admin
-    role4 = determine_user_role({'realm_access': {'roles': ['admin']}}, 'admin_user', 'admin@smkn1rongga.sch.id')
+    role4 = determine_user_role({'resource_access': {'exam-jingga': {'roles': ['admin']}}}, 'admin_user', 'admin@smkn1rongga.sch.id')
     assert role4 == Role.ADMIN
 
 

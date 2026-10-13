@@ -287,7 +287,8 @@ def test_parse_and_sync_teacher_and_admin_roles():
         'preferred_username': 'kurikulum_smk',
         'email': 'kurikulum@smkn1rongga.sch.id',
         'name': 'Drs. Supriyadi',
-        'realm_access': {'roles': ['kurikulum', 'guru']}
+        'realm_access': {'roles': ['guru']},
+        'resource_access': {'exam-jingga': {'roles': ['kurikulum']}}
     }
     curriculum = keycloak_auth.parse_and_sync_user({'id_token': make_mock_jwt(curriculum_payload)})
     assert curriculum.role == Role.KURIKULUM
@@ -300,7 +301,7 @@ def test_parse_and_sync_teacher_and_admin_roles():
         'preferred_username': 'sysadmin',
         'email': 'sysadmin@smkn1rongga.sch.id',
         'name': 'System Administrator',
-        'realm_access': {'roles': ['platform_admin']}
+        'resource_access': {'exam-jingga': {'roles': ['platform_admin']}}
     }
     platform_admin = keycloak_auth.parse_and_sync_user({'id_token': make_mock_jwt(admin_payload)})
     assert platform_admin.role == Role.PLATFORM_ADMIN
