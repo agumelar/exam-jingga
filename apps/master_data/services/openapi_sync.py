@@ -350,8 +350,10 @@ class MasterDataSyncService:
                 Teacher.objects.create(nip=nip, full_name=name, role_level='guru')
                 created.append(name)
 
+        # Bandingkan dengan semua staf pusat: guru bisa tercatat sebagai Kepala Sekolah atau jabatan lain
+        central_nips = {real_nip(t.get('nip')) for t in raw_staff} - {None}
         missing = sorted(Teacher.objects.exclude(Q(nip=None) | Q(nip=''))
-                         .exclude(nip__in=central_teachers).values_list('full_name', flat=True))
+                         .exclude(nip__in=central_nips).values_list('full_name', flat=True))
 
         message = f"{len(matched) + len(linked)} guru pusat cocok dengan guru Exam lewat NIP."
         if linked:

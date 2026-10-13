@@ -205,3 +205,13 @@ def test_placeholder_nip_from_central_is_ignored():
     res = MasterDataSyncService().sync_teachers(raw_staff=staff + [STAFF[1]])
     assert res['created'] == ['Guru Belum Ada']
     assert Teacher.objects.get(full_name='Administrator Sekolah').nip is None
+
+
+@pytest.mark.django_db
+def test_teacher_listed_as_other_staff_type_is_not_reported_missing():
+    # Kepala sekolah yang juga mengajar ada di data pusat dengan ptkType "Kepala Sekolah"
+    _legacy_teacher('kepsek', 'Rizal Firmansyah, S.Hut', nip='197001012000011003')
+    staff = STAFF + [{'nip': '197001012000011003', 'fullName': 'Rizal Firmansyah', 'ptkType': 'Kepala Sekolah'}]
+    res = MasterDataSyncService().sync_teachers(raw_staff=staff)
+    assert res['missing_from_central'] == []
+    assert Teacher.objects.filter(nip='197001012000011003').count() == 1
