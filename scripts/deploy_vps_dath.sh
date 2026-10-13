@@ -17,8 +17,9 @@ REF="${1:-origin/main}"
 
 if [ "${RUN_ON_VPS:-0}" != "1" ]; then
     echo "==> Deploy ${REF} ke ${VPS_SSH}:${DEPLOY_DIR}"
-    # Merge dulu sebelum skrip dijalankan, supaya bash tidak membaca skrip yang berubah di tengah eksekusi
-    ssh "${VPS_SSH}" "cd ${DEPLOY_DIR} && git fetch --quiet origin && git merge --ff-only ${REF} && RUN_ON_VPS=1 bash scripts/deploy_vps_dath.sh ${REF}"
+    # Merge dulu sebelum skrip dijalankan, supaya bash tidak membaca skrip yang berubah di tengah eksekusi.
+    # app.css adalah hasil build di server (langkah 5), jadi dikembalikan dulu agar merge tidak ditolak.
+    ssh "${VPS_SSH}" "cd ${DEPLOY_DIR} && git fetch --quiet origin && git checkout -- static/css/app.css && git merge --ff-only ${REF} && RUN_ON_VPS=1 bash scripts/deploy_vps_dath.sh ${REF}"
     echo "==> Cek domain publik"
     curl -s -o /dev/null -w "login: %{http_code}\n" https://exam.smkn1rongga.sch.id/accounts/login/
     exit 0
@@ -27,6 +28,7 @@ fi
 cd "${DEPLOY_DIR}"
 echo "[1/7] Checkout ${REF}"
 git fetch --quiet origin
+git checkout -- static/css/app.css
 git merge --ff-only "${REF}"
 git log --oneline -1
 
