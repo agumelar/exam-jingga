@@ -9,7 +9,7 @@
 * **Nama Proyek**: Exam Jingga (Aplikasi CBT Ujian Sekolah SMKN 1 Rongga)
 * **Arsitektur**: **DATH Modern Monolith** (Django 5.1 LTS, Alpine.js, Tailwind CSS v4, HTMX) menggantikan arsitektur SPA React lama.
 * **Tujuan Utama**: Membangun sistem CBT sekolah yang kokoh, zero-CORS browser dependency, offline-first vendor assets, real-time HTMX auto-save & polling, mitigasi beban 722+ siswa serentak di VPS ARM64, integrasi Keycloak SSO & OpenAPI Central Data Master, serta otomatisasi deployment produksi dengan Gunicorn + WhiteNoise + Nginx + Systemd.
-* **Status Keseluruhan**: Audit menyeluruh Oktober 2026 (Task 17-25) selesai: alur status naskah, keamanan login SSO-only, integritas ujian siswa, hak akses per peran, jadwal/kuota/pemilihan soal, laporan & logistik, master data & bank soal, backup & deploy. **319 / 319 test lulus.** Detail per fase ada di bagian 3 dan `log.md`; aturan operasional di `runbook-deploy.md`.
+* **Status Keseluruhan**: Audit menyeluruh Oktober 2026 (Task 17-25) selesai: alur status naskah, keamanan login SSO-only, integritas ujian siswa, hak akses per peran, jadwal/kuota/pemilihan soal, laporan & logistik, master data & bank soal, backup & deploy. **323 / 323 test lulus.** Detail per fase ada di bagian 3 dan `log.md`; aturan operasional di `runbook-deploy.md`.
 
 ---
 
@@ -62,7 +62,8 @@
 | **Task 24: Fase 6-7 - Operasional & Pembersihan** | Backup `pg_dump` (dalam container PG17) + media, 14 hari, timer 01.30 WIB, pra-migrasi otomatis, siap salin ke Google Drive via rclone; deploy berbasis git (`scripts/deploy_vps_dath.sh`); Nginx rate limit, proxy data-master terbuka dihapus, header aman media; static ber-hash; dependency dikunci; kode React/Supabase lama, workflow FTP, skrip berkredensial dihapus; `runbook-deploy.md` diperbarui. | ✅ |
 | **Task 25: SSO Realm Bersama ASIK** | Keycloak (`sso.smkn1rongga.sch.id`, realm `sekolah`) berada di VPS ASIK dan realm-nya dipakai bersama aplikasi ASIK. Peran admin Exam (`admin`, `kurikulum`, `platform_admin`, `data_admin`) kini hanya dari **client role `exam-jingga`**; role realm dengan nama yang sama dari ASIK tidak lagi memberi akses admin. Role digabung dari ID token dan access token (mapper role bawaan Keycloak hanya mengisi access token). Role realm `siswa`/`guru` tetap dipakai. | ✅ |
 | **Task 26: Shell Server ke Database Produksi** | `manage.py` membaca `.env` sebelum memilih settings; `.env` server berisi `DJANGO_SETTINGS_MODULE=config.settings.production`; `db.sqlite3` development lama di server dipindah ke `/opt/exam-jingga-backups/`. Sebelumnya `manage.py shell` di server diam-diam membaca sqlite lama. | ✅ |
-| **TOTAL TEST SUITE** | **Seluruh 319 pengujian Django & integrasi lulus (0 error, 0 failure)** | 🏆 **319 / 319 PASS** |
+| **Task 27: Uji Coba Alur Lengkap Otomatis** | `tests/test_trial_end_to_end.py` meniru data produksi (kelas 10 Uji, guru gumelar, admin-exam, kurikulum, siswa uji 9999000001/2, kelas pembanding). UH: bank soal -> jadwal -> pilih soal -> tervalidasi otomatis -> token salah/benar -> acak per siswa -> ragu -> buka ulang -> waktu habis dinilai otomatis -> rekap, analisis pengecoh, Excel. PTS: dibuat admin -> dikembalikan dengan alasan -> verifikasi -> pindah tab hanya peringatan -> hentikan paksa oleh kurikulum. PAS kolaboratif dua guru: kuota -> verifikasi -> pindah tab mengunci -> guru ditolak, kurikulum membuka kunci beralasan. Tidak ditemukan bug; perilaku browser (timer, deteksi tab, tampilan) dan SSO diuji lewat uji asap produksi. | ✅ |
+| **TOTAL TEST SUITE** | **Seluruh 323 pengujian Django & integrasi lulus (0 error, 0 failure)** | 🏆 **323 / 323 PASS** |
 
 ---
 
