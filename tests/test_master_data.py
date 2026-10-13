@@ -324,7 +324,7 @@ def test_openapi_sync_all_service(mock_fetch):
     assert res['success'] is True
     assert res['majors_count'] >= 1
     assert res['classes_count'] >= 1
-    assert res['teachers_count'] == 1
+    assert res['teachers_count'] == 0
     assert res['students_count'] == 1
 
 

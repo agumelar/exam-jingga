@@ -12,6 +12,14 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+# Akun guru di Exam memakai username SSO (huruf) dan belum menyimpan NIP, sedangkan data staf pusat
+# hanya punya NIP; mencocokkan keduanya sekarang akan membuat guru ganda.
+TEACHER_SYNC_DISABLED_REASON = (
+    "Sinkron guru dinonaktifkan sementara karena akun guru di Exam belum tertaut ke NIP data pusat. "
+    "Tambah atau ubah guru lewat Master Guru."
+)
+
+
 class SyncSourceError(RuntimeError):
     """Data pusat tidak bisa dibaca (token, izin, jaringan, atau isi kosong); sinkron dibatalkan."""
 
@@ -530,20 +538,19 @@ class MasterDataSyncService:
         raw_students = self.fetch_all_students_paginated(bearer_token=bearer_token, on_progress=on_progress)
         majors_res = self.sync_majors(raw_students=raw_students, bearer_token=bearer_token, on_progress=on_progress)
         classes_res = self.sync_classes(raw_students=raw_students, bearer_token=bearer_token, on_progress=on_progress)
-        teachers_res = self.sync_teachers(bearer_token=bearer_token, on_progress=on_progress)
         students_res = self.sync_students(raw_students=raw_students, bearer_token=bearer_token, on_progress=on_progress)
 
         return {
             'success': True,
             'majors_count': majors_res.get('count', 0),
             'classes_count': classes_res.get('count', 0),
-            'teachers_count': teachers_res.get('count', 0),
+            'teachers_count': 0,
             'students_count': students_res.get('count', 0),
             'message': (
-                f"Seluruh Data Master telah diperbarui dari {self.base_url}. "
+                f"Data Master diperbarui dari {self.base_url}. "
                 f"{students_res.get('count', 0)} Siswa Terdaftar, "
-                f"{classes_res.get('count', 0)} Rombel Kelas, "
-                f"{teachers_res.get('count', 0)} Guru & GTK."
+                f"{classes_res.get('count', 0)} Rombel Kelas. "
+                f"Data guru tidak disinkron: {TEACHER_SYNC_DISABLED_REASON}"
             )
         }
 

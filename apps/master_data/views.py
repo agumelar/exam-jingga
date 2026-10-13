@@ -15,7 +15,7 @@ from django.contrib.auth import get_user_model
 from apps.accounts.decorators import admin_required
 from apps.accounts.models import Role
 from .models import Major, ClassRoom, Teacher, Student, Subject, TeacherAssignment
-from .services.openapi_sync import master_data_sync_service
+from .services.openapi_sync import TEACHER_SYNC_DISABLED_REASON, SyncSourceError, master_data_sync_service
 from apps.reports.utils import excel_safe
 
 
@@ -760,7 +760,7 @@ class SyncMasterDataView(View):
             elif sync_type == 'classes':
                 result = master_data_sync_service.sync_classes(bearer_token=bearer_token)
             elif sync_type == 'teachers':
-                result = master_data_sync_service.sync_teachers(bearer_token=bearer_token)
+                raise SyncSourceError(TEACHER_SYNC_DISABLED_REASON)
             elif sync_type == 'students':
                 result = master_data_sync_service.sync_students(bearer_token=bearer_token)
             else:

@@ -141,3 +141,28 @@ def test_unstable_pagination_aborts_when_rows_are_missing():
 def test_requests_large_pages():
     _, get = _fetch(_pages([[_row(1)]], total=1))
     assert get.call_args.kwargs['params']['pageSize'] == 1000
+
+
+# ==============================================================================
+# Sinkron guru dimatikan sampai ada kunci NIP yang tertaut ke akun SSO guru
+# ==============================================================================
+
+@pytest.mark.django_db
+def test_teacher_sync_button_is_refused(client):
+    client.force_login(User.objects.create_user(username='admin_sync2', role='admin', is_staff=True))
+    with patch.object(MasterDataSyncService, 'sync_teachers') as sync_teachers:
+        res = client.post(reverse('master_data:sync'), {'type': 'teachers'}, HTTP_HX_REQUEST='true')
+    sync_teachers.assert_not_called()
+    assert 'Sinkron guru dinonaktifkan' in res.content.decode()
+
+
+@pytest.mark.django_db
+def test_sync_all_skips_teachers():
+    service = MasterDataSyncService()
+    feed = [{'id': 'id-1', 'nis': '5501', 'fullName': 'Siswa', 'status': 'ACTIVE'}]
+    with patch.object(MasterDataSyncService, 'fetch_all_students_paginated', return_value=feed), \
+            patch.object(MasterDataSyncService, 'sync_teachers') as sync_teachers:
+        res = service.sync_all()
+    sync_teachers.assert_not_called()
+    assert res['students_count'] == 1
+    assert 'guru tidak disinkron' in res['message']
