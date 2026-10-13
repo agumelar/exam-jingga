@@ -19,6 +19,12 @@ def normalize_person_name(name):
     return ' '.join(words)
 
 
+def real_nip(value):
+    """NIP asli berupa angka; data pusat kadang menulis teks pengganti (misalnya "admin")."""
+    nip = str(value or '').strip()
+    return nip if nip.isdigit() else None
+
+
 def match_staff_to_teachers(staff, teachers):
     """
     Pasangkan staf pusat (punya NIP) dengan guru Exam lewat nama yang dinormalkan.
@@ -30,7 +36,7 @@ def match_staff_to_teachers(staff, teachers):
 
     staff_by_name = defaultdict(list)
     for s in staff:
-        if s.get('nip'):
+        if real_nip(s.get('nip')):
             staff_by_name[normalize_person_name(s.get('fullName') or s.get('full_name'))].append(s)
 
     matches, ambiguous, unmatched = [], [], []

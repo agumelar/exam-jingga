@@ -152,3 +152,12 @@ def test_fill_teacher_nip_command_dry_run_then_apply():
     punya.refresh_from_db()
     assert asep.nip == NIP_A
     assert punya.nip == NIP_B
+
+
+@pytest.mark.django_db
+def test_placeholder_nip_from_central_is_ignored():
+    # Data pusat menulis "admin" di kolom NIP untuk akun Administrator Sekolah
+    _legacy_teacher('admin_sekolah', 'Administrator Sekolah')
+    staff = [{'nip': 'admin', 'fullName': 'Administrator Sekolah', 'ptkType': None}]
+    assert match_staff_to_teachers(staff, Teacher.objects.all())['matches'] == []
+    assert MasterDataSyncService().sync_teachers(raw_staff=staff + [STAFF[1]])['unmatched'] == ['Guru Belum Ada']

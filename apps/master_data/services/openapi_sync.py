@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from apps.accounts.models import Role
 from apps.accounts.services.keycloak_auth import get_m2m_access_token
 from apps.master_data.models import Major, ClassRoom, Teacher, Student
+from apps.master_data.services.teacher_identity import real_nip
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -323,7 +324,7 @@ class MasterDataSyncService:
         exam_nips = set(Teacher.objects.exclude(nip=None).exclude(nip='').values_list('nip', flat=True))
         matched, unmatched = [], []
         for t in raw_staff:
-            nip = str(t.get('nip') or '').strip()
+            nip = real_nip(t.get('nip'))
             name = t.get('fullName') or t.get('full_name') or t.get('name') or '-'
             if not nip:
                 continue
