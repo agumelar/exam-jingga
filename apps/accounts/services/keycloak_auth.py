@@ -389,7 +389,6 @@ def parse_and_sync_user(tokens: dict):
             )
             if teacher:
                 teacher.user = user
-                teacher.full_name = user.full_name or teacher.full_name
                 if sso_uuid:
                     teacher.sso_id = sso_uuid
                 fields = ['user', 'full_name', 'sso_id']
@@ -399,6 +398,9 @@ def parse_and_sync_user(tokens: dict):
                     else:
                         teacher.nip = token_nip
                         fields.append('nip')
+                # Guru ber-NIP memakai nama dari data pusat (sinkron guru); nama SSO hanya untuk yang belum
+                if not teacher.nip:
+                    teacher.full_name = user.full_name or teacher.full_name
                 teacher.save(update_fields=fields)
     except Exception as exc:
         logger.warning(f"Tidak dapat menautkan profil master data untuk {user.username}: {exc}")

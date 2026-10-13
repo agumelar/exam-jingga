@@ -350,6 +350,12 @@ class MasterDataSyncService:
                 Teacher.objects.create(nip=nip, full_name=name, role_level='guru')
                 created.append(name)
 
+            # Nama guru mengikuti data pusat (termasuk guru yang tercatat dengan jabatan lain, misalnya Kepala Sekolah)
+            central_names = {real_nip(t.get('nip')): t.get('fullName') or t.get('full_name') for t in raw_staff}
+            for nip, name in central_names.items():
+                if nip and name:
+                    Teacher.objects.filter(nip=nip).exclude(full_name=name).update(full_name=name)
+
         # Bandingkan dengan semua staf pusat: guru bisa tercatat sebagai Kepala Sekolah atau jabatan lain
         central_nips = {real_nip(t.get('nip')) for t in raw_staff} - {None}
         missing = sorted(Teacher.objects.exclude(Q(nip=None) | Q(nip=''))

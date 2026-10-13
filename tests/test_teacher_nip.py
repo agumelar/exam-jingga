@@ -215,3 +215,42 @@ def test_teacher_listed_as_other_staff_type_is_not_reported_missing():
     res = MasterDataSyncService().sync_teachers(raw_staff=staff)
     assert res['missing_from_central'] == []
     assert Teacher.objects.filter(nip='197001012000011003').count() == 1
+
+
+# ==============================================================================
+# Nama guru mengikuti data pusat
+# ==============================================================================
+
+@pytest.mark.django_db
+def test_teacher_sync_takes_name_from_central():
+    _, teacher = _legacy_teacher('asep', 'ASEP HILMAN, ,S.Pd', nip=NIP_A)
+    _, by_name = _legacy_teacher('encep', 'ENCEP GUNAEPI,ST,')
+    staff = [{'nip': NIP_A, 'fullName': 'Asep Hilman', 'ptkType': 'Guru'},
+             {'nip': NIP_B, 'fullName': 'Encep Gunaepi', 'ptkType': 'Guru'}]
+
+    MasterDataSyncService().sync_teachers(raw_staff=staff)
+
+    teacher.refresh_from_db()
+    by_name.refresh_from_db()
+    assert teacher.full_name == 'Asep Hilman'
+    assert (by_name.full_name, by_name.nip) == ('Encep Gunaepi', NIP_B)
+
+
+@pytest.mark.django_db
+def test_sso_login_keeps_central_name_for_teacher_with_nip():
+    sub, teacher = _legacy_teacher('gumelar', 'Agung Gumelar Saputra', nip=NIP_A)
+    payload = {'sub': str(sub), 'preferred_username': NIP_A, 'name': 'Nama Dari Keycloak',
+               'realm_access': {'roles': ['guru']}}
+    keycloak_auth.parse_and_sync_user({'id_token': _jwt(payload)})
+    teacher.refresh_from_db()
+    assert teacher.full_name == 'Agung Gumelar Saputra'
+
+
+@pytest.mark.django_db
+def test_sso_login_still_names_teacher_without_nip():
+    sub, teacher = _legacy_teacher('lama', 'NAMA LAMA')
+    payload = {'sub': str(sub), 'preferred_username': 'lama', 'name': 'Nama Baru',
+               'realm_access': {'roles': ['guru']}}
+    keycloak_auth.parse_and_sync_user({'id_token': _jwt(payload)})
+    teacher.refresh_from_db()
+    assert teacher.full_name == 'Nama Baru'
