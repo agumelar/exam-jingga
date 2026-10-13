@@ -88,18 +88,60 @@ STAFF = [
 
 
 @pytest.mark.django_db
-def test_teacher_sync_matches_by_nip_and_reports_missing_teachers():
+def test_teacher_sync_creates_missing_teachers_from_central():
     _legacy_teacher('gumelar', 'Agung Gumelar Saputra', nip=NIP_A)
     before_users = User.objects.count()
 
     res = MasterDataSyncService().sync_teachers(raw_staff=STAFF)
 
     assert res['success'] is True
-    assert res['count'] == 1
-    assert res['unmatched'] == ['Guru Belum Ada']
-    assert Teacher.objects.count() == 1
+    assert res['created'] == ['Guru Belum Ada']
+    created = Teacher.objects.get(nip=NIP_B)
+    assert (created.full_name, created.role_level, created.user) == ('Guru Belum Ada', 'guru', None)
+    # Tenaga kependidikan dan staf tanpa NIP tidak dijadikan guru; akun login tidak dibuat sinkron
+    assert not Teacher.objects.filter(nip=NIP_C).exists()
+    assert Teacher.objects.count() == 2
     assert User.objects.count() == before_users
     assert 'Guru Belum Ada' in res['message']
+
+
+@pytest.mark.django_db
+def test_created_teacher_links_on_first_sso_login():
+    MasterDataSyncService().sync_teachers(raw_staff=[STAFF[1]])
+    user = _login(uuid.uuid4(), NIP_B)
+    assert Teacher.objects.get(nip=NIP_B).user == user
+    assert Teacher.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_teacher_sync_links_legacy_teacher_by_exact_name_instead_of_duplicating():
+    _, legacy = _legacy_teacher('asep', 'ASEP AGUS SOLEH, S.Sos')
+    staff = [{'id': str(uuid.uuid4()), 'nip': NIP_A, 'fullName': 'Asep Agus Soleh', 'ptkType': 'Guru'}]
+
+    res = MasterDataSyncService().sync_teachers(raw_staff=staff)
+
+    legacy.refresh_from_db()
+    assert legacy.nip == NIP_A
+    assert res['linked'] == ['Asep Agus Soleh']
+    assert res['created'] == []
+    assert Teacher.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_teacher_sync_is_idempotent():
+    service = MasterDataSyncService()
+    service.sync_teachers(raw_staff=STAFF)
+    res = service.sync_teachers(raw_staff=STAFF)
+    assert res['created'] == []
+    assert Teacher.objects.filter(nip=NIP_B).count() == 1
+
+
+@pytest.mark.django_db
+def test_teacher_sync_reports_teachers_missing_from_central():
+    _legacy_teacher('pensiun', 'Guru Pensiun', nip='196001012000011001')
+    res = MasterDataSyncService().sync_teachers(raw_staff=STAFF)
+    assert res['missing_from_central'] == ['Guru Pensiun']
+    assert Teacher.objects.filter(nip='196001012000011001').exists()
 
 
 # ==============================================================================
@@ -160,4 +202,6 @@ def test_placeholder_nip_from_central_is_ignored():
     _legacy_teacher('admin_sekolah', 'Administrator Sekolah')
     staff = [{'nip': 'admin', 'fullName': 'Administrator Sekolah', 'ptkType': None}]
     assert match_staff_to_teachers(staff, Teacher.objects.all())['matches'] == []
-    assert MasterDataSyncService().sync_teachers(raw_staff=staff + [STAFF[1]])['unmatched'] == ['Guru Belum Ada']
+    res = MasterDataSyncService().sync_teachers(raw_staff=staff + [STAFF[1]])
+    assert res['created'] == ['Guru Belum Ada']
+    assert Teacher.objects.get(full_name='Administrator Sekolah').nip is None

@@ -226,7 +226,7 @@ def test_openapi_sync_classes_service():
 
 @pytest.mark.django_db
 def test_openapi_sync_teachers_service():
-    """sync_teachers mencocokkan lewat NIP dan tidak membuat guru maupun akun."""
+    """sync_teachers mencocokkan lewat NIP dan membuat guru pusat yang belum ada, tanpa akun login."""
     service = MasterDataSyncService()
     Teacher.objects.create(full_name='Dewi Sartika, S.Kom', nip='198203152010012005', email='dewi@smkn1rongga.sch.id')
     mock_staff = [
@@ -238,9 +238,9 @@ def test_openapi_sync_teachers_service():
     res = service.sync_teachers(raw_staff=mock_staff)
 
     assert res['success'] is True
-    assert res['count'] == 1
-    assert res['unmatched'] == ['Supriyadi']
-    assert Teacher.objects.count() == 1
+    assert res['created'] == ['Supriyadi']
+    assert Teacher.objects.get(nip='197508102005011002').user is None
+    assert Teacher.objects.count() == 2
     assert User.objects.count() == users_before
 
 @pytest.mark.django_db

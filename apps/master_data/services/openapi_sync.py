@@ -3,11 +3,12 @@ import uuid
 import requests
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.contrib.auth import get_user_model
 from apps.accounts.models import Role
 from apps.accounts.services.keycloak_auth import get_m2m_access_token
 from apps.master_data.models import Major, ClassRoom, Teacher, Student
-from apps.master_data.services.teacher_identity import real_nip
+from apps.master_data.services.teacher_identity import match_staff_to_teachers, real_nip
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -302,11 +303,12 @@ class MasterDataSyncService:
 
     def sync_teachers(self, raw_staff=None, bearer_token=None, on_progress=None):
         """
-        3. Cocokkan Data Guru Pusat (GET /v1/staff) dengan guru Exam lewat NIP.
+        3. Sinkron Data Guru Pusat (GET /v1/staff) lewat NIP.
 
-        NIP adalah kunci identitas guru (username Keycloak guru juga NIP). Sinkron ini tidak membuat
-        guru atau akun: guru pusat yang belum ada di Exam dilaporkan agar admin menambahkannya
-        lewat Master Guru, karena guru lama di Exam baru ber-NIP setelah login SSO atau fill_teacher_nip.
+        NIP adalah kunci identitas guru (username Keycloak guru juga NIP). Hanya staf berjenis Guru
+        dengan NIP angka yang dipakai. Urutannya: cocok lewat NIP, lalu guru lama tanpa NIP ditautkan
+        lewat nama persis, lalu sisanya dibuat sebagai guru baru tanpa akun (akun tertaut saat login
+        SSO pertama). Guru yang hilang dari data pusat hanya dilaporkan.
         """
         if on_progress:
             on_progress("Menghubungkan ke data.smkn1rongga.sch.id/v1/staff...")
@@ -321,26 +323,52 @@ class MasterDataSyncService:
             if not raw_staff:
                 raise SyncSourceError("Data pusat mengembalikan 0 guru; sinkron dibatalkan agar data Exam tidak berubah.")
 
-        exam_nips = set(Teacher.objects.exclude(nip=None).exclude(nip='').values_list('nip', flat=True))
-        matched, unmatched = [], []
+        central_teachers = {}
         for t in raw_staff:
             nip = real_nip(t.get('nip'))
-            name = t.get('fullName') or t.get('full_name') or t.get('name') or '-'
-            if not nip:
-                continue
-            if nip in exam_nips:
-                matched.append(name)
-            elif str(t.get('ptkType') or '').strip().lower() == 'guru':
-                unmatched.append(name)
+            if nip and str(t.get('ptkType') or '').strip().lower() == 'guru':
+                central_teachers[nip] = t.get('fullName') or t.get('full_name') or t.get('name') or '-'
 
-        message = f"{len(matched)} guru pusat cocok dengan guru Exam lewat NIP."
-        if unmatched:
-            message += (f" {len(unmatched)} guru pusat belum tertaut di Exam (tambahkan lewat Master Guru, "
-                        f"atau tunggu guru tersebut login SSO): {', '.join(sorted(unmatched))}.")
+        matched, linked, created = [], [], []
+        with transaction.atomic():
+            exam_nips = set(Teacher.objects.exclude(nip=None).exclude(nip='').values_list('nip', flat=True))
+            matched = [name for nip, name in central_teachers.items() if nip in exam_nips]
+
+            # Guru lama yang belum ber-NIP ditautkan lewat nama persis dulu, agar tidak dibuat ganda
+            open_staff = [{'nip': nip, 'fullName': name} for nip, name in central_teachers.items() if nip not in exam_nips]
+            pairing = match_staff_to_teachers(open_staff, Teacher.objects.filter(Q(nip=None) | Q(nip='')))
+            for teacher, nip in pairing['matches']:
+                Teacher.objects.filter(pk=teacher.pk).update(nip=nip)
+                linked.append(central_teachers[nip])
+                exam_nips.add(nip)
+
+            ambiguous = set(pairing['ambiguous'])
+            for nip, name in central_teachers.items():
+                if nip in exam_nips or name in ambiguous:
+                    continue
+                # Akun login dibuat saat guru pertama kali login SSO dengan NIP-nya
+                Teacher.objects.create(nip=nip, full_name=name, role_level='guru')
+                created.append(name)
+
+        missing = sorted(Teacher.objects.exclude(Q(nip=None) | Q(nip=''))
+                         .exclude(nip__in=central_teachers).values_list('full_name', flat=True))
+
+        message = f"{len(matched) + len(linked)} guru pusat cocok dengan guru Exam lewat NIP."
+        if linked:
+            message += f" NIP ditautkan lewat nama: {', '.join(sorted(linked))}."
+        if created:
+            message += f" Guru baru dari data pusat: {', '.join(sorted(created))}."
+        if ambiguous:
+            message += f" Nama ganda, isi NIP manual di Master Guru: {', '.join(sorted(ambiguous))}."
+        if missing:
+            message += f" Tidak ada lagi di data pusat (tidak diubah): {', '.join(missing)}."
         return {
             'success': True,
-            'count': len(matched),
-            'unmatched': sorted(unmatched),
+            'count': len(matched) + len(linked) + len(created),
+            'linked': sorted(linked),
+            'created': sorted(created),
+            'ambiguous': sorted(ambiguous),
+            'missing_from_central': missing,
             'message': message,
         }
 
