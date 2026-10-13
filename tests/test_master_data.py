@@ -317,7 +317,9 @@ def test_openapi_sync_all_service(mock_fetch):
     mock_fetch.side_effect = mock_api_call
 
     service = MasterDataSyncService()
-    res = service.sync_all()
+    # Siswa diambil lewat paginasi; ditiru agar test tidak pernah memanggil server data pusat sungguhan
+    with patch.object(MasterDataSyncService, 'fetch_all_students_paginated', return_value=mock_students):
+        res = service.sync_all()
 
     assert res['success'] is True
     assert res['majors_count'] >= 1

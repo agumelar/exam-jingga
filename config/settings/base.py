@@ -127,6 +127,9 @@ KEYCLOAK_URL = os.environ.get('KEYCLOAK_URL', 'https://sso.smkn1rongga.sch.id').
 KEYCLOAK_REALM = os.environ.get('KEYCLOAK_REALM', 'sekolah')
 KEYCLOAK_CLIENT_ID = os.environ.get('KEYCLOAK_CLIENT_ID', 'exam-jingga')
 KEYCLOAK_CLIENT_SECRET = os.environ.get('KEYCLOAK_CLIENT_SECRET', '')
+# Client login exam-jingga bertipe public (PKCE), jadi sinkron data pusat memakai client confidential terpisah
+DATA_MASTER_CLIENT_ID = os.environ.get('DATA_MASTER_CLIENT_ID', 'exam-jingga-sync')
+DATA_MASTER_CLIENT_SECRET = os.environ.get('DATA_MASTER_CLIENT_SECRET', '')
 
 # Data Master Pusat OpenAPI URL & Webhook Secret
 DATA_MASTER_BASE_URL = os.environ.get('DATA_MASTER_BASE_URL', 'https://data.smkn1rongga.sch.id').rstrip('/')

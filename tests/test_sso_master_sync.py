@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from django.conf import settings
 from django.urls import reverse
-from django.test import RequestFactory
+from django.test import RequestFactory, override_settings
 from django.contrib.auth import get_user_model
 from apps.accounts.models import Role
 from apps.accounts.services.keycloak_auth import (
@@ -96,6 +96,7 @@ def test_parse_and_sync_user_links_student():
 
 
 @pytest.mark.django_db
+@override_settings(DATA_MASTER_CLIENT_SECRET='rahasia-uji')
 def test_m2m_token_and_paginated_students_sync():
     service = MasterDataSyncService(base_url='https://mock-data.smkn1rongga.sch.id')
 

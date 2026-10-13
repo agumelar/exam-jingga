@@ -752,7 +752,7 @@ class SyncMasterDataView(View):
     """
     def post(self, request, *args, **kwargs):
         sync_type = request.POST.get('type', 'all')
-        bearer_token = request.session.get('kc_access_token')
+        bearer_token = None  # selalu token mesin dari client sinkron (DATA_MASTER_CLIENT_ID)
 
         try:
             if sync_type == 'majors':

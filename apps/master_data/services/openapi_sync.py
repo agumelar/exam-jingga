@@ -12,7 +12,11 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
-class SyncIncompleteError(RuntimeError):
+class SyncSourceError(RuntimeError):
+    """Data pusat tidak bisa dibaca (token, izin, jaringan, atau isi kosong); sinkron dibatalkan."""
+
+
+class SyncIncompleteError(SyncSourceError):
     """Tarikan data pusat terputus di tengah; hasilnya tidak boleh diperlakukan sebagai data lengkap."""
 
 
@@ -32,8 +36,8 @@ class MasterDataSyncService:
         try:
             return get_m2m_access_token()
         except Exception as e:
-            logger.info(f"M2M Keycloak token fallback: {e}")
-            return None
+            logger.warning(f"Token data pusat gagal: {e}")
+            raise SyncSourceError(f"Token akses data pusat gagal diambil dari Keycloak: {e}") from e
 
     def _get_headers(self, bearer_token=None):
         headers = {
@@ -115,7 +119,7 @@ class MasterDataSyncService:
             except Exception as e:
                 if page == 1:
                     logger.warning(f"Paginated fetch failed on first page: {e}")
-                    break
+                    raise SyncSourceError(f"Data siswa pusat tidak bisa diambil: {e}") from e
                 raise SyncIncompleteError(f"Halaman siswa {page} dari {page_count} gagal diambil: {e}") from e
 
             items = res_json.get('data', []) if isinstance(res_json, dict) else res_json
@@ -126,16 +130,8 @@ class MasterDataSyncService:
             page_count = meta.get('pageCount', 1)
             page += 1
 
-        # Fallback if paginated endpoint returned nothing
         if not all_students:
-            try:
-                all_students = self.fetch_master_api('/v1/students', bearer_token=bearer_token)
-            except Exception:
-                try:
-                    all_students = self.fetch_master_api('/students', bearer_token=bearer_token)
-                except Exception as e:
-                    logger.warning(f"Fallback student fetch failed: {e}")
-                    all_students = []
+            raise SyncSourceError("Data pusat mengembalikan 0 siswa; sinkron dibatalkan agar data Exam tidak berubah.")
 
         return all_students
 
@@ -298,12 +294,12 @@ class MasterDataSyncService:
         if raw_staff is None:
             try:
                 raw_staff = self.fetch_master_api('/v1/staff', bearer_token=bearer_token)
-            except Exception:
-                try:
-                    raw_staff = self.fetch_master_api('/staff', bearer_token=bearer_token)
-                except Exception as e:
-                    logger.warning(f"Gagal fetch staff: {e}")
-                    raw_staff = []
+            except SyncSourceError:
+                raise
+            except Exception as e:
+                raise SyncSourceError(f"Data guru pusat tidak bisa diambil: {e}") from e
+            if not raw_staff:
+                raise SyncSourceError("Data pusat mengembalikan 0 guru; sinkron dibatalkan agar data Exam tidak berubah.")
 
         if on_progress:
             on_progress(f"Memproses {len(raw_staff)} Guru & Tenaga Pendidik...")

@@ -224,15 +224,19 @@ def get_m2m_access_token(client_id: str = None, client_secret: str = None) -> st
     Obtain a Machine-to-Machine (M2M) bearer access token from Keycloak using Client Credentials Grant.
     Used by backend services to query Central Data Master API (https://data.smkn1rongga.sch.id/v1).
     """
-    c_id = client_id or getattr(settings, 'KEYCLOAK_CLIENT_ID', 'exam-jingga')
-    c_secret = client_secret or getattr(settings, 'KEYCLOAK_CLIENT_SECRET', '')
+    c_id = client_id or getattr(settings, 'DATA_MASTER_CLIENT_ID', 'exam-jingga-sync')
+    c_secret = client_secret or getattr(settings, 'DATA_MASTER_CLIENT_SECRET', '')
+    if not c_secret:
+        raise ValueError(
+            "DATA_MASTER_CLIENT_SECRET belum diisi di .env server. Sinkron data pusat butuh client "
+            f"Keycloak confidential '{c_id}' dengan service account."
+        )
 
     payload = {
         'grant_type': 'client_credentials',
         'client_id': c_id,
+        'client_secret': c_secret,
     }
-    if c_secret:
-        payload['client_secret'] = c_secret
 
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded',

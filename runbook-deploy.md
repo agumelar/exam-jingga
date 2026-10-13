@@ -68,6 +68,8 @@ Catatan: <ringkas>
 | `SECRET_KEY` | Wajib. Aplikasi menolak start bila kosong. |
 | `WEBHOOK_SECRET_KEY` | Wajib. Kunci header `x-api-key` dari panel Data Admin. |
 | `DB_*` | Koneksi PostgreSQL. |
+| `DATA_MASTER_CLIENT_ID` | Client Keycloak confidential khusus sinkron data pusat, bawaan `exam-jingga-sync`. Client login `exam-jingga` bertipe public dan tidak bisa dipakai untuk sinkron. |
+| `DATA_MASTER_CLIENT_SECRET` | Wajib untuk tombol Tarik Data Master. Tanpa ini sinkron menampilkan "Gagal sinkronisasi" dan tidak mengubah data. Setelah diubah: `sudo systemctl restart exam_jingga.service`. |
 | `RCLONE_REMOTE` | Opsional. Tujuan salinan backup di Google Drive, contoh `gdrive-sekolah:exam-jingga-backup`. |
 
 Rahasia tidak boleh ditulis di repo atau dokumen.
