@@ -93,11 +93,16 @@ class MasterDataSyncService:
         Mengambil seluruh data siswa aktif dari GET /v1/students dengan paginasi otomatis.
         Bila satu halaman gagal, sinkron dihentikan (SyncIncompleteError) agar data parsial
         tidak dianggap lengkap dan tidak memicu penonaktifan siswa.
+
+        Paginasi API pusat pernah tidak stabil (baris yang sama muncul di dua halaman, baris lain
+        tidak pernah muncul), jadi halaman diambil besar, baris digabung per id, dan jumlah siswa
+        unik harus sama dengan meta.total.
         """
-        all_students = []
+        unique = {}
         page = 1
-        page_size = 100
+        page_size = 1000
         page_count = 1
+        expected_total = None
 
         headers = self._get_headers(bearer_token=bearer_token)
         url = f"{self.base_url}/v1/students"
@@ -124,14 +129,24 @@ class MasterDataSyncService:
 
             items = res_json.get('data', []) if isinstance(res_json, dict) else res_json
             if isinstance(items, list):
-                all_students.extend(items)
+                for item in items:
+                    key = (item.get('id') or item.get('nis')) if isinstance(item, dict) else None
+                    unique[key or f'tanpa-kunci-{len(unique)}'] = item
 
             meta = res_json.get('meta', {}) if isinstance(res_json, dict) else {}
-            page_count = meta.get('pageCount', 1)
+            page_count = meta.get('totalPages') or meta.get('pageCount') or 1
+            if meta.get('total') is not None:
+                expected_total = int(meta['total'])
             page += 1
 
+        all_students = list(unique.values())
         if not all_students:
             raise SyncSourceError("Data pusat mengembalikan 0 siswa; sinkron dibatalkan agar data Exam tidak berubah.")
+        if expected_total is not None and len(all_students) != expected_total:
+            raise SyncIncompleteError(
+                f"Data pusat tidak konsisten: diterima {len(all_students)} siswa unik dari {expected_total} "
+                "yang dilaporkan. Sinkron dibatalkan agar data Exam tidak berubah."
+            )
 
         return all_students
 

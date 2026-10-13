@@ -91,3 +91,53 @@ def test_sync_view_reports_failure(client):
     html = res.content.decode()
     assert 'Token ditolak Keycloak' in html
     assert 'Sinkronisasi Berhasil' not in html
+
+
+# ==============================================================================
+# Paginasi data pusat (meta.totalPages, baris ganda, kelengkapan)
+# ==============================================================================
+
+def _row(i):
+    return {'id': f'id-{i}', 'nis': f'88{i}', 'fullName': f'Siswa {i}', 'status': 'ACTIVE'}
+
+
+def _pages(pages, total, meta_key='totalPages'):
+    """Tiruan requests.get yang mengembalikan halaman sesuai params['page']."""
+    def fake_get(url, params=None, headers=None, timeout=None):
+        page = params['page']
+        return _response(200, {'data': pages[page - 1], 'meta': {'page': page, meta_key: len(pages), 'total': total}})
+    return fake_get
+
+
+def _fetch(fake_get):
+    service = MasterDataSyncService()
+    with patch.object(service, '_get_headers', return_value={}), \
+            patch('apps.master_data.services.openapi_sync.requests.get', side_effect=fake_get) as get:
+        return service.fetch_all_students_paginated(), get
+
+
+def test_reads_every_page_from_total_pages():
+    rows, get = _fetch(_pages([[_row(1)], [_row(2)], [_row(3)]], total=3))
+    assert [r['nis'] for r in rows] == ['881', '882', '883']
+    assert get.call_count == 3
+
+
+def test_legacy_page_count_meta_still_supported():
+    rows, _ = _fetch(_pages([[_row(1)], [_row(2)]], total=2, meta_key='pageCount'))
+    assert len(rows) == 2
+
+
+def test_duplicate_rows_across_pages_are_merged():
+    rows, _ = _fetch(_pages([[_row(1), _row(2)], [_row(2), _row(3)]], total=3))
+    assert sorted(r['id'] for r in rows) == ['id-1', 'id-2', 'id-3']
+
+
+def test_unstable_pagination_aborts_when_rows_are_missing():
+    # API melaporkan 4 siswa, tapi paginasi mengulang id-2 dan tidak pernah mengirim id-4
+    with pytest.raises(SyncSourceError, match='3 siswa unik dari 4'):
+        _fetch(_pages([[_row(1), _row(2)], [_row(2), _row(3)]], total=4))
+
+
+def test_requests_large_pages():
+    _, get = _fetch(_pages([[_row(1)]], total=1))
+    assert get.call_args.kwargs['params']['pageSize'] == 1000
