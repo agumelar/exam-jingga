@@ -64,6 +64,7 @@ Catatan: <ringkas>
 
 | Variabel | Keterangan |
 |---|---|
+| `DJANGO_SETTINGS_MODULE` | Wajib di server: `config.settings.production`. `manage.py` membacanya dari `.env`; tanpa ini perintah `manage.py` jatuh ke settings development (sqlite), bukan database produksi. |
 | `SECRET_KEY` | Wajib. Aplikasi menolak start bila kosong. |
 | `WEBHOOK_SECRET_KEY` | Wajib. Kunci header `x-api-key` dari panel Data Admin. |
 | `DB_*` | Koneksi PostgreSQL. |
@@ -75,6 +76,7 @@ Rahasia tidak boleh ditulis di repo atau dokumen.
 - Harian 01.30 WIB (`exam_jingga_backup.timer`) dan otomatis sebelum setiap migrasi.
 - Lokasi: `/opt/exam-jingga-backups/` (database `*.dump` format custom, media `*.tar.gz`), disimpan 14 hari.
 - Manual: `bash /opt/exam-jingga/scripts/backup_db.sh manual`.
+- `legacy-dev-db-20261007.sqlite3`: database sqlite development lama yang dulu tertinggal di folder aplikasi. Tidak dipakai produksi; namanya sengaja tidak diawali `exam-jingga-` agar tidak terhapus retensi 14 hari.
 
 ### Mengaktifkan salinan ke Google Drive sekolah (sekali saja)
 1. Di VPS: `rclone config`, buat remote bertipe `drive` (misal `gdrive-sekolah`) dengan akun Google Drive sekolah. VPS tidak punya browser: jawab *Use auto config? n*, lalu jalankan `rclone authorize "drive"` di komputer yang punya browser dan tempel token yang dihasilkan.
