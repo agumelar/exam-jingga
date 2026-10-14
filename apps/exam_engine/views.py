@@ -55,7 +55,9 @@ def get_owned_session(request, session_id, for_update=False):
         'student', 'schedule', 'schedule__exam', 'schedule__exam__subject', 'schedule__teacher'
     )
     if for_update:
-        qs = qs.select_for_update()
+        # Kunci hanya baris sesi: PostgreSQL menolak FOR UPDATE pada sisi nullable outer join
+        # (guru jadwal dan mapel boleh kosong)
+        qs = qs.select_for_update(of=('self',))
     return get_object_or_404(qs, id=session_id, student=student)
 
 

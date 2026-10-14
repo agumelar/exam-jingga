@@ -357,3 +357,26 @@ def test_initialize_is_idempotent():
 ])
 def test_detect_cross_referencing_options(options, expected):
     assert detect_cross_referencing_options(options) is expected
+
+
+@pytest.mark.django_db
+def test_violation_locks_only_the_session_row(client):
+    # PostgreSQL menolak FOR UPDATE yang mencakup outer join (guru jadwal dan mapel boleh kosong);
+    # SQLite mengabaikan FOR UPDATE, jadi yang diuji adalah argumen penguncian
+    from django.db.models.query import QuerySet
+    w = World('pglock', exam_type='PAS')
+    _, session = w.start(client, w.student('8801'))
+    calls = []
+    original = QuerySet.select_for_update
+
+    def spy(self, *args, **kwargs):
+        calls.append(kwargs)
+        return original(self, *args, **kwargs)
+
+    from unittest.mock import patch
+    with patch.object(QuerySet, 'select_for_update', spy):
+        client.post(reverse('exam_engine:violation_handler', args=[session.id]))
+
+    assert calls and all(c.get('of') == ('self',) for c in calls)
+    session.refresh_from_db()
+    assert session.violation_count == 1
