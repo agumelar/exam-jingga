@@ -176,7 +176,7 @@
         class="flex-1 py-3 px-2.5 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-200 rounded-2xl font-semibold text-xs flex items-center justify-center gap-1 disabled:opacity-30 active:scale-95 transition-all cursor-pointer m3-state-layer border border-stone-200 dark:border-stone-700"
       >
         <i data-lucide="chevron-left" class="w-4 h-4"></i>
-        <span>Prev</span>
+        <span>Kembali</span>
       </button>
 
       <!-- Tombol Ragu-ragu (M3 Tonal Toggle) -->
@@ -219,7 +219,7 @@
           @click="goToNextQuestion()"
           class="flex-1 py-3 px-3 bg-orange-600 hover:bg-orange-500 text-white rounded-2xl font-semibold text-xs flex items-center justify-center gap-1 shadow-md shadow-orange-600/25 active:scale-95 transition-all cursor-pointer m3-state-layer"
         >
-          <span>Next</span>
+          <span>Lanjut</span>
           <i data-lucide="chevron-right" class="w-4 h-4"></i>
         </button>
       </template>
@@ -363,6 +363,18 @@
         this.initAntiCheat();
         this.initHeartbeat();
         this.initSaveWatch();
+        this.initWakeLock();
+      },
+
+      initWakeLock() {
+        // Layar HP yang padam sendiri menyembunyikan halaman dan akan tercatat sebagai pelanggaran
+        if (!('wakeLock' in navigator)) return;
+        const request = () => navigator.wakeLock.request('screen').catch(() => {});
+        request();
+        // Browser melepas kunci layar saat halaman tersembunyi; minta lagi saat siswa kembali
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden) request();
+        });
       },
 
       initTimer() {

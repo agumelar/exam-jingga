@@ -39,9 +39,7 @@
         'text-lg sm:text-xl': fontSize === 'large'
       }"
       class="font-semibold text-stone-900 dark:text-stone-100 leading-relaxed mb-6 whitespace-pre-wrap transition-all"
-    >
-      {{ current_item.question.question_text }}
-    </div>
+    >{{ current_item.question.question_text }}</div>
 
     <!-- Question Image (with Tap-to-Zoom Lightbox) -->
     {% if current_item.question.image_url %}
