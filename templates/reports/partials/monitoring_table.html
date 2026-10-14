@@ -133,7 +133,6 @@ Refreshed periodically via HTMX polling (every 3s) or on filter change.
                     <button
                       type="button"
                       hx-post="{% url 'reports:session_unlock' item.session.id %}"
-                      hx-prompt="Alasan buka kunci untuk {{ item.student.full_name }} (wajib, tercatat di log):"
                       hx-swap="none"
                       class="w-full min-h-11 px-4 bg-orange-700 hover:bg-orange-800 text-white rounded-2xl font-semibold text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
                     >
@@ -145,7 +144,7 @@ Refreshed periodically via HTMX polling (every 3s) or on filter change.
                     <button
                       type="button"
                       hx-post="{% url 'reports:session_force_submit' item.session.id %}"
-                      hx-prompt="Alasan paksa selesai untuk {{ item.student.full_name }} (wajib, tercatat di log):"
+                      hx-confirm="Hentikan ujian {{ item.student.full_name }} sekarang? Jawaban yang sudah ada langsung dinilai."
                       hx-swap="none"
                       class="min-h-11 px-3 bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-200 border border-red-300 dark:border-red-800 hover:bg-red-100 rounded-xl font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
                     >
@@ -155,7 +154,7 @@ Refreshed periodically via HTMX polling (every 3s) or on filter change.
                     <button
                       type="button"
                       hx-post="{% url 'reports:session_reset' item.session.id %}"
-                      hx-prompt="Reset menghapus sesi agar {{ item.student.full_name }} mulai ulang (jawaban disimpan di log). Tulis alasannya:"
+                      hx-confirm="Reset sesi {{ item.student.full_name }}? Jawabannya dihapus (salinannya tersimpan di log) dan siswa mulai ulang dengan token."
                       hx-swap="none"
                       class="min-h-11 px-3 bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 border border-stone-300 dark:border-stone-600 hover:bg-stone-200 rounded-xl font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
                     >

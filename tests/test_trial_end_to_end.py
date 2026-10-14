@@ -355,15 +355,12 @@ def test_pts_trial_review_and_session_actions(client, school):
     sesi1.refresh_from_db()
     assert (sesi1.status, sesi1.score) == ('finished', 100)
 
-    # 8. Guru tidak bisa menghentikan sesi; kurikulum bisa, alasan wajib, tercatat di log
+    # 8. Guru tidak bisa menghentikan sesi; kurikulum bisa, dan aksinya tercatat di log
     _, sesi2 = _start_exam(client, s.siswa2, schedule, 'PTS001')
     _answer(client, sesi2, soal[0], soal[0].correct_answer)
     client.force_login(s.guru_user)
     assert client.post(reverse('reports:session_force_submit', args=[sesi2.id]), {'reason': 'coba'}, **HX).status_code == 403
     client.force_login(s.kurikulum)
-    client.post(reverse('reports:session_force_submit', args=[sesi2.id]), {'reason': ' '}, **HX)
-    sesi2.refresh_from_db()
-    assert sesi2.status == 'active'
     client.post(reverse('reports:session_force_submit', args=[sesi2.id]), {'reason': 'Waktu sesi ruangan habis'}, **HX)
     sesi2.refresh_from_db()
     assert (sesi2.status, sesi2.score) == ('finished', 20)
@@ -438,13 +435,10 @@ def test_pas_trial_collaboration_lock_and_unlock(client, school):
     _answer(client, sesi, soal[1], soal[1].correct_answer)
     assert StudentAnswer.objects.get(session=sesi, question=soal[1]).chosen_answer is None
 
-    # 5. Guru tidak bisa membuka kunci; kurikulum bisa dengan alasan wajib, dan tercatat
+    # 5. Guru tidak bisa membuka kunci; kurikulum bisa, dan aksinya tercatat
     client.force_login(s.guru_user)
     assert client.post(reverse('reports:session_unlock', args=[sesi.id]), {'reason': 'coba'}, **HX).status_code == 403
     client.force_login(s.kurikulum)
-    client.post(reverse('reports:session_unlock', args=[sesi.id]), {'reason': ' '}, **HX)
-    sesi.refresh_from_db()
-    assert sesi.status == 'locked'
     client.post(reverse('reports:session_unlock', args=[sesi.id]), {'reason': 'Sudah dibina kurikulum'}, **HX)
     sesi.refresh_from_db()
     assert (sesi.status, sesi.violation_count) == ('active', 2)

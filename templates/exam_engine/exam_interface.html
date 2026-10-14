@@ -343,7 +343,10 @@
             headers: { 'X-CSRFToken': this.csrfToken() },
             credentials: 'same-origin',
           })
-            .then((r) => (r.ok ? r.json() : null))
+            .then((r) => {
+              if (r.status === 404) { this.leaveResetSession(); return null; }
+              return r.ok ? r.json() : null;
+            })
             .then((data) => {
               if (!data) return;
               if (data.status === 'finished') { window.location.href = '/student/dashboard/'; return; }
@@ -355,7 +358,16 @@
         setInterval(beat, 15000);
       },
 
+      leaveResetSession() {
+        // Sesi tidak ada lagi di server: biasanya direset kurikulum saat halaman ini masih terbuka
+        window.location.href = '/student/dashboard/?sesi=direset';
+      },
+
       initSaveWatch() {
+        document.body.addEventListener('htmx:responseError', (evt) => {
+          const path = (evt.detail.pathInfo && evt.detail.pathInfo.requestPath) || '';
+          if (evt.detail.xhr && evt.detail.xhr.status === 404 && path.includes('/exam/session/')) this.leaveResetSession();
+        });
         const isSave = (evt) => (evt.detail.pathInfo && evt.detail.pathInfo.requestPath || '').includes('/save-answer/');
         document.body.addEventListener('htmx:responseError', (evt) => { if (isSave(evt)) this.saveFailed = true; });
         document.body.addEventListener('htmx:sendError', (evt) => { if (isSave(evt)) this.saveFailed = true; });

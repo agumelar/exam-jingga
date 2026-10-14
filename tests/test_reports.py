@@ -284,8 +284,6 @@ def test_session_unlock_reset_and_force_submit_actions(client, test_setup):
 
     # 1. Unlock Action
     unlock_url = f'/session-management/unlock/{session.id}/'
-    # Tanpa alasan ditolak
-    assert client.post(unlock_url, HTTP_HX_REQUEST='true').status_code == 422
     res_unlock = client.post(unlock_url, HTTP_HX_REQUEST='true', HTTP_HX_PROMPT='Sudah dibina kurikulum')
     assert res_unlock.status_code == 200
     session.refresh_from_db()

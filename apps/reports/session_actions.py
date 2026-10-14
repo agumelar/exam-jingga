@@ -60,8 +60,6 @@ def _log(session, action, actor, reason, with_answers=False):
 
 def perform_session_action(session_id, action, actor, reason):
     reason = (reason or '').strip()
-    if not reason:
-        raise SessionActionError("Alasan wajib diisi.", status=422)
     if action not in ALLOWED_FROM:
         raise SessionActionError("Aksi tidak dikenal.", status=404)
 

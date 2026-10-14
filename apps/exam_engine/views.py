@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 DASHBOARD_URL = '/student/dashboard/'
 FINISH_GRACE_SECONDS = 10
 SCORE_POPUP_WINDOW = timedelta(minutes=10)
+RESET_NOTICE_URL = f'{DASHBOARD_URL}?sesi=direset'
 
 
 def get_current_student(request):
@@ -144,6 +145,7 @@ class StudentDashboardView(View):
             },
             'now': now,
             'score_popup': score_popup,
+            'reset_notice': request.GET.get('sesi') == 'direset',
         }
         return TemplateResponse(request, 'exam_engine/student_dashboard.html', context)
 
@@ -419,7 +421,11 @@ class FinishExamView(View):
     """Kirim lembar ujian dan hitung nilai."""
 
     def post(self, request, session_id, *args, **kwargs):
-        session = get_owned_session(request, session_id)
+        try:
+            session = get_owned_session(request, session_id)
+        except Http404:
+            # Sesi direset kurikulum saat halaman ujian siswa masih terbuka
+            return redirect(RESET_NOTICE_URL)
         if session.status == 'locked':
             # Sesi terkunci karena pelanggaran diselesaikan oleh admin/kurikulum, bukan oleh siswa
             messages.error(request, "Ujian Anda terkunci. Temui bagian kurikulum.")

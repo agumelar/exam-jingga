@@ -228,6 +228,22 @@
     </div>
   </main>
 
+  {% if reset_notice %}
+  <!-- Halaman ujian tertinggal setelah kurikulum mereset sesi -->
+  <div id="reset-notice" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-6">
+    <div role="alertdialog" aria-modal="true" aria-labelledby="reset-notice-title"
+         class="w-full max-w-sm rounded-3xl bg-white dark:bg-zinc-900 p-7 text-center shadow-2xl">
+      <h2 id="reset-notice-title" class="text-xl font-bold text-stone-900 dark:text-white">Sesi ujianmu direset oleh kurikulum</h2>
+      <p class="mt-2 text-base text-stone-700 dark:text-zinc-300 leading-relaxed">Masukkan token lagi untuk mulai ulang. Jawaban sebelumnya tidak dipakai.</p>
+      <button type="button" id="reset-notice-close" onclick="document.getElementById('reset-notice').remove()"
+              class="mt-6 w-full h-12 rounded-2xl bg-orange-700 hover:bg-orange-800 text-white text-base font-semibold cursor-pointer">
+        Mengerti
+      </button>
+    </div>
+  </div>
+  <script>(document.getElementById('reset-notice-close') || {}).focus?.();</script>
+  {% endif %}
+
   {% if score_popup %}
   <!-- Nilai ujian yang baru selesai, tampil sekali setelah waktu habis -->
   <div id="score-popup" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-6">
