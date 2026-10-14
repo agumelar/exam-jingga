@@ -16,8 +16,9 @@ Aplikasi aktif dipakai pada **07.00-16.00 WIB**. Server: VPS Ubuntu 24.04 ARM64 
 ## Checklist Pra-Deploy
 1. Perubahan lulus `pytest` dan `npm run build` di lokal.
 2. Commit final sudah di-push ke `main`.
-3. Catat baseline: jumlah error login, error pada flow jadwal/ujian (`journalctl -u exam_jingga.service`).
-4. Siapkan pesan status untuk operator sekolah.
+3. Test juga lulus di PostgreSQL: `bash scripts/test_postgres_vps.sh` (container PostgreSQL sementara di VPS, terhapus otomatis). Wajib bila perubahan menyentuh query, penguncian baris, atau migrasi; test lokal memakai SQLite yang mengabaikan `SELECT ... FOR UPDATE`.
+4. Catat baseline: jumlah error login, error pada flow jadwal/ujian (`journalctl -u exam_jingga.service`).
+5. Siapkan pesan status untuk operator sekolah.
 
 ## Eksekusi Deploy (22.00-04.00)
 1. **Release + backup**: dari komputer lokal jalankan
