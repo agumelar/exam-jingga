@@ -295,3 +295,24 @@ class Schedule(models.Model):
         if self.exam and self.exam.level:
             return f"Semua Kelas {self.exam.level}"
         return "Semua Kelas"
+
+
+class ScheduleTimeChange(models.Model):
+    """
+    Catatan waktu paket yang digeser setelah ada siswa mengerjakan (ujian susulan).
+    Kartu dan daftar hadir hanya menampilkan waktu terbaru; catatan ini menyimpan jadwal gelombang awal.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='time_changes')
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='schedule_time_changes')
+    old_start = models.DateTimeField()
+    old_end = models.DateTimeField(null=True, blank=True)
+    new_start = models.DateTimeField()
+    new_end = models.DateTimeField(null=True, blank=True)
+    finished_sessions = models.IntegerField(default=0, help_text="Siswa yang sudah selesai saat waktu digeser")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'schedule_time_changes'
+        ordering = ['created_at']

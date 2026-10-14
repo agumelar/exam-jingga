@@ -5,7 +5,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.master_data.models import ClassRoom, Subject, Teacher, TeacherAssignment
-from apps.schedules.models import Exam, Schedule
+from apps.schedules.models import Exam, Schedule, ScheduleTimeChange
 from apps.schedules.utils import (
     build_teacher_quota_map,
     build_teacher_set_groups,
@@ -166,8 +166,17 @@ class ScheduleForm(forms.Form):
             or cleaned.get('duration') != exam.duration
             or cleaned.get('session_no') != self.schedule_instance.session_no
         )
-        if time_changed and exam.started_sessions_count():
-            self.add_error('start_time', "Waktu tidak bisa diubah karena sudah ada siswa yang mulai mengerjakan.")
+        # Susulan: waktu boleh digeser setelah ujian berjalan, asal tidak ada siswa yang sedang mengerjakan.
+        # Siswa yang sudah selesai tetap ditolak gerbang token; sisa waktu siswa aktif bisa terpotong bila digeser.
+        if time_changed and self._sessions_in_progress(exam):
+            self.add_error('start_time', "Waktu tidak bisa diubah karena masih ada siswa yang sedang mengerjakan "
+                                         "atau terkunci. Tunggu sampai mereka selesai, atau selesaikan sesi yang "
+                                         "terkunci lewat Monitoring.")
+
+    @staticmethod
+    def _sessions_in_progress(exam):
+        from apps.exam_engine.models import ExamSession
+        return ExamSession.objects.filter(schedule__exam=exam, status__in=['active', 'locked']).exists()
 
     # ------------------------------------------------------------------ save
 
@@ -215,6 +224,12 @@ class ScheduleForm(forms.Form):
         start = c['start_time']
         end = start + timedelta(minutes=c['duration'])
         token = (c.get('token') or schedule.token).upper()
+
+        old_start, old_end = schedule.start_time, schedule.end_time
+        finished = exam.started_sessions_count()
+        if finished and (start != old_start or end != old_end):
+            ScheduleTimeChange.objects.create(exam=exam, changed_by=self.user, old_start=old_start, old_end=old_end,
+                                              new_start=start, new_end=end, finished_sessions=finished)
 
         exam.title = resolve_exam_title(c['exam_type'], c.get('title', ''), c.get('sub_type', '')) or exam.title
         exam.duration = c['duration']

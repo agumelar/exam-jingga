@@ -88,6 +88,13 @@ M3 Elevated Schedule Card with 100% UI fidelity matching React ScheduleCard.jsx
       <i data-lucide="calendar" class="w-4 h-4 text-orange-500 shrink-0"></i>
       <span>{{ s.start_time|date:"d M Y, H:i" }} WIB</span>
     </div>
+    {% with first_change=s.exam.time_changes.all|first %}{% if first_change %}
+    <!-- Jadwal awal sebelum digeser untuk susulan -->
+    <div class="flex items-center gap-3">
+      <i data-lucide="history" class="w-4 h-4 text-orange-500 shrink-0"></i>
+      <span>Susulan, jadwal awal {{ first_change.old_start|date:"d M Y, H:i" }} WIB</span>
+    </div>
+    {% endif %}{% endwith %}
 
     <!-- Token Akses -->
     <div class="flex items-center gap-3 font-mono" x-data="{ copied: false }">

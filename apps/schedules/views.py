@@ -304,7 +304,7 @@ class ScheduleEditModalView(View):
         schedule, actor = self._load(request, pk)
         if not _can_edit_schedule(actor, schedule):
             return _error_toast_response("Anda tidak berwenang mengubah jadwal ini.", 403)
-        form = ScheduleForm(request.POST, schedule_instance=schedule, is_admin=actor.is_admin,
+        form = ScheduleForm(request.POST, schedule_instance=schedule, is_admin=actor.is_admin, user=request.user,
                             creator_teacher=actor.teacher)
         if not form.is_valid():
             return _render_form_modal(request, form, actor, schedule)
