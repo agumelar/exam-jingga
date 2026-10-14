@@ -300,7 +300,7 @@ def test_full_cbt_e2e_workflow_lifecycle():
         HTTP_HX_REQUEST='true'
     )
     assert v1_resp.status_code == 200
-    assert 'Peringatan pindah layar (1/2)' in v1_resp.content.decode('utf-8')
+    assert 'Pelanggaran ke-1' in v1_resp.content.decode('utf-8')
     exam_session.refresh_from_db()
     assert exam_session.violation_count == 1
     assert exam_session.status == 'active'

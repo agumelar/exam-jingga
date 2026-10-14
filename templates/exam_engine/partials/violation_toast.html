@@ -1,11 +1,23 @@
-<div id="toast-warning" role="alert" class="fixed top-20 inset-x-4 sm:inset-x-auto sm:right-6 z-50 p-4 rounded-2xl bg-amber-400 text-stone-950 shadow-2xl flex items-start gap-3 max-w-sm">
-  <i data-lucide="alert-triangle" class="w-5 h-5 shrink-0" aria-hidden="true"></i>
-  <div>
-    <p class="text-sm font-bold">Peringatan pindah layar ({{ count }}{% if is_official %}/2{% endif %})</p>
-    <p class="text-sm">{% if is_official %}Pelanggaran berikutnya mengunci ujian Anda. Tetap di halaman ujian.{% else %}Tetap fokus di halaman ujian.{% endif %}</p>
+<!-- Peringatan pindah layar: di tengah layar dan harus ditutup siswa, agar benar-benar terbaca -->
+<div id="violation-dialog" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-6">
+  <div role="alertdialog" aria-modal="true" aria-labelledby="violation-title" aria-describedby="violation-desc"
+       class="w-full max-w-sm rounded-3xl bg-white dark:bg-zinc-900 p-7 text-center shadow-2xl border-2 border-amber-400">
+    <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300">
+      <i data-lucide="alert-triangle" class="w-9 h-9" aria-hidden="true"></i>
+    </div>
+    <h2 id="violation-title" class="text-xl font-bold text-stone-900 dark:text-white">Kamu berpindah layar</h2>
+    <p id="violation-desc" class="mt-2 text-base text-stone-700 dark:text-zinc-300 leading-relaxed">
+      Pelanggaran ke-{{ count }} tercatat.
+      {% if is_official %}Satu kali lagi berpindah layar, ujianmu terkunci dan kamu harus menemui bagian kurikulum.{% else %}Tetap di halaman ujian sampai waktu habis.{% endif %}
+    </p>
+    <button type="button" id="violation-ok"
+            onclick="document.getElementById('violation-dialog').remove()"
+            class="mt-6 w-full h-12 rounded-2xl bg-orange-700 hover:bg-orange-800 text-white text-base font-semibold cursor-pointer">
+      Saya mengerti
+    </button>
   </div>
 </div>
 <script>
-  setTimeout(() => { const t = document.getElementById('toast-warning'); if (t) t.remove(); }, 4000);
   if (window.lucide) lucide.createIcons();
+  (document.getElementById('violation-ok') || {}).focus?.();
 </script>

@@ -379,7 +379,7 @@ def test_violation_handler_and_status_check(client):
     # 1. First Violation (Warning Toast)
     res_v1 = client.post(reverse('exam_engine:violation_handler', kwargs={'session_id': session.id}))
     assert res_v1.status_code == 200
-    assert 'Peringatan pindah layar (1/2)' in res_v1.content.decode('utf-8')
+    assert 'Pelanggaran ke-1' in res_v1.content.decode('utf-8')
     
     session.refresh_from_db()
     assert session.violation_count == 1
@@ -435,7 +435,7 @@ def test_violation_handler_uh_warning_only(client):
     # 1. First violation
     res1 = client.post(reverse('exam_engine:violation_handler', kwargs={'session_id': session.id}))
     assert res1.status_code == 200
-    assert 'Peringatan pindah layar (1)' in res1.content.decode('utf-8')
+    assert 'Pelanggaran ke-1' in res1.content.decode('utf-8')
     session.refresh_from_db()
     assert session.violation_count == 1
     assert session.status == 'active'
@@ -443,7 +443,7 @@ def test_violation_handler_uh_warning_only(client):
     # 2. Second violation: still active! Never locked!
     res2 = client.post(reverse('exam_engine:violation_handler', kwargs={'session_id': session.id}))
     assert res2.status_code == 200
-    assert 'Peringatan pindah layar (2)' in res2.content.decode('utf-8')
+    assert 'Pelanggaran ke-2' in res2.content.decode('utf-8')
     assert 'lock-screen-overlay' not in res2.content.decode('utf-8')
     session.refresh_from_db()
     assert session.violation_count == 2

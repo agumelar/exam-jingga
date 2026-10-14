@@ -228,6 +228,25 @@
     </div>
   </main>
 
+  {% if score_popup %}
+  <!-- Nilai ujian yang baru selesai, tampil sekali setelah waktu habis -->
+  <div id="score-popup" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-6">
+    <div role="dialog" aria-modal="true" aria-labelledby="score-popup-title"
+         class="w-full max-w-sm rounded-3xl bg-white dark:bg-zinc-900 p-7 text-center shadow-2xl">
+      <p id="score-popup-title" class="text-base font-semibold text-stone-700 dark:text-zinc-300">Waktu habis, ujian selesai</p>
+      <p class="mt-1 text-sm text-stone-600 dark:text-zinc-400">{{ score_popup.title }}</p>
+      <p class="mt-5 text-sm font-medium text-stone-600 dark:text-zinc-400">Nilai kamu</p>
+      <p class="text-6xl font-bold text-orange-700 dark:text-orange-400 tabular-nums"><span>{{ score_popup.score|floatformat:"-1" }}</span></p>
+      <p class="mt-2 text-base text-stone-700 dark:text-zinc-300">{{ score_popup.correct }} dari {{ score_popup.total }} soal benar</p>
+      <button type="button" id="score-popup-close" onclick="document.getElementById('score-popup').remove()"
+              class="mt-6 w-full h-12 rounded-2xl bg-orange-700 hover:bg-orange-800 text-white text-base font-semibold cursor-pointer">
+        Tutup
+      </button>
+    </div>
+  </div>
+  <script>(document.getElementById('score-popup-close') || {}).focus?.();</script>
+  {% endif %}
+
   <!-- Alphanumeric Token Input OTP Modal (100% Fidelity TokenInputOTP.jsx) -->
   <div 
     x-show="showTokenModal"

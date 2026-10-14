@@ -1,6 +1,7 @@
 """Views and HTMX Endpoints for Core CBT Exam Engine."""
 import logging
 import uuid
+from datetime import timedelta
 
 from django.contrib import messages
 from django.db import transaction
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 DASHBOARD_URL = '/student/dashboard/'
 FINISH_GRACE_SECONDS = 10
+SCORE_POPUP_WINDOW = timedelta(minutes=10)
 
 
 def get_current_student(request):
@@ -123,6 +125,8 @@ class StudentDashboardView(View):
                     'finished_at': fs.finished_at,
                 })
 
+        score_popup = self._score_popup(request, student)
+
         # Ruang dan sesi siswa berasal dari alokasi logistik (yang juga tercetak di kartu)
         from apps.reports.models import StudentLogistic
         logistic = StudentLogistic.objects.filter(student=student).order_by('-updated_at').first() if student else None
@@ -139,8 +143,32 @@ class StudentDashboardView(View):
                 'session_name': logistic.session_name if logistic else '-',
             },
             'now': now,
+            'score_popup': score_popup,
         }
         return TemplateResponse(request, 'exam_engine/student_dashboard.html', context)
+
+    @staticmethod
+    def _score_popup(request, student):
+        """
+        Nilai ujian yang baru selesai, ditampilkan sekali saat siswa tiba di dashboard. Berlaku untuk semua
+        cara selesai (kiriman otomatis, dinilai server); ujian yang selesai lebih dari 10 menit lalu tidak muncul.
+        """
+        if not student:
+            return None
+        latest = (ExamSession.objects.filter(student=student, status='finished',
+                                             finished_at__gte=timezone.now() - SCORE_POPUP_WINDOW)
+                  .select_related('schedule__exam').order_by('-finished_at').first())
+        shown = request.session.get('score_popups_shown', [])
+        if not latest or str(latest.id) in shown:
+            return None
+        request.session['score_popups_shown'] = (shown + [str(latest.id)])[-20:]
+        answers = StudentAnswer.objects.filter(session=latest)
+        return {
+            'title': latest.schedule.exam.title,
+            'score': latest.score,
+            'correct': answers.filter(is_correct=True).count(),
+            'total': answers.count(),
+        }
 
 
 @method_decorator(never_cache, name='dispatch')
@@ -407,5 +435,4 @@ class FinishExamView(View):
         score = grade_exam_session(session)
         if request.headers.get('HX-Request'):
             return render(request, 'exam_engine/partials/finish_modal.html', {'session': session, 'score': score})
-        messages.success(request, f"Ujian berhasil diselesaikan. Nilai Anda: {score}")
         return redirect(DASHBOARD_URL)
