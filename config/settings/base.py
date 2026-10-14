@@ -110,6 +110,11 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# Backup sebelum hapus permanen paket ujian (scripts/backup_db.sh mode --arsip)
+BACKUP_DIR = os.environ.get('BACKUP_DIR', '/opt/exam-jingga-backups')
+PURGE_ARCHIVE_DIR = os.environ.get('PURGE_ARCHIVE_DIR', os.path.join(BACKUP_DIR, 'arsip-hapus'))
+BACKUP_SCRIPT = str(BASE_DIR / 'scripts' / 'backup_db.sh')
+
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

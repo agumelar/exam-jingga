@@ -1,4 +1,5 @@
 import json
+from urllib.parse import parse_qs, urlparse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views import View
 from django.core.paginator import Paginator
@@ -16,7 +17,7 @@ from apps.questions.models import Question
 from apps.schedules.models import Exam, ExamQuestion, Schedule
 from apps.schedules.forms import ScheduleForm
 from apps.exam_engine.models import ExamSession
-from apps.schedules import lifecycle
+from apps.schedules import archive, lifecycle
 from apps.schedules.lifecycle import Actor, LifecycleError
 from apps.schedules.utils import generate_exam_token
 
@@ -98,6 +99,10 @@ def _enrich_schedule_data(schedules, actor):
             if s.show_unlock and s.started_sessions else ''
         )
         s.can_regenerate_token = lifecycle.can_regenerate_token(exam, actor)
+        s.is_archived = bool(exam.archived_at)
+        s.can_archive = not s.is_archived and archive.can_manage_archive(exam, actor) and not archive.archive_block_reason(exam)
+        s.can_unarchive = s.is_archived and archive.can_manage_archive(exam, actor)
+        s.can_purge = s.is_archived and archive.can_purge(actor)
         enriched.append(s)
     return enriched
 
@@ -116,10 +121,21 @@ def _toast(message, level='success'):
     return {'message': message, 'level': level}
 
 
+def _archive_filter(qs, status_filter):
+    """Paket arsip hanya tampil di filter Arsip; filter lain menyembunyikannya."""
+    return qs.filter(exam__archived_at__isnull=(status_filter != 'arsip'))
+
+
+def _current_status_filter(request):
+    query = parse_qs(urlparse(request.headers.get('HX-Current-URL', '')).query)
+    return (query.get('status') or ['all'])[0]
+
+
 def _render_schedule_grid(request, toast=None, close_modal=False):
     actor = _actor(request)
+    qs = _archive_filter(_scoped_schedules(actor), _current_status_filter(request))
     context = {
-        'schedules': _enrich_schedule_data(list(_scoped_schedules(actor).order_by('-start_time')), actor),
+        'schedules': _enrich_schedule_data(list(qs.order_by('-start_time')), actor),
         'is_admin': actor.is_admin,
         'user_role': actor.transition_role,
         'current_teacher': actor.teacher,
@@ -158,7 +174,7 @@ class ScheduleListView(View):
         status_filter = request.GET.get('status', 'all')
 
         actor = _actor(request)
-        qs = _scoped_schedules(actor)
+        qs = _archive_filter(_scoped_schedules(actor), status_filter)
 
         # Search filter
         if search_query:
@@ -315,7 +331,8 @@ class ScheduleEditModalView(View):
 def _delete_schedule(schedule):
     """Hapus jadwal (dan paketnya bila jadwal terakhir). Ditolak bila sudah ada sesi siswa."""
     if schedule.exam_sessions.exists():
-        raise LifecycleError("Jadwal ini sudah dikerjakan siswa, jadi tidak bisa dihapus. Hasilnya tetap tersimpan.")
+        raise LifecycleError("Jadwal ini sudah dikerjakan siswa, jadi tidak bisa dihapus langsung. Arsipkan paketnya "
+                             "agar hilang dari daftar; hapus permanen oleh admin tersedia dari filter Arsip.")
     exam = schedule.exam
     with transaction.atomic():
         schedule.delete()
@@ -402,16 +419,42 @@ class ScheduleActionView(View):
         }
         return render(request, 'schedules/partials/schedule_reason_modal.html', context)
 
+    def _render_purge_modal(self, request, schedule, error='', typed=''):
+        return render(request, 'schedules/partials/schedule_purge_modal.html',
+                      {'schedule': schedule, 'error': error, 'typed': typed})
+
     def get(self, request, pk, action):
         schedule = get_object_or_404(Schedule.objects.select_related('exam'), pk=pk)
+        if action == 'purge':
+            if not archive.can_purge(_actor(request)):
+                return _error_toast_response("Hapus permanen hanya bisa dilakukan admin.", 403)
+            return self._render_purge_modal(request, schedule)
         if action not in REASON_MODAL_ACTIONS:
             return HttpResponse(status=404)
         return self._render_reason_modal(request, schedule, action)
+
+    def _purge(self, request, schedule, actor):
+        typed = request.POST.get('confirm_title', '')
+        try:
+            log = archive.purge_exam(schedule.exam_id, actor, typed)
+        except archive.ArchiveError as exc:
+            if exc.status == 403:
+                return _error_toast_response(exc.message, 403)
+            return self._render_purge_modal(request, schedule, error=exc.message, typed=typed)
+        res = _render_schedule_grid(
+            request, close_modal=True,
+            toast=f"Paket '{log.title}' dihapus permanen. Rekap nilai dan backup database tersimpan di folder arsip-hapus.")
+        res['HX-Retarget'] = '#schedule-list-grid-container'
+        res['HX-Reswap'] = 'outerHTML'
+        return res
 
     def post(self, request, pk, action):
         schedule = get_object_or_404(Schedule.objects.select_related('exam'), pk=pk)
         actor = _actor(request)
         exam_id = schedule.exam_id
+
+        if action == 'purge':
+            return self._purge(request, schedule, actor)
 
         if action in REASON_MODAL_ACTIONS:
             note = request.POST.get('note', '')
@@ -434,6 +477,8 @@ class ScheduleActionView(View):
             'verify': (lifecycle.verify_exam, "Naskah '{title}' terverifikasi. Ujian terbuka sesuai jam jadwal."),
             'withdraw': (lifecycle.withdraw_submission, "Pengajuan naskah '{title}' ditarik. Soal bisa diubah lagi."),
             'regenerate-token': (lifecycle.regenerate_token, "Token baru: {token}. Berlaku di semua jadwal paket ini."),
+            'archive': (archive.archive_exam, "Paket '{title}' diarsipkan. Nilainya tetap bisa dibuka di Hasil Ujian."),
+            'unarchive': (archive.unarchive_exam, "Paket '{title}' dikembalikan ke daftar jadwal."),
         }
         if action not in handlers:
             return HttpResponse(status=404)

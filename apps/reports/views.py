@@ -517,35 +517,38 @@ class ExamResultsExportView(View):
             return HttpResponseForbidden("Unauthorized")
 
         exam = get_object_or_404(exams_visible_to(request.user).select_related('subject', 'teacher'), id=exam_id)
-        related_sch_ids = list(exam.schedules.values_list('id', flat=True))
-        allowed_class_ids = _allowed_class_ids(request.user, exam)
+        return build_exam_results_export(exam, _allowed_class_ids(request.user, exam))
 
-        students_qs = expected_students_for_exam(exam, allowed_class_ids)
 
-        students = list(students_qs.order_by('class_room__name', 'full_name'))
-        session_map = get_student_best_session_map(exam, related_sch_ids)
+def build_exam_results_export(exam, allowed_class_ids=None):
+    """Rekap nilai dan analisis butir sebagai file Excel (dipakai unduhan dan backup sebelum hapus permanen)."""
+    related_sch_ids = list(exam.schedules.values_list('id', flat=True))
+    students_qs = expected_students_for_exam(exam, allowed_class_ids)
 
-        participants_data = []
-        for s in students:
-            session = session_map.get(str(s.id))
-            is_fin = session and session.status == 'finished'
-            participants_data.append({
-                'nis': s.nis,
-                'full_name': s.full_name,
-                'class_name': s.class_room.name if s.class_room else '-',
-                'status_label': 'Selesai' if is_fin else (session.get_status_display() if session else 'Belum Mulai'),
-                'correct_count': session.correct_n if session else 0,
-                'wrong_count': max(0, session.answered_n - session.correct_n) if session else 0,
-                'blank_count': max(0, session.total_n - session.answered_n) if session else 0,
-                'score': round(session.score, 1) if is_fin else 0.0,
-                'is_finished': is_fin,
-            })
+    students = list(students_qs.order_by('class_room__name', 'full_name'))
+    session_map = get_student_best_session_map(exam, related_sch_ids)
 
-        analysis_dict = calculate_distractor_analysis(
-            exam, related_sch_ids, student_ids=None if allowed_class_ids is None else [s.id for s in students]
-        )
-        return generate_exam_results_excel(exam, participants_data, analysis_dict['analysis_data'],
-                                           kkm=SchoolSetting.get_settings().kkm)
+    participants_data = []
+    for s in students:
+        session = session_map.get(str(s.id))
+        is_fin = session and session.status == 'finished'
+        participants_data.append({
+            'nis': s.nis,
+            'full_name': s.full_name,
+            'class_name': s.class_room.name if s.class_room else '-',
+            'status_label': 'Selesai' if is_fin else (session.get_status_display() if session else 'Belum Mulai'),
+            'correct_count': session.correct_n if session else 0,
+            'wrong_count': max(0, session.answered_n - session.correct_n) if session else 0,
+            'blank_count': max(0, session.total_n - session.answered_n) if session else 0,
+            'score': round(session.score, 1) if is_fin else 0.0,
+            'is_finished': is_fin,
+        })
+
+    analysis_dict = calculate_distractor_analysis(
+        exam, related_sch_ids, student_ids=None if allowed_class_ids is None else [s.id for s in students]
+    )
+    return generate_exam_results_excel(exam, participants_data, analysis_dict['analysis_data'],
+                                       kkm=SchoolSetting.get_settings().kkm)
 
 
 class DistractorAnalysisView(View):

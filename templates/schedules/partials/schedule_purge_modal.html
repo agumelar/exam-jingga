@@ -1,0 +1,81 @@
+{% comment %}
+Konfirmasi hapus permanen paket ujian yang sudah diarsipkan (hanya admin). Admin mengetik ulang nama paket.
+Server membuat rekap Excel dan backup database lebih dulu; bila gagal, modal dirender ulang dengan `error`.
+{% endcomment %}
+<div
+  x-data="reasonModal('purge-btn-{{ schedule.id }}')"
+  x-init="open()"
+  @keydown.escape.window="close()"
+  @keydown.tab="trapFocus($event)"
+  class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 font-sans"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="purge-modal-title"
+  aria-describedby="purge-modal-desc"
+>
+  <div
+    x-ref="panel"
+    @click.outside="close()"
+    class="bg-white dark:bg-stone-900 w-full max-w-md rounded-t-[2rem] sm:rounded-[2.5rem] p-6 sm:p-8 shadow-2xl text-left text-stone-900 dark:text-white border border-stone-200/80 dark:border-stone-800 max-h-[90vh] overflow-y-auto"
+  >
+    <h3 id="purge-modal-title" class="text-lg font-bold tracking-tight">Hapus Permanen Paket Ujian</h3>
+    <p class="text-sm text-stone-600 dark:text-stone-300 mt-1">
+      <strong class="text-stone-900 dark:text-white">{{ schedule.exam.title }}</strong>
+      &bull; {{ schedule.exam.subject.name|default:"Mapel belum diatur" }}
+    </p>
+    <p id="purge-modal-desc" class="text-sm text-stone-600 dark:text-stone-300 mt-3 leading-relaxed">
+      Semua jadwal, nilai, dan jawaban siswa di paket ini dihapus dari aplikasi. Sebelumnya, rekap nilai disimpan
+      sebagai file Excel dan database dibackup ke folder arsip-hapus. Kalau backup gagal, tidak ada yang dihapus.
+    </p>
+
+    <form
+      hx-post="{% url 'schedules:action' pk=schedule.id action='purge' %}"
+      hx-target="#modal-container"
+      hx-swap="innerHTML"
+      hx-disabled-elt="find button[type=submit]"
+      class="mt-5 space-y-4"
+      novalidate
+    >
+      {% csrf_token %}
+      <div>
+        <label for="purge-confirm" class="block text-sm font-semibold text-stone-800 dark:text-stone-100 mb-1.5">
+          Ketik nama paket untuk konfirmasi
+        </label>
+        <input
+          id="purge-confirm"
+          name="confirm_title"
+          type="text"
+          autocomplete="off"
+          x-ref="note"
+          value="{{ typed }}"
+          placeholder="{{ schedule.exam.title }}"
+          {% if error %}aria-invalid="true" aria-describedby="purge-confirm-error"{% endif %}
+          class="w-full min-h-11 px-3.5 rounded-2xl bg-stone-50 dark:bg-stone-800 border {% if error %}border-red-600 dark:border-red-400{% else %}border-stone-300 dark:border-stone-600{% endif %} text-base text-stone-900 dark:text-white placeholder:text-stone-500 dark:placeholder:text-stone-400 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-orange-600"
+        >
+        {% if error %}
+          <p id="purge-confirm-error" class="mt-2 text-sm text-red-700 dark:text-red-300 flex gap-1.5" role="alert">
+            <i data-lucide="alert-circle" class="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true"></i>
+            <span>{{ error }}</span>
+          </p>
+        {% endif %}
+      </div>
+
+      <div class="flex flex-col-reverse sm:flex-row gap-3 pt-1">
+        <button
+          type="button"
+          @click="close()"
+          class="flex-1 min-h-11 bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-100 rounded-2xl font-semibold text-sm transition cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+        >
+          Batal
+        </button>
+        <button
+          type="submit"
+          class="group flex-1 min-h-11 bg-red-700 hover:bg-red-800 disabled:opacity-60 disabled:cursor-wait text-white rounded-2xl font-semibold text-sm transition cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+        >
+          <span class="group-disabled:hidden">Hapus Permanen</span>
+          <span class="hidden group-disabled:inline">Membuat backup...</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

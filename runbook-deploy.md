@@ -81,6 +81,12 @@ Rahasia tidak boleh ditulis di repo atau dokumen.
 - Manual: `bash /opt/exam-jingga/scripts/backup_db.sh manual`.
 - `legacy-dev-db-20261007.sqlite3`: database sqlite development lama yang dulu tertinggal di folder aplikasi. Tidak dipakai produksi; namanya sengaja tidak diawali `exam-jingga-` agar tidak terhapus retensi 14 hari.
 
+### Arsip dan hapus permanen paket ujian
+- Paket yang semua jadwalnya sudah lewat bisa diarsipkan dari kartu jadwal (admin/kurikulum semua jenis, guru UH miliknya). Paket arsip hanya tampil di filter Arsip; nilainya tetap di Hasil Ujian dan bisa dikembalikan.
+- Hapus permanen hanya admin, hanya untuk paket yang sudah diarsipkan, dengan mengetik ulang nama paket. Aplikasi lebih dulu menyimpan rekap Excel dan menjalankan `backup_db.sh hapus-<paket> --arsip`; bila backup gagal, tidak ada yang dihapus. Catatan penghapusan ada di tabel `exam_purge_logs`.
+- File ada di `/opt/exam-jingga-backups/arsip-hapus/` dan disalin ke `<RCLONE_REMOTE>/arsip-hapus`. Folder ini tidak ikut dibersihkan otomatis (14 hari di server, 60 hari di Drive hanya berlaku untuk `database/` dan `media/`). Nilai wajib disimpan satu tahun pelajaran; hapus file arsip secara manual setelah itu.
+- Memulihkan satu paket: restore dump arsip ke database sementara, lalu ambil baris paketnya; rekap Excel bisa langsung dibuka tanpa restore.
+
 ### Mengaktifkan salinan ke Google Drive sekolah (sekali saja)
 1. Di VPS: `rclone config`, buat remote bertipe `drive` (misal `gdrive-sekolah`) dengan akun Google Drive sekolah. VPS tidak punya browser: jawab *Use auto config? n*, lalu jalankan `rclone authorize "drive"` di komputer yang punya browser dan tempel token yang dihasilkan.
 2. Tambahkan ke `.env`: `RCLONE_REMOTE=gdrive-sekolah:exam-jingga-backup`.

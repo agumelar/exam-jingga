@@ -4,6 +4,10 @@
 #
 #   bash scripts/backup_db.sh            # backup harian (dipanggil exam_jingga_backup.timer)
 #   bash scripts/backup_db.sh pra-migrasi  # dipanggil deploy sebelum migrate
+#   bash scripts/backup_db.sh hapus-<paket> --arsip  # dipanggil aplikasi sebelum hapus permanen paket
+#
+# Mode --arsip menyimpan dump di arsip-hapus/ bersama rekap Excel dari aplikasi. Folder itu tidak ikut
+# dibersihkan otomatis (nilai wajib disimpan satu tahun pelajaran) dan disalin utuh ke Drive.
 #
 # PostgreSQL 17 berjalan di container supabase-db, sedangkan pg_dump di host masih versi 16
 # (pg_dump menolak server yang lebih baru), jadi dump dijalankan di dalam container.
@@ -19,6 +23,7 @@ RETENTION_DAYS="${RETENTION_DAYS:-14}"
 REMOTE_RETENTION_DAYS="${REMOTE_RETENTION_DAYS:-60}"
 DB_CONTAINER="${DB_CONTAINER:-supabase-db}"
 LABEL="${1:-harian}"
+MODE="${2:-}"
 
 set -a
 # shellcheck disable=SC1091
@@ -26,9 +31,12 @@ set -a
 set +a
 
 umask 077
-mkdir -p "${BACKUP_DIR}"
+ARCHIVE_DIR="${BACKUP_DIR}/arsip-hapus"
+TARGET_DIR="${BACKUP_DIR}"
+[ "${MODE}" = "--arsip" ] && TARGET_DIR="${ARCHIVE_DIR}"
+mkdir -p "${TARGET_DIR}"
 STAMP="$(TZ=Asia/Jakarta date +%Y%m%d-%H%M)"
-DB_FILE="${BACKUP_DIR}/exam-jingga-db-${LABEL}-${STAMP}.dump"
+DB_FILE="${TARGET_DIR}/exam-jingga-db-${LABEL}-${STAMP}.dump"
 MEDIA_FILE="${BACKUP_DIR}/exam-jingga-media-${LABEL}-${STAMP}.tar.gz"
 
 echo "[backup] dump database ${DB_NAME} (skema public) -> ${DB_FILE}"
@@ -44,14 +52,21 @@ if [ "${LABEL}" = "harian" ] && [ -d "${APP_DIR}/media" ]; then
     tar -czf "${MEDIA_FILE}" -C "${APP_DIR}" media
 fi
 
-find "${BACKUP_DIR}" -name 'exam-jingga-*' -type f -mtime "+${RETENTION_DAYS}" -delete
+# Hanya backup rutin di folder utama; arsip-hapus disimpan sampai dihapus manual
+find "${BACKUP_DIR}" -maxdepth 1 -name 'exam-jingga-*' -type f -mtime "+${RETENTION_DAYS}" -delete
 
 if [ -n "${RCLONE_REMOTE:-}" ]; then
     if command -v rclone > /dev/null; then
         echo "[backup] salin ke ${RCLONE_REMOTE}"
-        rclone copy "${DB_FILE}" "${RCLONE_REMOTE}/database"
-        [ -f "${MEDIA_FILE}" ] && rclone copy "${MEDIA_FILE}" "${RCLONE_REMOTE}/media"
-        rclone delete --min-age "${REMOTE_RETENTION_DAYS}d" "${RCLONE_REMOTE}" || true
+        if [ "${MODE}" = "--arsip" ]; then
+            rclone copy "${ARCHIVE_DIR}" "${RCLONE_REMOTE}/arsip-hapus"
+        else
+            rclone copy "${DB_FILE}" "${RCLONE_REMOTE}/database"
+            [ -f "${MEDIA_FILE}" ] && rclone copy "${MEDIA_FILE}" "${RCLONE_REMOTE}/media"
+        fi
+        # Retensi Drive hanya untuk backup rutin, bukan arsip-hapus
+        rclone delete --min-age "${REMOTE_RETENTION_DAYS}d" "${RCLONE_REMOTE}/database" || true
+        rclone delete --min-age "${REMOTE_RETENTION_DAYS}d" "${RCLONE_REMOTE}/media" || true
     else
         echo "[backup] PERINGATAN: RCLONE_REMOTE diisi tetapi rclone belum terpasang" >&2
     fi

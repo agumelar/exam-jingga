@@ -55,6 +55,7 @@ HTMX Target Grid Container for Schedules
           {% elif status_filter == 'terjadwal' %}Belum ada naskah terverifikasi yang menunggu jam mulai.
           {% elif status_filter == 'draft' %}Tidak ada naskah yang masih menunggu soal atau verifikasi.
           {% elif status_filter == 'selesai' %}Belum ada jadwal yang selesai.
+          {% elif status_filter == 'arsip' %}Belum ada paket yang diarsipkan.
           {% else %}Tidak ada jadwal ujian yang ditemukan.{% endif %}
         </p>
         <p class="text-sm text-stone-600 dark:text-stone-400 mt-1 font-normal">

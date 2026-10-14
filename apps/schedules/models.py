@@ -104,6 +104,15 @@ class Exam(models.Model):
         help_text="Pengguna yang terakhir mengembalikan atau membuka kunci naskah"
     )
     reviewed_at = models.DateTimeField(null=True, blank=True)
+    # Paket yang sudah lewat bisa diarsipkan agar tidak menumpuk di daftar jadwal; nilainya tetap tersimpan
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='archived_exams',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -316,3 +325,30 @@ class ScheduleTimeChange(models.Model):
     class Meta:
         db_table = 'schedule_time_changes'
         ordering = ['created_at']
+
+
+class ExamPurgeLog(models.Model):
+    """
+    Catatan paket ujian yang dihapus permanen. Disimpan tanpa relasi ke paket (paketnya sudah tidak ada),
+    lengkap dengan lokasi backup database dan file Excel rekap nilai yang dibuat sebelum penghapusan.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    exam_id_snapshot = models.UUIDField()
+    title = models.CharField(max_length=255)
+    exam_type = models.CharField(max_length=20)
+    subject_name = models.CharField(max_length=255, blank=True, default='')
+    teacher_name = models.CharField(max_length=255, blank=True, default='')
+    classes = models.TextField(blank=True, default='')
+    first_start = models.DateTimeField(null=True, blank=True)
+    schedules_count = models.IntegerField(default=0)
+    sessions_count = models.IntegerField(default=0)
+    answers_count = models.IntegerField(default=0)
+    backup_file = models.CharField(max_length=500, blank=True, default='')
+    export_file = models.CharField(max_length=500, blank=True, default='')
+    deleted_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='purged_exams')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'exam_purge_logs'
+        ordering = ['-created_at']

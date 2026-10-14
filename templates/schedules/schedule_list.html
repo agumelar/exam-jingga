@@ -115,6 +115,7 @@
       hx-get="{% url 'schedules:list' %}"
       hx-target="#schedule-list-grid-container"
       hx-swap="outerHTML"
+      hx-push-url="true"
       hx-trigger="submit, keyup changed delay:300ms from:#schedule-search-input, change from:#schedule-date-select, change from:#schedule-status-select"
       class="flex flex-col sm:flex-row gap-4 items-center"
     >
@@ -176,6 +177,7 @@
           <option value="terjadwal">Terjadwal</option>
           <option value="aktif">Berlangsung</option>
           <option value="selesai">Selesai</option>
+          <option value="arsip">Arsip</option>
         </select>
       </div>
     </form>

@@ -61,6 +61,11 @@ M3 Elevated Schedule Card with 100% UI fidelity matching React ScheduleCard.jsx
     <!-- Fase jadwal: status naskah + jam -->
     <div>
       {% include 'schedules/partials/phase_badge.html' with s=s %}
+      {% if s.is_archived %}
+        <span class="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-stone-200 dark:bg-stone-700 text-stone-800 dark:text-stone-100 text-xs font-semibold">
+          <i data-lucide="archive" class="w-3.5 h-3.5" aria-hidden="true"></i>Diarsipkan
+        </span>
+      {% endif %}
     </div>
 
     <!-- Session Badge for PAS/PAT/SAJ -->
@@ -281,6 +286,48 @@ M3 Elevated Schedule Card with 100% UI fidelity matching React ScheduleCard.jsx
           <span>Buka Kunci Naskah</span>
         </button>
       {% endif %}
+    {% endif %}
+
+    <!-- Arsip: paket yang sudah lewat disembunyikan dari daftar; nilainya tetap di Hasil Ujian -->
+    {% if s.can_archive %}
+      <button
+        type="button"
+        id="archive-btn-{{ s.id }}"
+        hx-post="{% url 'schedules:action' pk=s.id action='archive' %}"
+        hx-target="#schedule-list-grid-container"
+        hx-swap="outerHTML"
+        hx-confirm="Arsipkan paket '{{ s.exam.title }}'? Paket hilang dari daftar jadwal, nilainya tetap bisa dibuka di Hasil Ujian."
+        class="w-full min-h-11 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-100 border border-stone-300 dark:border-stone-600 py-3.5 rounded-2xl font-semibold text-xs tracking-wide flex items-center justify-center gap-2 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+      >
+        <i data-lucide="archive" class="w-4 h-4" aria-hidden="true"></i>
+        <span>Arsipkan</span>
+      </button>
+    {% endif %}
+    {% if s.can_unarchive %}
+      <button
+        type="button"
+        id="unarchive-btn-{{ s.id }}"
+        hx-post="{% url 'schedules:action' pk=s.id action='unarchive' %}"
+        hx-target="#schedule-list-grid-container"
+        hx-swap="outerHTML"
+        class="w-full min-h-11 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-100 border border-stone-300 dark:border-stone-600 py-3.5 rounded-2xl font-semibold text-xs tracking-wide flex items-center justify-center gap-2 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+      >
+        <i data-lucide="archive-restore" class="w-4 h-4" aria-hidden="true"></i>
+        <span>Kembalikan dari Arsip</span>
+      </button>
+    {% endif %}
+    {% if s.can_purge %}
+      <button
+        type="button"
+        id="purge-btn-{{ s.id }}"
+        hx-get="{% url 'schedules:action' pk=s.id action='purge' %}"
+        hx-target="#modal-container"
+        hx-swap="innerHTML"
+        class="w-full min-h-11 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-950/70 text-red-800 dark:text-red-200 border border-red-300 dark:border-red-800 py-3.5 rounded-2xl font-semibold text-xs tracking-wide flex items-center justify-center gap-2 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+      >
+        <i data-lucide="trash-2" class="w-4 h-4" aria-hidden="true"></i>
+        <span>Hapus Permanen</span>
+      </button>
     {% endif %}
 
     <!-- Button: Info Peserta -->
