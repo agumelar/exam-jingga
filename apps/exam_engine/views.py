@@ -30,6 +30,7 @@ from apps.exam_engine.utils import (
 logger = logging.getLogger(__name__)
 
 DASHBOARD_URL = '/student/dashboard/'
+FINISH_GRACE_SECONDS = 10
 
 
 def get_current_student(request):
@@ -392,6 +393,14 @@ class FinishExamView(View):
         if session.status == 'locked':
             # Sesi terkunci karena pelanggaran diselesaikan oleh admin/kurikulum, bukan oleh siswa
             messages.error(request, "Ujian Anda terkunci. Temui bagian kurikulum.")
+            return redirect(f"/exam/session/{session.id}/")
+        # Aturan sekolah: siswa tidak menyelesaikan ujian sendiri; formulir ini dikirim otomatis saat
+        # hitung mundur habis. Selisih beberapa detik jam HP dan server tetap diterima.
+        if session.status != 'finished' and session.calculate_remaining_seconds() > FINISH_GRACE_SECONDS:
+            message = "Ujian belum bisa diselesaikan. Jawaban terkirim otomatis saat waktu habis."
+            if request.headers.get('HX-Request'):
+                return HttpResponse(message, status=403)
+            messages.info(request, message)
             return redirect(f"/exam/session/{session.id}/")
         score = grade_exam_session(session)
         if request.headers.get('HX-Request'):

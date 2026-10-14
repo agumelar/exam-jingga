@@ -113,6 +113,12 @@ def _answer(client, session, question, letter):
                        {'question_id': question.id, 'chosen_answer': letter}, **HX)
 
 
+def _time_up(session):
+    # Aturan sekolah: tidak ada tombol selesai; formulir terkirim otomatis saat hitung mundur habis
+    duration = Schedule.objects.get(pk=session.schedule_id).exam.duration
+    ExamSession.objects.filter(pk=session.pk).update(started_at=timezone.now() - timedelta(minutes=duration))
+
+
 def _wrong_letter(question):
     return next(x for x in 'ABCDE' if x != question.correct_answer)
 
@@ -205,10 +211,14 @@ def test_uh_trial_from_question_bank_to_results(client, school):
         assert all(sorted(order) == list('ABCDE') for _, order in layout)
     assert _layout(sesi1) != _layout(sesi2)
 
-    # 11. Siswa 1 menjawab semua benar lalu selesai
+    # 11. Siswa 1 menjawab semua benar; tombol selesai ditolak sebelum waktu habis, lalu terkirim otomatis
     client.force_login(s.siswa1.user)
     for q in soal:
         assert _answer(client, sesi1, q, q.correct_answer).status_code == 200
+    early = client.post(reverse('exam_engine:finish_exam', args=[sesi1.id]), **HX)
+    sesi1.refresh_from_db()
+    assert (early.status_code, sesi1.status) == (403, 'active')
+    _time_up(sesi1)
     client.post(reverse('exam_engine:finish_exam', args=[sesi1.id]), **HX)
     sesi1.refresh_from_db()
     assert (sesi1.status, sesi1.score) == ('finished', 100)
@@ -340,6 +350,7 @@ def test_pts_trial_review_and_session_actions(client, school):
     # 7. Siswa 1 selesai normal
     for q in soal:
         _answer(client, sesi1, q, q.correct_answer)
+    _time_up(sesi1)
     client.post(reverse('exam_engine:finish_exam', args=[sesi1.id]), **HX)
     sesi1.refresh_from_db()
     assert (sesi1.status, sesi1.score) == ('finished', 100)
@@ -445,6 +456,7 @@ def test_pas_trial_collaboration_lock_and_unlock(client, school):
     assert StudentAnswer.objects.get(session=sesi, question=soal[0]).chosen_answer == soal[0].correct_answer
     for q in soal[1:]:
         _answer(client, sesi, q, q.correct_answer)
+    _time_up(sesi)
     client.post(reverse('exam_engine:finish_exam', args=[sesi.id]), **HX)
     sesi.refresh_from_db()
     assert (sesi.status, sesi.score) == ('finished', 100)

@@ -341,6 +341,9 @@ def test_full_cbt_e2e_workflow_lifecycle():
     # =========================================================================
     # STAGE 8: Student Finishes Exam (Score Calculation and Grading)
     # =========================================================================
+    # Aturan sekolah: tidak ada tombol selesai; formulir terkirim otomatis saat hitung mundur habis
+    ExamSession.objects.filter(pk=exam_session.pk).update(
+        started_at=timezone.now() - timedelta(minutes=exam_session.schedule.exam.duration))
     finish_resp = student_client.post(
         f'/exam/session/{exam_session.id}/finish/',
         HTTP_HX_REQUEST='true'

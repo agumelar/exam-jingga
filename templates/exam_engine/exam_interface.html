@@ -81,16 +81,6 @@
           <span x-text="formattedTime"></span>
         </div>
 
-        <!-- Selesai Header Button (M3 Outlined/Tonal Pill) -->
-        <button
-          type="button"
-          @click="showFinishModal = true"
-          class="hidden sm:inline-flex items-center gap-1.5 bg-red-50 dark:bg-red-950/30 text-red-600 hover:bg-red-600 hover:text-white px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer select-none border border-red-200 dark:border-red-900/40"
-        >
-          <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
-          <span>Selesai</span>
-        </button>
-
       </div>
     </div>
   </header>
@@ -149,14 +139,9 @@
           </div>
         </div>
 
-        <!-- Finish Submission Button in Sidebar -->
-        <button
-          type="button"
-          @click="showFinishModal = true"
-          class="mt-6 w-full py-3.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-semibold text-xs hover:bg-orange-600 hover:text-white transition-all shadow-md cursor-pointer"
-        >
-          Kirim Jawaban
-        </button>
+        <p class="mt-6 p-3 rounded-2xl bg-slate-100 dark:bg-zinc-800 text-xs font-medium text-slate-600 dark:text-zinc-300 leading-relaxed">
+          Jawaban terkirim otomatis saat waktu habis. Gunakan sisa waktu untuk memeriksa kembali jawabanmu.
+        </p>
       </div>
     </aside>
   </div>
@@ -201,15 +186,15 @@
         <span x-text="activeOrder"></span>
       </button>
 
-      <!-- Tombol Selanjutnya / Selesai (FAB Style) -->
+      <!-- Tombol Lanjut, atau Periksa di soal terakhir -->
       <template x-if="activeOrder >= totalCount">
         <button
           type="button"
-          @click="showFinishModal = true"
-          class="flex-1 py-3 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-semibold text-xs flex items-center justify-center gap-1 shadow-md shadow-emerald-600/25 active:scale-95 transition-all cursor-pointer m3-state-layer"
+          @click="isDrawerOpen = true"
+          class="flex-1 py-3 px-3 bg-slate-800 hover:bg-slate-700 dark:bg-zinc-100 dark:text-zinc-900 text-white rounded-2xl font-semibold text-xs flex items-center justify-center gap-1 active:scale-95 transition-all cursor-pointer m3-state-layer"
         >
-          <i data-lucide="send" class="w-3.5 h-3.5"></i>
-          <span>Kirim</span>
+          <i data-lucide="list-checks" class="w-4 h-4"></i>
+          <span>Periksa</span>
         </button>
       </template>
 
@@ -250,52 +235,10 @@
     </div>
   </div>
 
-  <!-- Finish Confirmation Modal -->
-  <div 
-    x-show="showFinishModal"
-    x-cloak
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200"
-    @click="showFinishModal = false"
-  >
-    <div 
-      class="bg-white dark:bg-zinc-950 w-full max-w-md rounded-[3rem] p-8 sm:p-10 shadow-2xl relative border border-slate-100 dark:border-zinc-800 text-center animate-in zoom-in-95 duration-200"
-      @click.stop
-    >
-      <div class="inline-flex p-4 bg-orange-100 dark:bg-orange-950/40 text-orange-600 rounded-3xl mb-4 shadow-lg shadow-orange-600/10">
-        <i data-lucide="alert-triangle" class="w-9 h-9"></i>
-      </div>
-      
-      <h3 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white mb-2">
-        Selesaikan Ujian?
-      </h3>
-      <p class="text-xs font-normal text-slate-500 dark:text-zinc-400 mb-6 leading-relaxed">
-        Pastikan Anda telah memeriksa kembali seluruh jawaban sebelum mengirim lembar ujian ke server. Tindakan ini tidak dapat dibatalkan.
-      </p>
-
-      <form 
-        id="finish-exam-form"
-        action="{% url 'exam_engine:finish_exam' session.id %}" 
-        method="POST"
-        class="space-y-3"
-      >
-        {% csrf_token %}
-        <button
-          type="submit"
-          class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-semibold text-xs tracking-wide shadow-lg shadow-emerald-600/25 transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-2"
-        >
-          <i data-lucide="send" class="w-4 h-4"></i>
-          <span>Ya, Selesaikan & Kirim Jawaban</span>
-        </button>
-        <button
-          type="button"
-          @click="showFinishModal = false"
-          class="w-full py-3.5 bg-slate-100 dark:bg-zinc-900 hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 rounded-2xl font-semibold text-xs tracking-wide transition-all cursor-pointer"
-        >
-          Batal, Periksa Dulu
-        </button>
-      </form>
-    </div>
-  </div>
+  <!-- Tidak ada tombol selesai (aturan sekolah): formulir ini hanya dikirim otomatis saat waktu habis -->
+  <form id="finish-exam-form" action="{% url 'exam_engine:finish_exam' session.id %}" method="POST" class="hidden">
+    {% csrf_token %}
+  </form>
 
   <!-- Anti-Cheat Red Screen Lock Container (Triggered automatically upon 2+ violations) -->
   <div id="lock-container">
@@ -338,7 +281,6 @@
       fontSize: 'normal',
       isDrawerOpen: false,
       lightboxImg: null,
-      showFinishModal: false,
       saveFailed: false,
       lastCheatTime: 0,
       blurTimer: null,

@@ -486,7 +486,8 @@ def test_finish_exam_view_and_score_calculation(client):
 
     client.force_login(student_user)
 
-    # Submit via HTMX
+    # Aturan sekolah: tidak ada tombol selesai; formulir terkirim otomatis saat hitung mundur habis
+    ExamSession.objects.filter(pk=session.pk).update(started_at=timezone.now() - timedelta(minutes=60))
     res = client.post(
         reverse('exam_engine:finish_exam', kwargs={'session_id': session.id}),
         HTTP_HX_REQUEST='true'
