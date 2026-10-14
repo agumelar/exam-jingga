@@ -382,7 +382,8 @@ def parse_and_sync_user(tokens: dict):
             # Username Keycloak guru adalah NIP; akun lama Exam tetap memakai nama pendeknya
             token_nip = username if re.fullmatch(r'\d{16,18}', username) else None
             teacher = (
-                (sso_uuid and Teacher.objects.filter(sso_id=sso_uuid).first())
+                Teacher.objects.filter(user=user).first()
+                or (sso_uuid and Teacher.objects.filter(sso_id=sso_uuid).first())
                 or (token_nip and Teacher.objects.filter(nip=token_nip).first())
                 or Teacher.objects.filter(email__iexact=user.email).first()
                 or Teacher.objects.filter(nip=user.username).first()
@@ -402,6 +403,13 @@ def parse_and_sync_user(tokens: dict):
                 if not teacher.nip:
                     teacher.full_name = user.full_name or teacher.full_name
                 teacher.save(update_fields=fields)
+            elif user.role == Role.GURU:
+                # Guru yang belum punya data guru (misalnya tanpa NIP atau jenis staf kosong di data pusat)
+                # dibuatkan saat login SSO pertama agar kurikulum bisa langsung memberi penugasan
+                email_taken = not user.email or Teacher.objects.filter(email__iexact=user.email).exists()
+                Teacher.objects.create(user=user, full_name=user.full_name or user.username, nip=token_nip,
+                                       sso_id=sso_uuid, email=None if email_taken else user.email, role_level='guru')
+                logger.info(f"Data guru dibuat saat login SSO untuk akun {user.pk}")
     except Exception as exc:
         logger.warning(f"Tidak dapat menautkan profil master data untuk {user.username}: {exc}")
 

@@ -254,3 +254,58 @@ def test_sso_login_still_names_teacher_without_nip():
     keycloak_auth.parse_and_sync_user({'id_token': _jwt(payload)})
     teacher.refresh_from_db()
     assert teacher.full_name == 'Nama Baru'
+
+
+# ==============================================================================
+# Guru tanpa data guru: dibuat saat login SSO pertama; sinkron menautkan akun yang sudah ada
+# ==============================================================================
+
+@pytest.mark.django_db
+def test_first_login_creates_teacher_profile_with_nip():
+    user = _login(uuid.uuid4(), NIP_C)
+    teacher = Teacher.objects.get(user=user)
+    assert (teacher.nip, teacher.role_level) == (NIP_C, 'guru')
+
+
+@pytest.mark.django_db
+def test_first_login_creates_teacher_profile_without_nip():
+    # Guru tanpa NIP login dengan username biasa (akun yang sama dipakai di ASIK)
+    user = _login(uuid.uuid4(), 'tauqi')
+    teacher = Teacher.objects.get(user=user)
+    assert teacher.nip is None
+    _login(user.sso_id, 'tauqi')
+    assert Teacher.objects.filter(user=user).count() == 1
+
+
+@pytest.mark.django_db
+def test_login_does_not_create_teacher_for_students_or_admins():
+    _login(uuid.uuid4(), '9999000002', roles=())
+    payload = {'sub': str(uuid.uuid4()), 'preferred_username': 'admin-exam', 'name': 'Admin',
+               'resource_access': {'exam-jingga': {'roles': ['admin']}}}
+    keycloak_auth.parse_and_sync_user({'id_token': _jwt(payload)})
+    assert not Teacher.objects.exists()
+
+
+@pytest.mark.django_db
+def test_sync_then_login_gives_one_teacher():
+    MasterDataSyncService().sync_teachers(raw_staff=[STAFF[1]])
+    user = _login(uuid.uuid4(), NIP_B)
+    assert Teacher.objects.filter(nip=NIP_B).count() == 1
+    assert Teacher.objects.get(nip=NIP_B).user == user
+
+
+@pytest.mark.django_db
+def test_sync_links_new_teacher_to_existing_nip_account():
+    # Akun SSO sudah ada (pernah login sebelum perbaikan) tetapi belum punya data guru
+    existing = User.objects.create_user(username=NIP_B, role=Role.GURU, sso_id=uuid.uuid4())
+    MasterDataSyncService().sync_teachers(raw_staff=[STAFF[1]])
+    assert Teacher.objects.get(nip=NIP_B).user == existing
+
+
+@pytest.mark.django_db
+def test_sync_reports_staff_with_empty_type():
+    staff = [{'nip': NIP_A, 'fullName': 'Suhendar Aryadi', 'ptkType': None},
+             {'nip': None, 'fullName': 'M Tauqi', 'ptkType': None}]
+    res = MasterDataSyncService().sync_teachers(raw_staff=staff)
+    assert res['empty_type'] == ['M Tauqi', 'Suhendar Aryadi']
+    assert 'Jenis staf kosong' in res['message']

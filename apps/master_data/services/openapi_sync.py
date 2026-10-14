@@ -346,8 +346,11 @@ class MasterDataSyncService:
             for nip, name in central_teachers.items():
                 if nip in exam_nips or name in ambiguous:
                     continue
-                # Akun login dibuat saat guru pertama kali login SSO dengan NIP-nya
-                Teacher.objects.create(nip=nip, full_name=name, role_level='guru')
+                # Tautkan ke akun SSO yang sudah ada (username = NIP) bila belum punya data guru;
+                # selain itu akun tertaut saat guru pertama kali login SSO dengan NIP-nya
+                account = User.objects.filter(username=nip, teacher_profile__isnull=True).first()
+                Teacher.objects.create(nip=nip, full_name=name, role_level='guru', user=account,
+                                       sso_id=account.sso_id if account else None)
                 created.append(name)
 
             # Nama guru mengikuti data pusat (termasuk guru yang tercatat dengan jabatan lain, misalnya Kepala Sekolah)
@@ -361,6 +364,13 @@ class MasterDataSyncService:
         missing = sorted(Teacher.objects.exclude(Q(nip=None) | Q(nip=''))
                          .exclude(nip__in=central_nips).values_list('full_name', flat=True))
 
+        # Staf dengan jenis kosong tidak ikut disinkron; dilaporkan bila belum ada di Exam agar data pusat dilengkapi
+        exam_nips = set(Teacher.objects.exclude(Q(nip=None) | Q(nip='')).values_list('nip', flat=True))
+        empty_type = sorted(
+            t.get('fullName') or t.get('full_name') or '-' for t in raw_staff
+            if not str(t.get('ptkType') or '').strip() and real_nip(t.get('nip')) not in exam_nips
+        )
+
         message = f"{len(matched) + len(linked)} guru pusat cocok dengan guru Exam lewat NIP."
         if linked:
             message += f" NIP ditautkan lewat nama: {', '.join(sorted(linked))}."
@@ -370,6 +380,9 @@ class MasterDataSyncService:
             message += f" Nama ganda, isi NIP manual di Master Guru: {', '.join(sorted(ambiguous))}."
         if missing:
             message += f" Tidak ada lagi di data pusat (tidak diubah): {', '.join(missing)}."
+        if empty_type:
+            message += (f" Jenis staf kosong di data pusat, belum disinkron (lengkapi di Data Admin; guru yang "
+                        f"sudah punya akun SSO otomatis muncul setelah login ke Exam): {', '.join(empty_type)}.")
         return {
             'success': True,
             'count': len(matched) + len(linked) + len(created),
@@ -377,6 +390,7 @@ class MasterDataSyncService:
             'created': sorted(created),
             'ambiguous': sorted(ambiguous),
             'missing_from_central': missing,
+            'empty_type': empty_type,
             'message': message,
         }
 
