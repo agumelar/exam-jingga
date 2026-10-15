@@ -257,7 +257,7 @@ class BankSoalView(View):
         teachers_data = []
         if is_staff_admin:
             subjects = Subject.objects.all().order_by('name')
-            all_teachers = Teacher.objects.prefetch_related('assignments__class_room', 'assignments__subject').all().order_by('full_name')
+            all_teachers = Teacher.objects.active().prefetch_related('assignments__class_room', 'assignments__subject').order_by('full_name')
             teachers_data = get_teachers_subject_mapping(all_teachers)
             subjects_data = get_subjects_level_mapping(subjects)
             if selected_subject:
@@ -361,7 +361,7 @@ class QuestionCreateView(View):
 
         if is_staff_admin:
             subjects = Subject.objects.all().order_by('name')
-            all_teachers = Teacher.objects.prefetch_related('assignments__class_room', 'assignments__subject').all().order_by('full_name')
+            all_teachers = Teacher.objects.active().prefetch_related('assignments__class_room', 'assignments__subject').order_by('full_name')
             teachers_data = get_teachers_subject_mapping(all_teachers)
             subjects_data = get_subjects_level_mapping(subjects)
         else:
@@ -456,7 +456,7 @@ class QuestionCreateView(View):
 
         # Form errors handling
         subjects = Subject.objects.all().order_by('name')
-        all_teachers = Teacher.objects.prefetch_related('assignments__class_room', 'assignments__subject').all().order_by('full_name')
+        all_teachers = Teacher.objects.active().prefetch_related('assignments__class_room', 'assignments__subject').order_by('full_name')
         teachers_data = get_teachers_subject_mapping(all_teachers) if is_staff_admin else []
         teachers = all_teachers if is_staff_admin else (Teacher.objects.filter(id=teacher.id) if teacher else Teacher.objects.none())
         subjects_data = get_subjects_level_mapping(subjects, teacher=teacher if not is_staff_admin else None)
@@ -521,7 +521,7 @@ class QuestionEditView(View):
 
         if is_staff_admin:
             subjects = Subject.objects.all().order_by('name')
-            all_teachers = Teacher.objects.prefetch_related('assignments__class_room', 'assignments__subject').all().order_by('full_name')
+            all_teachers = Teacher.objects.filter(Q(user=None) | Q(user__is_active=True) | Q(pk=question.created_by_id)).prefetch_related('assignments__class_room', 'assignments__subject').order_by('full_name')
             teachers_data = get_teachers_subject_mapping(all_teachers)
             subjects_data = get_subjects_level_mapping(subjects)
         else:
@@ -615,7 +615,7 @@ class QuestionEditView(View):
             return redirect('questions:bank_soal')
 
         subjects = Subject.objects.all().order_by('name')
-        all_teachers = Teacher.objects.prefetch_related('assignments__class_room', 'assignments__subject').all().order_by('full_name')
+        all_teachers = Teacher.objects.filter(Q(user=None) | Q(user__is_active=True) | Q(pk=question.created_by_id)).prefetch_related('assignments__class_room', 'assignments__subject').order_by('full_name')
         teachers_data = get_teachers_subject_mapping(all_teachers) if is_staff_admin else []
         teachers = all_teachers if is_staff_admin else (Teacher.objects.filter(id=teacher.id) if teacher else Teacher.objects.none())
         subjects_data = get_subjects_level_mapping(subjects, teacher=teacher if not is_staff_admin else None)

@@ -141,7 +141,12 @@
           {% for t in teachers %}
             <tr class="hover:bg-stone-50/80 dark:hover:bg-stone-800/50 transition-colors">
               <td class="p-4 pl-6 text-stone-400 font-mono text-xs">{{ forloop.counter }}</td>
-              <td class="p-4 font-semibold text-stone-900 dark:text-white">{{ t.full_name }}</td>
+              <td class="p-4 font-semibold text-stone-900 dark:text-white">
+                {{ t.full_name }}
+                {% if t.user and not t.user.is_active %}
+                  <span class="ml-2 inline-block px-2 py-0.5 rounded-full bg-stone-200 dark:bg-stone-700 text-stone-800 dark:text-stone-100 text-xs font-semibold align-middle">Nonaktif</span>
+                {% endif %}
+              </td>
               <td class="p-4 font-mono text-xs text-stone-500 dark:text-stone-400">{{ t.nip|default:'-' }}</td>
               <td class="p-4 font-mono text-xs text-stone-500 dark:text-stone-400">{{ t.email|default:'-' }}</td>
               <td class="p-4 pr-6 text-center">

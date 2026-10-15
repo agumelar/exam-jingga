@@ -59,8 +59,20 @@ class ClassRoom(models.Model):
         return self.name
 
 
+class TeacherQuerySet(models.QuerySet):
+    def active(self):
+        """
+        Guru yang boleh dipilih untuk penugasan, jadwal, dan penulis soal: belum punya akun (guru baru dari
+        data pusat, akunnya tertaut saat login pertama) atau akunnya aktif. Guru pindah tugas dinonaktifkan
+        lewat akunnya; data dan soalnya tetap tersimpan.
+        """
+        return self.filter(models.Q(user=None) | models.Q(user__is_active=True))
+
+
 class Teacher(models.Model):
     """Data Guru & Tenaga Pendidik / Pembuat Soal."""
+    objects = TeacherQuerySet.as_manager()
+
     ROLE_CHOICES = [
         ('admin', 'Admin'),
         ('kurikulum', 'Kurikulum'),

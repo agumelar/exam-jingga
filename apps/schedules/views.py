@@ -212,7 +212,7 @@ class ScheduleListView(View):
         available_levels = [10, 11, 12]
         available_classes = ClassRoom.objects.all().order_by('name')
         available_subjects = Subject.objects.all().order_by('name')
-        available_teachers = Teacher.objects.all().order_by('full_name')
+        available_teachers = Teacher.objects.active().order_by('full_name')
 
         context = {
             'schedules': enriched_schedules,

@@ -32,7 +32,7 @@ class ScheduleForm(forms.Form):
     level = forms.TypedChoiceField(choices=Exam.LEVEL_CHOICES, coerce=int)
     subject = forms.ModelChoiceField(queryset=Subject.objects.all())
     class_room = forms.ModelChoiceField(queryset=ClassRoom.objects.all(), required=False)
-    teacher = forms.ModelChoiceField(queryset=Teacher.objects.all(), required=False)
+    teacher = forms.ModelChoiceField(queryset=Teacher.objects.active(), required=False)
     start_time = forms.DateTimeField(input_formats=['%Y-%m-%dT%H:%M'])
     token = forms.CharField(max_length=10, required=False)
     duration = forms.IntegerField(initial=60, min_value=1, max_value=600)

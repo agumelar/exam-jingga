@@ -501,7 +501,7 @@ class TeacherAssignmentListView(View):
 
         context = {
             'assignments': qs,
-            'teachers': Teacher.objects.all().order_by('full_name'),
+            'teachers': Teacher.objects.active().order_by('full_name'),
             'subjects': Subject.objects.all().order_by('name'),
             'classes': ClassRoom.objects.all().order_by('level', 'name'),
             'search_query': q,
