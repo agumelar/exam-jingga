@@ -9,7 +9,7 @@
 * **Nama Proyek**: Exam Jingga (Aplikasi CBT Ujian Sekolah SMKN 1 Rongga)
 * **Arsitektur**: **DATH Modern Monolith** (Django 5.1 LTS, Alpine.js, Tailwind CSS v4, HTMX) menggantikan arsitektur SPA React lama.
 * **Tujuan Utama**: Membangun sistem CBT sekolah yang kokoh, zero-CORS browser dependency, offline-first vendor assets, real-time HTMX auto-save & polling, mitigasi beban 722+ siswa serentak di VPS ARM64, integrasi Keycloak SSO & OpenAPI Central Data Master, serta otomatisasi deployment produksi dengan Gunicorn + WhiteNoise + Nginx + Systemd.
-* **Status Keseluruhan**: Audit menyeluruh Oktober 2026 (Task 17-25) selesai: alur status naskah, keamanan login SSO-only, integritas ujian siswa, hak akses per peran, jadwal/kuota/pemilihan soal, laporan & logistik, master data & bank soal, backup & deploy. **418 / 418 test lulus (SQLite dan PostgreSQL 17).** Detail per fase ada di bagian 3 dan `log.md`; aturan operasional di `runbook-deploy.md`.
+* **Status Keseluruhan**: Audit menyeluruh Oktober 2026 (Task 17-25) selesai: alur status naskah, keamanan login SSO-only, integritas ujian siswa, hak akses per peran, jadwal/kuota/pemilihan soal, laporan & logistik, master data & bank soal, backup & deploy. **419 / 419 test lulus (SQLite dan PostgreSQL 17).** Detail per fase ada di bagian 3 dan `log.md`; aturan operasional di `runbook-deploy.md`.
 
 ---
 
@@ -79,7 +79,7 @@
 | **Task 41: Arsip dan Hapus Permanen Paket** | Keputusan pemilik: nilai disimpan satu tahun pelajaran; dua lapis. Arsip (`Exam.archived_at`) untuk paket yang semua jadwalnya lewat dan tanpa sesi berjalan: admin/kurikulum semua jenis, guru UH miliknya; filter Arsip, bisa dikembalikan, nilai tetap di Hasil Ujian. Hapus permanen hanya admin/platform admin, hanya paket arsip, ketik ulang nama paket; aplikasi menyimpan rekap Excel lalu `backup_db.sh hapus-<paket> --arsip` (dump + salin ke Drive); gagal = tidak ada yang dihapus; tercatat di `exam_purge_logs`. `backup_db.sh`: retensi lokal `-maxdepth 1`, retensi Drive hanya `database/` dan `media/`, sehingga `arsip-hapus` aman. Migrasi `schedules.0006`. | ✅ |
 | **Task 42: Arsip Massal** | Toolbar admin di Jadwal Ujian punya tombol Arsipkan Terpilih (mengarsipkan paket dari jadwal terpilih, melaporkan yang dilewati); pesan hapus massal yang melewati jadwal terpakai kini menyarankan arsip. | ✅ |
 | **Task 43: Hapus Permanen Massal** | Di filter Arsip, admin mencentang beberapa paket lalu Hapus Permanen Terpilih dengan satu konfirmasi `HAPUS PERMANEN`; modal menampilkan paket dan jumlah siswa; satu backup database untuk kelompok, satu rekap Excel per paket, satu log per paket, paket tak memenuhi syarat dilewati. Kartu arsip tanpa token, buka kunci, edit, dan aksi naskah. | ✅ |
-| **TOTAL TEST SUITE** | **Seluruh 418 pengujian lulus di SQLite dan PostgreSQL 17** | 🏆 **418 / 418 PASS** |
+| **TOTAL TEST SUITE** | **Seluruh 419 pengujian lulus di SQLite dan PostgreSQL 17** | 🏆 **419 / 419 PASS** |
 
 ---
 
