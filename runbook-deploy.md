@@ -83,7 +83,7 @@ Rahasia tidak boleh ditulis di repo atau dokumen.
 
 ### Arsip dan hapus permanen paket ujian
 - Paket yang semua jadwalnya sudah lewat bisa diarsipkan dari kartu jadwal (admin/kurikulum semua jenis, guru UH miliknya). Paket arsip hanya tampil di filter Arsip; nilainya tetap di Hasil Ujian dan bisa dikembalikan.
-- Hapus permanen hanya admin, hanya untuk paket yang sudah diarsipkan, dengan mengetik ulang nama paket. Aplikasi lebih dulu menyimpan rekap Excel dan menjalankan `backup_db.sh hapus-<paket> --arsip`; bila backup gagal, tidak ada yang dihapus. Catatan penghapusan ada di tabel `exam_purge_logs`.
+- Hapus permanen hanya admin, hanya untuk paket yang sudah diarsipkan: satu paket dengan mengetik ulang nama paket, atau beberapa paket sekaligus dari filter Arsip dengan mengetik `HAPUS PERMANEN`. Aplikasi lebih dulu menyimpan rekap Excel dan menjalankan `backup_db.sh hapus-<paket> --arsip`; bila backup gagal, tidak ada yang dihapus. Catatan penghapusan ada di tabel `exam_purge_logs`.
 - File ada di `/opt/exam-jingga-backups/arsip-hapus/` dan disalin ke `<RCLONE_REMOTE>/arsip-hapus`. Folder ini tidak ikut dibersihkan otomatis (14 hari di server, 60 hari di Drive hanya berlaku untuk `database/` dan `media/`). Nilai wajib disimpan satu tahun pelajaran; hapus file arsip secara manual setelah itu.
 - Memulihkan satu paket: restore dump arsip ke database sementara, lalu ambil baris paketnya; rekap Excel bisa langsung dibuka tanpa restore.
 
