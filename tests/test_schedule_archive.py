@@ -253,3 +253,55 @@ def test_unarchive_from_archive_view_rerenders_archive_list(client, world):
 
     html = res.content.decode()
     assert 'UH Arsip Lain' in html and 'UH Tetap Arsip' not in html
+
+
+# ==============================================================================
+# Aksi massal
+# ==============================================================================
+
+def _toast(res):
+    import json
+    return json.loads(res.headers['HX-Trigger'])['showToast']['message']
+
+
+@pytest.mark.django_db
+def test_bulk_delete_message_points_to_archive(client, world):
+    _, sch = world['make']('UH Dikerjakan')
+    client.force_login(world['admin'])
+    res = client.post(reverse('schedules:bulk_delete'), {'schedule_ids': [str(sch.id)]}, **HX)
+    assert 'Arsipkan' in _toast(res)
+    assert Schedule.objects.filter(pk=sch.pk).exists()
+
+
+@pytest.mark.django_db
+def test_bulk_archive_archives_finished_and_skips_the_rest(client, world):
+    exam_a, sch_a = world['make']('UH Satu')
+    exam_b, sch_b = world['make']('UH Dua')
+    exam_c, sch_c = world['make']('UH Belum Lewat', hours_ago=0, session_status=None)
+    client.force_login(world['admin'])
+
+    res = client.post(reverse('schedules:bulk_archive'),
+                      {'schedule_ids': [str(sch_a.id), str(sch_b.id), str(sch_c.id)]}, **HX)
+
+    for exam in (exam_a, exam_b, exam_c):
+        exam.refresh_from_db()
+    assert exam_a.archived_at and exam_b.archived_at and exam_c.archived_at is None
+    message = _toast(res)
+    assert '2 paket diarsipkan' in message and '1 paket dilewati' in message
+
+
+@pytest.mark.django_db
+def test_bulk_archive_is_admin_only(client, world):
+    exam, sch = world['make']('UH Guru')
+    client.force_login(world['gu'])
+    client.post(reverse('schedules:bulk_archive'), {'schedule_ids': [str(sch.id)]}, **HX)
+    exam.refresh_from_db()
+    assert exam.archived_at is None
+
+
+@pytest.mark.django_db
+def test_admin_toolbar_has_bulk_archive_button(client, world):
+    world['make']('UH Toolbar')
+    client.force_login(world['admin'])
+    page = client.get(reverse('schedules:list'), {'date_filter': 'Semua'}).content.decode()
+    assert 'bulkArchive()' in page and 'Arsipkan Terpilih' in page

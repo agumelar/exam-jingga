@@ -31,6 +31,14 @@ HTMX Target Grid Container for Schedules
         </span>
         <button
           type="button"
+          @click="bulkArchive()"
+          :disabled="selectedIds.length === 0"
+          class="bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 border border-stone-300 dark:border-stone-600 text-stone-800 dark:text-stone-100 px-5 py-2.5 rounded-xl text-xs font-semibold disabled:opacity-40 transition shadow-xs cursor-pointer select-none"
+        >
+          <i data-lucide="archive" class="w-3.5 h-3.5 inline mr-1"></i> Arsipkan Terpilih
+        </button>
+        <button
+          type="button"
           @click="bulkDelete()"
           :disabled="selectedIds.length === 0"
           class="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl text-xs font-semibold disabled:opacity-40 transition shadow-xs cursor-pointer select-none"

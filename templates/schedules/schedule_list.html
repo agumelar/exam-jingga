@@ -101,6 +101,20 @@
       });
     },
 
+    bulkArchive() {
+      if (this.selectedIds.length === 0) return;
+      if (!confirm(`Arsipkan paket dari ${this.selectedIds.length} jadwal terpilih? Paket yang belum lewat dilewati. Nilainya tetap ada di Hasil Ujian.`)) return;
+
+      htmx.ajax('POST', '{% url 'schedules:bulk_archive' %}', {
+        target: '#schedule-list-grid-container',
+        swap: 'outerHTML',
+        values: { schedule_ids: this.selectedIds },
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+      }).then(() => {
+        this.selectedIds = [];
+      });
+    },
+
     triggerFilter() {
       htmx.trigger('#schedule-filter-form', 'submit');
     }

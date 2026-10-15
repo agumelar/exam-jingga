@@ -9,6 +9,7 @@ urlpatterns = [
     path('<uuid:pk>/edit/', views.ScheduleEditModalView.as_view(), name='edit'),
     path('<uuid:pk>/delete/', views.ScheduleDeleteView.as_view(), name='delete'),
     path('bulk-delete/', views.BulkDeleteSchedulesView.as_view(), name='bulk_delete'),
+    path('bulk-archive/', views.BulkArchiveSchedulesView.as_view(), name='bulk_archive'),
     path('<uuid:pk>/action/<str:action>/', views.ScheduleActionView.as_view(), name='action'),
     path('exam/<uuid:exam_id>/questions/', views.SelectQuestionsView.as_view(), name='select_questions'),
     path('exam/<uuid:exam_id>/toggle-question/<uuid:question_id>/', views.ToggleQuestionView.as_view(), name='toggle_question'),

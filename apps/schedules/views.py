@@ -380,7 +380,35 @@ class BulkDeleteSchedulesView(View):
                 skipped += 1
         toast = f"{deleted} jadwal dihapus."
         if skipped:
-            toast += f" {skipped} jadwal dilewati karena sudah dikerjakan siswa."
+            toast += (f" {skipped} jadwal dilewati karena sudah dikerjakan siswa. "
+                      "Arsipkan paketnya agar hilang dari daftar.")
+        return _render_schedule_grid(request, toast=toast)
+
+
+def _posted_schedule_ids(request):
+    try:
+        return json.loads(request.body).get('schedule_ids', [])
+    except (ValueError, AttributeError):
+        return request.POST.getlist('schedule_ids')
+
+
+@method_decorator(admin_required, name='dispatch')
+class BulkArchiveSchedulesView(View):
+    """Arsipkan paket dari beberapa jadwal terpilih (admin). Paket yang belum lewat atau masih berjalan dilewati."""
+
+    def post(self, request):
+        actor = _actor(request)
+        exam_ids = set(Schedule.objects.filter(id__in=_posted_schedule_ids(request)).values_list('exam_id', flat=True))
+        archived, skipped = 0, 0
+        for exam_id in exam_ids:
+            try:
+                archive.archive_exam(exam_id, actor)
+                archived += 1
+            except archive.ArchiveError:
+                skipped += 1
+        toast = f"{archived} paket diarsipkan."
+        if skipped:
+            toast += f" {skipped} paket dilewati karena jadwalnya belum lewat, masih berjalan, atau sudah diarsipkan."
         return _render_schedule_grid(request, toast=toast)
 
 
