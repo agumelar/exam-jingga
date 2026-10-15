@@ -100,6 +100,9 @@ def _enrich_schedule_data(schedules, actor):
         )
         s.can_regenerate_token = lifecycle.can_regenerate_token(exam, actor)
         s.is_archived = bool(exam.archived_at)
+        if s.is_archived:
+            s.can_select_questions = s.can_verify = s.can_reject = s.can_withdraw = False
+            s.show_unlock = s.can_regenerate_token = False
         s.can_archive = not s.is_archived and archive.can_manage_archive(exam, actor) and not archive.archive_block_reason(exam)
         s.can_unarchive = s.is_archived and archive.can_manage_archive(exam, actor)
         s.can_purge = s.is_archived and archive.can_purge(actor)
@@ -133,8 +136,11 @@ def _current_status_filter(request):
 
 def _render_schedule_grid(request, toast=None, close_modal=False):
     actor = _actor(request)
-    qs = _archive_filter(_scoped_schedules(actor), _current_status_filter(request))
+    status_filter = _current_status_filter(request)
+    qs = _archive_filter(_scoped_schedules(actor), status_filter)
     context = {
+        'status_filter': status_filter,
+        'can_bulk_purge': status_filter == 'arsip' and archive.can_purge(actor),
         'schedules': _enrich_schedule_data(list(qs.order_by('-start_time')), actor),
         'is_admin': actor.is_admin,
         'user_role': actor.transition_role,
@@ -214,6 +220,7 @@ class ScheduleListView(View):
             'search_query': search_query,
             'date_filter': date_filter,
             'status_filter': status_filter,
+            'can_bulk_purge': status_filter == 'arsip' and archive.can_purge(actor),
             'is_admin': is_admin,
             'user_role': 'admin' if is_admin else 'guru',
             'current_teacher': current_teacher,
@@ -390,6 +397,45 @@ def _posted_schedule_ids(request):
         return json.loads(request.body).get('schedule_ids', [])
     except (ValueError, AttributeError):
         return request.POST.getlist('schedule_ids')
+
+
+@method_decorator(admin_required, name='dispatch')
+class BulkPurgeSchedulesView(View):
+    """Hapus permanen beberapa paket arsip (admin): satu kalimat konfirmasi, satu backup untuk semuanya."""
+
+    def _exam_ids(self, schedule_ids):
+        return list(Schedule.objects.filter(id__in=schedule_ids).values_list('exam_id', flat=True).distinct())
+
+    def _modal(self, request, schedule_ids, error=''):
+        return render(request, 'schedules/partials/schedule_bulk_purge_modal.html', {
+            'rows': archive.purge_preview(self._exam_ids(schedule_ids)),
+            'schedule_ids': schedule_ids,
+            'phrase': archive.PURGE_PHRASE,
+            'error': error,
+        })
+
+    def get(self, request):
+        if not archive.can_purge(_actor(request)):
+            return _error_toast_response("Hapus permanen hanya bisa dilakukan admin.", 403)
+        return self._modal(request, request.GET.getlist('schedule_ids'))
+
+    def post(self, request):
+        schedule_ids = _posted_schedule_ids(request)
+        try:
+            logs, skipped = archive.purge_exams(self._exam_ids(schedule_ids), _actor(request),
+                                                request.POST.get('confirm_phrase', ''))
+        except archive.ArchiveError as exc:
+            if exc.status == 403:
+                return _error_toast_response(exc.message, 403)
+            return self._modal(request, schedule_ids, error=exc.message)
+        toast = (f"{len(logs)} paket dihapus permanen. Rekap nilai dan backup database tersimpan "
+                 "di folder arsip-hapus.")
+        if skipped:
+            toast += f" {len(skipped)} paket dilewati: " + '; '.join(f"{t} ({r})" for t, r in skipped) + '.'
+        res = _render_schedule_grid(request, toast=toast, close_modal=True)
+        res['HX-Retarget'] = '#schedule-list-grid-container'
+        res['HX-Reswap'] = 'outerHTML'
+        return res
 
 
 @method_decorator(admin_required, name='dispatch')

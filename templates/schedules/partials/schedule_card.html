@@ -30,7 +30,7 @@ M3 Elevated Schedule Card with 100% UI fidelity matching React ScheduleCard.jsx
 
   <!-- Hover Action Menu (Edit / Delete) -->
   <div class="absolute top-10 right-8 flex items-center gap-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity z-10">
-    {% if is_admin or s.exam.exam_type == 'UH' %}
+    {% if not s.is_archived and is_admin or not s.is_archived and s.exam.exam_type == 'UH' %}
       <button
         type="button"
         hx-get="{% url 'schedules:edit' pk=s.id %}"
@@ -101,7 +101,8 @@ M3 Elevated Schedule Card with 100% UI fidelity matching React ScheduleCard.jsx
     </div>
     {% endif %}{% endwith %}
 
-    <!-- Token Akses -->
+    <!-- Token Akses (tidak relevan untuk paket arsip) -->
+    {% if not s.is_archived %}
     <div class="flex items-center gap-3 font-mono" x-data="{ copied: false }">
       <i data-lucide="key" class="w-4 h-4 text-orange-500 shrink-0"></i>
       <span class="text-stone-900 dark:text-white tracking-widest font-bold font-mono select-all">
@@ -136,6 +137,7 @@ M3 Elevated Schedule Card with 100% UI fidelity matching React ScheduleCard.jsx
         </button>
       {% endif %}
     </div>
+    {% endif %}
 
     <!-- Guru Penanggung Jawab -->
     <div class="flex items-center gap-3">

@@ -305,3 +305,115 @@ def test_admin_toolbar_has_bulk_archive_button(client, world):
     client.force_login(world['admin'])
     page = client.get(reverse('schedules:list'), {'date_filter': 'Semua'}).content.decode()
     assert 'bulkArchive()' in page and 'Arsipkan Terpilih' in page
+
+
+# ==============================================================================
+# Hapus permanen massal (filter Arsip, admin, satu konfirmasi)
+# ==============================================================================
+
+def _archive_now(exam):
+    exam.archived_at = timezone.now()
+    exam.save(update_fields=['archived_at'])
+
+
+def _bulk_purge(client, schedules, phrase='HAPUS PERMANEN'):
+    return client.post(reverse('schedules:bulk_purge'),
+                       {'schedule_ids': [str(s.id) for s in schedules], 'confirm_phrase': phrase}, **HX)
+
+
+@pytest.mark.django_db
+def test_bulk_purge_deletes_archived_exams_with_one_backup(client, world, tmp_path):
+    exam_a, sch_a = world['make']('UH Hapus A')
+    exam_b, sch_b = world['make']('UH Hapus B')
+    exam_c, sch_c = world['make']('UH Belum Arsip')
+    _archive_now(exam_a)
+    _archive_now(exam_b)
+    client.force_login(world['admin'])
+
+    with override_settings(PURGE_ARCHIVE_DIR=str(tmp_path)), \
+            patch.object(archive, 'run_pre_delete_backup', return_value='/backup/massal.dump') as backup:
+        res = _bulk_purge(client, [sch_a, sch_b, sch_c])
+
+    backup.assert_called_once()
+    assert not Exam.objects.filter(pk__in=[exam_a.pk, exam_b.pk]).exists()
+    assert Exam.objects.filter(pk=exam_c.pk).exists()
+    logs = ExamPurgeLog.objects.all()
+    assert sorted(l.title for l in logs) == ['UH Hapus A', 'UH Hapus B']
+    assert {l.backup_file for l in logs} == {'/backup/massal.dump'}
+    assert len(list(tmp_path.glob('*.xlsx'))) == 2
+    message = _toast(res)
+    assert '2 paket dihapus permanen' in message and '1 paket dilewati' in message
+
+
+@pytest.mark.django_db
+def test_bulk_purge_requires_the_phrase(client, world, tmp_path):
+    exam, sch = world['make']('UH Frasa')
+    _archive_now(exam)
+    client.force_login(world['admin'])
+    with override_settings(PURGE_ARCHIVE_DIR=str(tmp_path)), \
+            patch.object(archive, 'run_pre_delete_backup') as backup:
+        res = _bulk_purge(client, [sch], phrase='hapus')
+    backup.assert_not_called()
+    assert Exam.objects.filter(pk=exam.pk).exists()
+    assert 'HAPUS PERMANEN' in res.content.decode()
+
+
+@pytest.mark.django_db
+def test_bulk_purge_deletes_nothing_when_backup_fails(client, world, tmp_path):
+    exam_a, sch_a = world['make']('UH Gagal A')
+    exam_b, sch_b = world['make']('UH Gagal B')
+    _archive_now(exam_a)
+    _archive_now(exam_b)
+    client.force_login(world['admin'])
+    with override_settings(PURGE_ARCHIVE_DIR=str(tmp_path)), \
+            patch.object(archive, 'run_pre_delete_backup', side_effect=archive.ArchiveError('backup gagal')):
+        res = _bulk_purge(client, [sch_a, sch_b])
+    assert Exam.objects.filter(pk__in=[exam_a.pk, exam_b.pk]).count() == 2
+    assert not ExamPurgeLog.objects.exists()
+    assert 'backup gagal' in res.content.decode()
+
+
+@pytest.mark.django_db
+def test_bulk_purge_is_admin_only(client, world, tmp_path):
+    exam, sch = world['make']('UH Kurikulum Massal')
+    _archive_now(exam)
+    client.force_login(world['kurikulum'])
+    with override_settings(PURGE_ARCHIVE_DIR=str(tmp_path)), \
+            patch.object(archive, 'run_pre_delete_backup') as backup:
+        assert _bulk_purge(client, [sch]).status_code == 403
+    backup.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_bulk_purge_modal_lists_selected_exams(client, world):
+    exam, sch = world['make']('UH Daftar Modal')
+    _archive_now(exam)
+    client.force_login(world['admin'])
+    html = client.get(reverse('schedules:bulk_purge'), {'schedule_ids': [str(sch.id)]}, **HX).content.decode()
+    assert 'UH Daftar Modal' in html and '1 siswa' in html
+    assert 'name="confirm_phrase"' in html and 'HAPUS PERMANEN' in html
+
+
+@pytest.mark.django_db
+def test_bulk_purge_button_only_in_archive_filter_for_admin(client, world):
+    exam, _ = world['make']('UH Tombol Massal')
+    _archive_now(exam)
+    client.force_login(world['admin'])
+    archived = client.get(reverse('schedules:list'), {'date_filter': 'Semua', 'status': 'arsip'}).content.decode()
+    normal = client.get(reverse('schedules:list'), {'date_filter': 'Semua'}).content.decode()
+    assert 'bulkPurge()' in archived and 'Hapus Permanen Terpilih' in archived
+    assert 'Hapus Permanen Terpilih' not in normal
+    client.force_login(world['kurikulum'])
+    kurikulum = client.get(reverse('schedules:list'), {'date_filter': 'Semua', 'status': 'arsip'}).content.decode()
+    assert 'Hapus Permanen Terpilih' not in kurikulum
+
+
+@pytest.mark.django_db
+def test_archived_card_hides_unlock_and_token(client, world):
+    exam, sch = world['make']('UH Kartu Arsip')
+    _archive_now(exam)
+    client.force_login(world['admin'])
+    html = client.get(reverse('schedules:list'), {'date_filter': 'Semua', 'status': 'arsip'}).content.decode()
+    assert f'unlock-btn-{sch.id}' not in html
+    assert f'regenerate-token-btn-{sch.id}' not in html
+    assert 'Token Aktif' not in html and 'Belum Aktif' not in html

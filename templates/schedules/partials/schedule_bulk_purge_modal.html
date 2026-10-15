@@ -1,0 +1,96 @@
+{% comment %}
+Konfirmasi hapus permanen beberapa paket arsip sekaligus (hanya admin). Satu kalimat konfirmasi untuk semua;
+server membuat rekap Excel per paket dan satu backup database dulu, dan tidak menghapus apa pun bila gagal.
+{% endcomment %}
+<div
+  x-data="reasonModal('bulk-purge-btn')"
+  x-init="open()"
+  @keydown.escape.window="close()"
+  @keydown.tab="trapFocus($event)"
+  class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4 font-sans"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="bulk-purge-title"
+  aria-describedby="bulk-purge-desc"
+>
+  <div
+    x-ref="panel"
+    @click.outside="close()"
+    class="bg-white dark:bg-stone-900 w-full max-w-lg rounded-t-[2rem] sm:rounded-[2.5rem] p-6 sm:p-8 shadow-2xl text-left text-stone-900 dark:text-white border border-stone-200/80 dark:border-stone-800 max-h-[90vh] overflow-y-auto"
+  >
+    <h3 id="bulk-purge-title" class="text-lg font-bold tracking-tight">Hapus Permanen {{ rows|length }} Paket</h3>
+    <p id="bulk-purge-desc" class="text-sm text-stone-600 dark:text-stone-300 mt-2 leading-relaxed">
+      Jadwal, nilai, dan jawaban siswa di paket berikut dihapus dari aplikasi. Sebelumnya, rekap nilai tiap paket
+      disimpan sebagai file Excel dan database dibackup ke folder arsip-hapus. Kalau backup gagal, tidak ada yang dihapus.
+    </p>
+
+    <ul class="mt-4 divide-y divide-stone-200 dark:divide-stone-800 rounded-2xl border border-stone-200 dark:border-stone-800 max-h-56 overflow-y-auto">
+      {% for row in rows %}
+        <li class="px-4 py-3 text-sm flex items-start justify-between gap-3">
+          <span>
+            <span class="font-semibold text-stone-900 dark:text-white">{{ row.title }}</span>
+            <span class="block text-stone-600 dark:text-stone-300">{{ row.subject|default:"Mapel belum diatur" }}</span>
+          </span>
+          <span class="shrink-0 text-right {% if row.skip_reason %}text-amber-800 dark:text-amber-200{% else %}text-stone-700 dark:text-stone-300{% endif %}">
+            {% if row.skip_reason %}Dilewati: {{ row.skip_reason }}{% else %}{{ row.students }} siswa{% endif %}
+          </span>
+        </li>
+      {% empty %}
+        <li class="px-4 py-3 text-sm text-stone-600 dark:text-stone-300">Tidak ada paket yang dipilih.</li>
+      {% endfor %}
+    </ul>
+
+    <form
+      hx-post="{% url 'schedules:bulk_purge' %}"
+      hx-target="#modal-container"
+      hx-swap="innerHTML"
+      hx-disabled-elt="find button[type=submit]"
+      class="mt-5 space-y-4"
+      novalidate
+    >
+      {% csrf_token %}
+      {% for schedule_id in schedule_ids %}
+        <input type="hidden" name="schedule_ids" value="{{ schedule_id }}">
+      {% endfor %}
+      <div>
+        <label for="bulk-purge-phrase" class="block text-sm font-semibold text-stone-800 dark:text-stone-100 mb-1.5">
+          Ketik <span class="font-mono">{{ phrase }}</span> untuk konfirmasi
+        </label>
+        <input
+          id="bulk-purge-phrase"
+          name="confirm_phrase"
+          type="text"
+          autocomplete="off"
+          autocapitalize="characters"
+          x-ref="note"
+          placeholder="{{ phrase }}"
+          {% if error %}aria-invalid="true" aria-describedby="bulk-purge-error"{% endif %}
+          class="w-full min-h-11 px-3.5 rounded-2xl bg-stone-50 dark:bg-stone-800 border {% if error %}border-red-600 dark:border-red-400{% else %}border-stone-300 dark:border-stone-600{% endif %} text-base text-stone-900 dark:text-white placeholder:text-stone-500 dark:placeholder:text-stone-400 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-orange-600"
+        >
+        {% if error %}
+          <p id="bulk-purge-error" class="mt-2 text-sm text-red-700 dark:text-red-300 flex gap-1.5" role="alert">
+            <i data-lucide="alert-circle" class="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true"></i>
+            <span>{{ error }}</span>
+          </p>
+        {% endif %}
+      </div>
+
+      <div class="flex flex-col-reverse sm:flex-row gap-3 pt-1">
+        <button
+          type="button"
+          @click="close()"
+          class="flex-1 min-h-11 bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-100 rounded-2xl font-semibold text-sm transition cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+        >
+          Batal
+        </button>
+        <button
+          type="submit"
+          class="group flex-1 min-h-11 bg-red-700 hover:bg-red-800 disabled:opacity-60 disabled:cursor-wait text-white rounded-2xl font-semibold text-sm transition cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+        >
+          <span class="group-disabled:hidden">Hapus Permanen</span>
+          <span class="hidden group-disabled:inline">Membuat backup...</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

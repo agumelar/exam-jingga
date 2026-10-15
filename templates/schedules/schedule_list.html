@@ -101,6 +101,15 @@
       });
     },
 
+    bulkPurge() {
+      if (this.selectedIds.length === 0) return;
+      htmx.ajax('GET', '{% url 'schedules:bulk_purge' %}', {
+        target: '#modal-container',
+        swap: 'innerHTML',
+        values: { schedule_ids: this.selectedIds }
+      });
+    },
+
     bulkArchive() {
       if (this.selectedIds.length === 0) return;
       if (!confirm(`Arsipkan paket dari ${this.selectedIds.length} jadwal terpilih? Paket yang belum lewat dilewati. Nilainya tetap ada di Hasil Ujian.`)) return;

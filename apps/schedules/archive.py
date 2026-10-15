@@ -112,9 +112,49 @@ def _export_results(exam, folder):
     return path
 
 
-def purge_exam(exam_id, actor, confirm_title):
+def _purge_block_reason(exam):
+    if not exam.archived_at:
+        return "belum diarsipkan"
+    if _sessions_in_progress(exam):
+        return "masih ada siswa yang sedang mengerjakan atau terkunci"
+    return ''
+
+
+def _delete_with_logs(exams, actor, backup_path, export_paths):
+    """Hapus paket beserta jadwal, sesi, dan jawabannya; satu catatan log per paket."""
     from apps.exam_engine.models import ExamSession, StudentAnswer
 
+    logs = []
+    with transaction.atomic():
+        for exam in exams:
+            schedules = list(exam.schedules.select_related('class_room'))
+            sessions = ExamSession.objects.filter(schedule__exam=exam)
+            answers = StudentAnswer.objects.filter(session__in=sessions)
+            logs.append(ExamPurgeLog.objects.create(
+                exam_id_snapshot=exam.id, title=exam.title, exam_type=exam.exam_type,
+                subject_name=exam.subject.name if exam.subject else '',
+                teacher_name=exam.teacher.full_name if exam.teacher else '',
+                classes=', '.join(sorted({s.class_room.name for s in schedules if s.class_room})),
+                first_start=min((s.start_time for s in schedules), default=None),
+                schedules_count=len(schedules), sessions_count=sessions.count(), answers_count=answers.count(),
+                backup_file=backup_path, export_file=str(export_paths[exam.id]), deleted_by=actor.user,
+            ))
+            answers.delete()
+            sessions.delete()
+            exam.schedules.all().delete()
+            exam.delete()
+    return logs
+
+
+def _backup_then_delete(exams, actor, label):
+    # Rekap dan backup dibuat lebih dulu; kegagalan di sini membatalkan seluruh penghapusan
+    folder = Path(settings.PURGE_ARCHIVE_DIR)
+    export_paths = {exam.id: _export_results(exam, folder) for exam in exams}
+    backup_path = run_pre_delete_backup(label)
+    return _delete_with_logs(exams, actor, backup_path, export_paths)
+
+
+def purge_exam(exam_id, actor, confirm_title):
     if not can_purge(actor):
         raise ArchiveError("Hapus permanen hanya bisa dilakukan admin.", status=403)
     exam = Exam.objects.select_related('subject', 'teacher').get(pk=exam_id)
@@ -124,26 +164,39 @@ def purge_exam(exam_id, actor, confirm_title):
         raise ArchiveError("Nama paket yang diketik tidak sama. Tidak ada yang dihapus.", status=422)
     if _sessions_in_progress(exam):
         raise ArchiveError("Masih ada siswa yang sedang mengerjakan atau terkunci.")
+    return _backup_then_delete([exam], actor, f"hapus-{_slug(exam.title)}")[0]
 
-    # Simpan rekap dan backup dulu; kegagalan di sini membatalkan penghapusan
-    export_path = _export_results(exam, Path(settings.PURGE_ARCHIVE_DIR))
-    backup_path = run_pre_delete_backup(f"hapus-{_slug(exam.title)}")
 
-    schedules = list(exam.schedules.select_related('class_room'))
-    sessions = ExamSession.objects.filter(schedule__exam=exam)
-    with transaction.atomic():
-        log = ExamPurgeLog.objects.create(
-            exam_id_snapshot=exam.id, title=exam.title, exam_type=exam.exam_type,
-            subject_name=exam.subject.name if exam.subject else '',
-            teacher_name=exam.teacher.full_name if exam.teacher else '',
-            classes=', '.join(sorted({s.class_room.name for s in schedules if s.class_room})),
-            first_start=min((s.start_time for s in schedules), default=None),
-            schedules_count=len(schedules), sessions_count=sessions.count(),
-            answers_count=StudentAnswer.objects.filter(session__in=sessions).count(),
-            backup_file=backup_path, export_file=str(export_path), deleted_by=actor.user,
-        )
-        StudentAnswer.objects.filter(session__in=sessions).delete()
-        sessions.delete()
-        exam.schedules.all().delete()
-        exam.delete()
-    return log
+PURGE_PHRASE = 'HAPUS PERMANEN'
+
+
+def purge_exams(exam_ids, actor, confirm_phrase):
+    """
+    Hapus permanen beberapa paket arsip sekaligus dengan satu konfirmasi kalimat. Satu backup database
+    untuk seluruh kelompok dan satu rekap Excel per paket. Paket yang tidak memenuhi syarat dilewati.
+    """
+    if not can_purge(actor):
+        raise ArchiveError("Hapus permanen hanya bisa dilakukan admin.", status=403)
+    if (confirm_phrase or '').strip() != PURGE_PHRASE:
+        raise ArchiveError(f"Ketik {PURGE_PHRASE} persis untuk konfirmasi. Tidak ada yang dihapus.", status=422)
+    exams = list(Exam.objects.filter(pk__in=exam_ids).select_related('subject', 'teacher'))
+    eligible = [e for e in exams if not _purge_block_reason(e)]
+    skipped = [(e.title, _purge_block_reason(e)) for e in exams if _purge_block_reason(e)]
+    if not eligible:
+        raise ArchiveError("Tidak ada paket arsip yang bisa dihapus di pilihan ini.")
+    label = f"hapus-{_slug(eligible[0].title)}" if len(eligible) == 1 else f"hapus-massal-{len(eligible)}-paket"
+    return _backup_then_delete(eligible, actor, label), skipped
+
+
+def purge_preview(exam_ids):
+    """Daftar paket terpilih untuk jendela konfirmasi: judul, jumlah siswa, dan alasan bila dilewati."""
+    from apps.exam_engine.models import ExamSession
+    rows = []
+    for exam in Exam.objects.filter(pk__in=exam_ids).select_related('subject').order_by('title'):
+        rows.append({
+            'title': exam.title,
+            'subject': exam.subject.name if exam.subject else '',
+            'students': ExamSession.objects.filter(schedule__exam=exam).values('student').distinct().count(),
+            'skip_reason': _purge_block_reason(exam),
+        })
+    return rows
