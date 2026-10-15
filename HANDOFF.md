@@ -9,7 +9,7 @@
 * **Nama Proyek**: Exam Jingga (Aplikasi CBT Ujian Sekolah SMKN 1 Rongga)
 * **Arsitektur**: **DATH Modern Monolith** (Django 5.1 LTS, Alpine.js, Tailwind CSS v4, HTMX) menggantikan arsitektur SPA React lama.
 * **Tujuan Utama**: Membangun sistem CBT sekolah yang kokoh, zero-CORS browser dependency, offline-first vendor assets, real-time HTMX auto-save & polling, mitigasi beban 722+ siswa serentak di VPS ARM64, integrasi Keycloak SSO & OpenAPI Central Data Master, serta otomatisasi deployment produksi dengan Gunicorn + WhiteNoise + Nginx + Systemd.
-* **Status Keseluruhan**: Audit menyeluruh Oktober 2026 (Task 17-25) selesai: alur status naskah, keamanan login SSO-only, integritas ujian siswa, hak akses per peran, jadwal/kuota/pemilihan soal, laporan & logistik, master data & bank soal, backup & deploy. **407 / 407 test lulus (SQLite dan PostgreSQL 17).** Detail per fase ada di bagian 3 dan `log.md`; aturan operasional di `runbook-deploy.md`.
+* **Status Keseluruhan**: Audit menyeluruh Oktober 2026 (Task 17-25) selesai: alur status naskah, keamanan login SSO-only, integritas ujian siswa, hak akses per peran, jadwal/kuota/pemilihan soal, laporan & logistik, master data & bank soal, backup & deploy. **411 / 411 test lulus (SQLite dan PostgreSQL 17).** Detail per fase ada di bagian 3 dan `log.md`; aturan operasional di `runbook-deploy.md`.
 
 ---
 
@@ -77,7 +77,8 @@
 | **Task 39: Peringatan dan Pop Up Nilai** | Hasil uji asap: peringatan pindah layar terlalu kecil di atas layar, dan siswa langsung ke dashboard tanpa melihat nilai. Peringatan kini kotak di tengah layar yang harus ditutup siswa (PAS/PAT/SAJ menyebut satu kali lagi terkunci). Dashboard menampilkan pop up nilai sekali untuk sesi yang selesai dalam 10 menit terakhir, apa pun cara selesainya; berlaku untuk semua jenis ujian (keputusan pemilik). | ✅ |
 | **Task 40: Sesi Direset dan Aksi Tanpa Alasan** | Uji asap beberapa skema (PAS, SAJ, susulan, buka kunci, reset, paksa selesai) lulus tanpa error 500. Ditemukan: setelah reset, halaman ujian siswa terus mengirim ke sesi yang sudah dihapus (404) dan kiriman otomatis berakhir di halaman 404. Kini 404 pada permintaan sesi mengarahkan siswa ke dashboard dengan pesan bahwa sesi direset. Atas permintaan pemilik, isian alasan pada aksi sesi dihapus: buka kunci langsung, reset dan paksa selesai cukup konfirmasi; log tetap mencatat pelaku, waktu, status sebelumnya, dan jumlah pelanggaran. | ✅ |
 | **Task 41: Arsip dan Hapus Permanen Paket** | Keputusan pemilik: nilai disimpan satu tahun pelajaran; dua lapis. Arsip (`Exam.archived_at`) untuk paket yang semua jadwalnya lewat dan tanpa sesi berjalan: admin/kurikulum semua jenis, guru UH miliknya; filter Arsip, bisa dikembalikan, nilai tetap di Hasil Ujian. Hapus permanen hanya admin/platform admin, hanya paket arsip, ketik ulang nama paket; aplikasi menyimpan rekap Excel lalu `backup_db.sh hapus-<paket> --arsip` (dump + salin ke Drive); gagal = tidak ada yang dihapus; tercatat di `exam_purge_logs`. `backup_db.sh`: retensi lokal `-maxdepth 1`, retensi Drive hanya `database/` dan `media/`, sehingga `arsip-hapus` aman. Migrasi `schedules.0006`. | ✅ |
-| **TOTAL TEST SUITE** | **Seluruh 407 pengujian lulus di SQLite dan PostgreSQL 17** | 🏆 **407 / 407 PASS** |
+| **Task 42: Arsip Massal** | Toolbar admin di Jadwal Ujian punya tombol Arsipkan Terpilih (mengarsipkan paket dari jadwal terpilih, melaporkan yang dilewati); pesan hapus massal yang melewati jadwal terpakai kini menyarankan arsip. | ✅ |
+| **TOTAL TEST SUITE** | **Seluruh 411 pengujian lulus di SQLite dan PostgreSQL 17** | 🏆 **411 / 411 PASS** |
 
 ---
 
