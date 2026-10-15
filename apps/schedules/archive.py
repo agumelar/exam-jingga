@@ -107,7 +107,8 @@ def _export_results(exam, folder):
     from apps.reports.views import build_exam_results_export
     folder.mkdir(parents=True, exist_ok=True)
     stamp = timezone.localtime().strftime('%Y%m%d-%H%M')
-    path = folder / f"exam-jingga-rekap-{_slug(exam.title)}-{stamp}.xlsx"
+    # Potongan id paket mencegah dua paket bernama sama saling menimpa rekap saat dihapus bersamaan
+    path = folder / f"exam-jingga-rekap-{_slug(exam.title)}-{str(exam.id)[:8]}-{stamp}.xlsx"
     path.write_bytes(build_exam_results_export(exam).content)
     return path
 

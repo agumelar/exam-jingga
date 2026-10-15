@@ -417,3 +417,20 @@ def test_archived_card_hides_unlock_and_token(client, world):
     assert f'unlock-btn-{sch.id}' not in html
     assert f'regenerate-token-btn-{sch.id}' not in html
     assert 'Token Aktif' not in html and 'Belum Aktif' not in html
+
+
+@pytest.mark.django_db
+def test_bulk_purge_keeps_one_workbook_per_exam_even_with_same_title(client, world, tmp_path):
+    # Dua paket bernama sama yang dihapus pada menit yang sama tidak boleh saling menimpa file rekapnya
+    exam_a, sch_a = world['make']('Penilaian Akhir Semester', exam_type='PAS')
+    exam_b, sch_b = world['make']('Penilaian Akhir Semester', exam_type='PAS')
+    _archive_now(exam_a)
+    _archive_now(exam_b)
+    client.force_login(world['admin'])
+    with override_settings(PURGE_ARCHIVE_DIR=str(tmp_path)), \
+            patch.object(archive, 'run_pre_delete_backup', return_value='/backup/massal.dump'):
+        _bulk_purge(client, [sch_a, sch_b])
+
+    files = sorted(p.name for p in tmp_path.glob('*.xlsx'))
+    assert len(files) == 2
+    assert {l.export_file for l in ExamPurgeLog.objects.all()} == {str(tmp_path / f) for f in files}
