@@ -159,21 +159,11 @@
 
           <div class="print-footer">
             <div class="print-photo-box">FOTO 3X4</div>
-            <div class="print-qr-box">
-              <div style="width: 15mm; height: 15mm; border: 1pt dashed #999; display: flex; align-items: center; justify-content: center; font-size: 5pt; text-align: center;">
-                QR {{ s.student.nis }}
-              </div>
-            </div>
             <div class="print-signature-area">
               {{ settings.exam_city|default:'Rongga' }}, {{ settings.exam_date|default:'................' }}<br>
               Kepala Sekolah,
               <div class="print-sig-space">
-                {% if settings.headmaster_signature_url %}
-                  <img src="{{ settings.headmaster_signature_url }}" class="print-img-ttd" alt="TTD" />
-                {% endif %}
-                {% if settings.school_seal_url %}
-                  <img src="{{ settings.school_seal_url }}" class="print-img-cap" alt="Cap" />
-                {% endif %}
+                <div class="print-sig-stack">{% if settings.headmaster_signature_url %}<img src="{{ settings.headmaster_signature_url }}" class="print-img-ttd" alt="TTD" />{% endif %}{% if settings.school_seal_url %}<img src="{{ settings.school_seal_url }}" class="print-img-cap" alt="Cap" />{% endif %}</div>
               </div>
               <b><u>{{ settings.headmaster_name|default:'.......................' }}</u></b><br>
               NIP. {{ settings.headmaster_nip|default:'.......................' }}
@@ -336,11 +326,6 @@
     background: #f0f0f0 !important;
   }
 
-  .print-qr-box {
-    width: 15mm !important;
-    height: 15mm !important;
-  }
-
   .print-signature-area {
     position: relative !important;
     text-align: center !important;
@@ -350,26 +335,36 @@
 
   .print-sig-space {
     height: 10mm !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+  }
+
+  /* Wadah seukuran tanda tangan: cap menimpa sepertiga kiri tanda tangan seperti cap basah pada surat dinas */
+  .print-sig-stack {
     position: relative !important;
+    display: inline-block !important;
+    height: 10mm !important;
+    min-width: 12mm !important;
   }
 
   .print-img-ttd {
     height: 10mm !important;
     object-fit: contain !important;
-    position: absolute !important;
-    left: 50% !important;
-    transform: translateX(-50%) !important;
+    display: block !important;
+    position: relative !important;
     z-index: 2 !important;
   }
 
   .print-img-cap {
-    height: 12mm !important;
+    height: 13mm !important;
     object-fit: contain !important;
     position: absolute !important;
-    left: 5% !important;
-    top: -2mm !important;
+    left: -6mm !important;
+    top: 50% !important;
+    transform: translateY(-50%) rotate(-8deg) !important;
     z-index: 3 !important;
-    opacity: 0.8 !important;
+    opacity: 0.85 !important;
     mix-blend-mode: multiply !important;
   }
 }
