@@ -9,7 +9,7 @@
 * **Nama Proyek**: Exam Jingga (Aplikasi CBT Ujian Sekolah SMKN 1 Rongga)
 * **Arsitektur**: **DATH Modern Monolith** (Django 5.1 LTS, Alpine.js, Tailwind CSS v4, HTMX) menggantikan arsitektur SPA React lama.
 * **Tujuan Utama**: Membangun sistem CBT sekolah yang kokoh, zero-CORS browser dependency, offline-first vendor assets, real-time HTMX auto-save & polling, mitigasi beban 722+ siswa serentak di VPS ARM64, integrasi Keycloak SSO & OpenAPI Central Data Master, serta otomatisasi deployment produksi dengan Gunicorn + WhiteNoise + Nginx + Systemd.
-* **Status Keseluruhan**: Audit menyeluruh Oktober 2026 (Task 17-25) selesai: alur status naskah, keamanan login SSO-only, integritas ujian siswa, hak akses per peran, jadwal/kuota/pemilihan soal, laporan & logistik, master data & bank soal, backup & deploy. **425 / 425 test lulus (SQLite dan PostgreSQL 17).** Detail per fase ada di bagian 3 dan `log.md`; aturan operasional di `runbook-deploy.md`.
+* **Status Keseluruhan**: Audit menyeluruh Oktober 2026 (Task 17-25) selesai: alur status naskah, keamanan login SSO-only, integritas ujian siswa, hak akses per peran, jadwal/kuota/pemilihan soal, laporan & logistik, master data & bank soal, backup & deploy. **427 / 427 test lulus (SQLite dan PostgreSQL 17).** Detail per fase ada di bagian 3 dan `log.md`; aturan operasional di `runbook-deploy.md`.
 
 ---
 
@@ -80,7 +80,8 @@
 | **Task 42: Arsip Massal** | Toolbar admin di Jadwal Ujian punya tombol Arsipkan Terpilih (mengarsipkan paket dari jadwal terpilih, melaporkan yang dilewati); pesan hapus massal yang melewati jadwal terpakai kini menyarankan arsip. | ✅ |
 | **Task 43: Hapus Permanen Massal** | Di filter Arsip, admin mencentang beberapa paket lalu Hapus Permanen Terpilih dengan satu konfirmasi `HAPUS PERMANEN`; modal menampilkan paket dan jumlah siswa; satu backup database untuk kelompok, satu rekap Excel per paket, satu log per paket, paket tak memenuhi syarat dilewati. Kartu arsip tanpa token, buka kunci, edit, dan aksi naskah. | ✅ |
 | **Task 44: Guru Nonaktif** | Guru pindah tugas atau akun uji dinonaktifkan lewat akunnya (`is_active=False`). `Teacher.objects.active()` (belum punya akun atau akun aktif) dipakai pilihan guru di penugasan, jadwal, dan penulis soal; form edit soal tetap menyertakan penulis saat ini; Master Guru memberi label Nonaktif; soal tetap tersimpan. Produksi: akun dhavika (Dhafika Mutiara, 40 soal), sandi (Sandi Saprudin), meta (akun uji) dinonaktifkan setelah backup `pra-nonaktif-guru`. | ✅ |
-| **TOTAL TEST SUITE** | **Seluruh 425 pengujian lulus di SQLite dan PostgreSQL 17** | 🏆 **425 / 425 PASS** |
+| **Task 45: Kartu Peserta** | Masukan kurikulum: kotak "QR <NIS>" di kartu bukan QR sungguhan dan tidak dipakai, dihapus; cap kepala sekolah kini menimpa sepertiga kiri tanda tangan dengan sedikit miring (sebelumnya terpisah di pojok kiri). Diperiksa dalam tampilan cetak (tumpang tindih 31%). | ✅ |
+| **TOTAL TEST SUITE** | **Seluruh 427 pengujian lulus di SQLite dan PostgreSQL 17** | 🏆 **427 / 427 PASS** |
 
 ---
 
