@@ -9,7 +9,7 @@
 * **Nama Proyek**: Exam Jingga (Aplikasi CBT Ujian Sekolah SMKN 1 Rongga)
 * **Arsitektur**: **DATH Modern Monolith** (Django 5.1 LTS, Alpine.js, Tailwind CSS v4, HTMX) menggantikan arsitektur SPA React lama.
 * **Tujuan Utama**: Membangun sistem CBT sekolah yang kokoh, zero-CORS browser dependency, offline-first vendor assets, real-time HTMX auto-save & polling, mitigasi beban 722+ siswa serentak di VPS ARM64, integrasi Keycloak SSO & OpenAPI Central Data Master, serta otomatisasi deployment produksi dengan Gunicorn + WhiteNoise + Nginx + Systemd.
-* **Status Keseluruhan**: Audit menyeluruh Oktober 2026 (Task 17-25) selesai: alur status naskah, keamanan login SSO-only, integritas ujian siswa, hak akses per peran, jadwal/kuota/pemilihan soal, laporan & logistik, master data & bank soal, backup & deploy. **427 / 427 test lulus (SQLite dan PostgreSQL 17).** Detail per fase ada di bagian 3 dan `log.md`; aturan operasional di `runbook-deploy.md`.
+* **Status Keseluruhan**: Audit menyeluruh Oktober 2026 (Task 17-25) selesai: alur status naskah, keamanan login SSO-only, integritas ujian siswa, hak akses per peran, jadwal/kuota/pemilihan soal, laporan & logistik, master data & bank soal, backup & deploy. **430 / 430 test lulus (SQLite dan PostgreSQL 17).** Detail per fase ada di bagian 3 dan `log.md`; aturan operasional di `runbook-deploy.md`.
 
 ---
 
@@ -114,6 +114,7 @@ Test suite `tests/test_e2e_workflow.py` mensimulasikan siklus penuh asesmen seko
 
 ## ⚡ 6. Pembaruan Operasional Terkini (Live Ready)
 * **Sentralisasi Media Storage**: 282 media gambar bank soal tersimpan permanen di storage NVMe VPS (`/opt/exam-jingga/media/`) dengan streaming Nginx CORS dan smart resolver `image_url`. Lingkungan lokal streaming langsung dari VPS tanpa membebani disk lokal.
+* **Gambar Soal dan Opsi (perbaikan 24 Nov 2026, commit 0faa040)**: Sejak commit 5558ceb (2 Okt 2026) setiap simpan soal menghapus semua gambar, karena tanda hapus tersembunyi bernilai "0" dibaca benar oleh `BooleanField`. Kini `ClearFlagField` di `apps/questions/forms.py` hanya menganggap "1"/"true"/"on" sebagai hapus (`tests/test_question_images.py`). Gambar lama (236 soal, URL Supabase) utuh: identik di SQLite 7 Okt, dump 15 Okt, dan data sekarang. Gambar yang diunggah guru selama bug langsung terhapus dan tidak ada di backup; guru harus mengunggah ulang.
 * **Login SSO-only & Logout Tunggal**: Semua peran login lewat SSO Keycloak (siswa: username NIS). Tidak ada form kata sandi; superuser memakai `/accounts/darurat/` hanya saat SSO mati. Logout juga mengakhiri sesi Keycloak (penting di komputer lab).
 * **Jadwal Ujian Aktif & Aturan Hard-Stop Opsi A**: Paket ujian Ulangan Harian Matematika Kelas 11 RPL 1 aktif dengan Token `MAT11X`. Siswa yang mencoba masuk setelah batas `end_time` jadwal (misal 13:31 pada jadwal 12:30-13:30) secara otomatis ditolak gerbang ujian (*strict token gate*), dan durasi sisa pengerjaan siswa terpotong otomatis agar tepat berakhir bersamaan dengan waktu penutupan jadwal.
 * **Peran**: Admin/Kurikulum (termasuk platform/data admin) mengelola jadwal PTS/PAS/PAT/SAJ, verifikasi, logistik, kartu, pengaturan, dan membuka kunci siswa. Guru membuat UH untuk kelas yang ia ajar, memilih soal dari bank miliknya, melihat hasil paketnya. Peran pengawas tidak dipakai. Lihat `apps/accounts/policy.py`.
