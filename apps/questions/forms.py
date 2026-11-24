@@ -3,15 +3,27 @@ from .models import Question
 from apps.master_data.models import Subject, Teacher
 
 
+class ClearFlagField(forms.BooleanField):
+    """Tanda hapus gambar dari input tersembunyi. Hanya "1", "true" atau "on" berarti hapus.
+
+    BooleanField bawaan memakai CheckboxInput yang membaca string "0" sebagai benar, sehingga
+    setiap simpan menghapus semua gambar soal dan opsi.
+    """
+    widget = forms.HiddenInput
+
+    def to_python(self, value):
+        return str(value or '').strip().lower() in ('1', 'true', 'on')
+
+
 class QuestionForm(forms.ModelForm):
     """Formulir input / edit butir soal bank soal."""
-    
-    clear_question_image = forms.BooleanField(required=False)
-    clear_image_a = forms.BooleanField(required=False)
-    clear_image_b = forms.BooleanField(required=False)
-    clear_image_c = forms.BooleanField(required=False)
-    clear_image_d = forms.BooleanField(required=False)
-    clear_image_e = forms.BooleanField(required=False)
+
+    clear_question_image = ClearFlagField(required=False)
+    clear_image_a = ClearFlagField(required=False)
+    clear_image_b = ClearFlagField(required=False)
+    clear_image_c = ClearFlagField(required=False)
+    clear_image_d = ClearFlagField(required=False)
+    clear_image_e = ClearFlagField(required=False)
 
     class Meta:
         model = Question
