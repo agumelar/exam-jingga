@@ -28,6 +28,21 @@ def get_current_teacher(user):
     return None
 
 
+def teacher_subject_levels(teacher):
+    """Mapel yang diajar guru menurut Penugasan Guru, beserta tingkat kelasnya: [{'id', 'name', 'levels'}]."""
+    if teacher is None:
+        return []
+    rows = (TeacherAssignment.objects.filter(teacher=teacher, subject__isnull=False, class_room__isnull=False)
+            .values_list('subject_id', 'subject__name', 'class_room__level').distinct())
+    subjects = {}
+    for subject_id, name, level in rows:
+        entry = subjects.setdefault(str(subject_id), {'id': str(subject_id), 'name': name, 'levels': set()})
+        if level:
+            entry['levels'].add(int(level))
+    return sorted(({**s, 'levels': sorted(s['levels'])} for s in subjects.values() if s['levels']),
+                  key=lambda s: s['name'])
+
+
 def get_scoped_questions_queryset(request):
     """Filter questions queryset based on user role, assigned subjects, and query parameters."""
     user = request.user
@@ -326,6 +341,7 @@ class BankSoalView(View):
             'search_query': request.GET.get('q', '').strip(),
             'is_staff_admin': is_staff_admin,
             'current_teacher': teacher,
+            'can_import_word': bool(teacher_subject_levels(teacher)),
         }
         return render(request, self.template_name, context)
 
