@@ -12,6 +12,7 @@ import base64
 import hashlib
 import io
 import json
+import math
 import re
 import shutil
 import tempfile
@@ -29,7 +30,7 @@ from docx.enum.text import WD_BREAK
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageDraw, ImageOps, UnidentifiedImageError
 
 from .models import Question, detect_cross_referencing_options
 
@@ -61,7 +62,17 @@ EXAMPLES = (
         'kunci': 'B',
         'cp': '',
     },
+    {
+        'soal': ('Perhatikan gambar berikut!\nBangun datar yang jumlah sisinya sama dengan bangun pada gambar '
+                 'adalah ....'),
+        'options': ('', '', '', '', ''),
+        'kunci': 'B',
+        'cp': 'CP 5 - Bangun datar',
+        'pictures': {'Soal': (3, False), 'A': (4, False), 'B': (3, True), 'C': (5, False), 'D': (0, False),
+                     'E': (6, False)},
+    },
 )
+PICTURE_SENTENCE = 'Perhatikan gambar berikut! Benda pada gambar digunakan untuk ....'
 
 _VML_IMAGEDATA = '{urn:schemas-microsoft-com:vml}imagedata'
 _MC_CHOICE = '{http://schemas.openxmlformats.org/markup-compatibility/2006}Choice'
@@ -465,7 +476,10 @@ def _build_item(number, cells, part):
         else:
             item.options[slot] = cell.text
 
-    if not item.question_text:
+    if not item.question_text and 'question' in item.images:
+        item.errors.append(f'Soal bergambar tetap perlu kalimat pertanyaan, misalnya "{PICTURE_SENTENCE}". '
+                           'Tulis kalimatnya di sel Soal, di atas atau di bawah gambar.')
+    elif not item.question_text:
         item.errors.append('Teks soal kosong. Tulis kalimat soal, misalnya "Perhatikan gambar berikut!".')
     for key in OPTION_KEYS:
         if not item.options[key] and key not in item.images:
@@ -651,7 +665,27 @@ def _shade(cell, color='EDE7E3'):
     tc_pr.append(shd)
 
 
-def _template_table(doc, values=None):
+def _shape_png(sides, flipped):
+    """Gambar bangun datar sederhana untuk contoh soal bergambar. sides=0 berarti lingkaran."""
+    img = Image.new('RGBA', (240, 160), (255, 255, 255, 0))
+    draw = ImageDraw.Draw(img)
+    cx, cy, r = 120, 82, 62
+    if sides == 0:
+        draw.ellipse((cx - r, cy - r, cx + r, cy + r), outline=(154, 52, 18), width=5)
+    else:
+        start = math.pi / 2 if flipped else -math.pi / 2
+        if sides == 4:
+            start = -math.pi / 4
+        points = [(cx + r * math.cos(start + 2 * math.pi * i / sides), cy + r * math.sin(start + 2 * math.pi * i / sides))
+                  for i in range(sides)]
+        draw.polygon(points, outline=(154, 52, 18), width=5)
+    buf = io.BytesIO()
+    img.save(buf, 'PNG')
+    buf.seek(0)
+    return buf
+
+
+def _template_table(doc, values=None, pictures=None):
     table = doc.add_table(rows=len(TEMPLATE_LABELS), cols=2)
     table.style = 'Table Grid'
     values = values or {}
@@ -666,6 +700,10 @@ def _template_table(doc, values=None):
         right.paragraphs[0].text = lines[0]
         for line in lines[1:]:
             right.add_paragraph(line)
+        if pictures and label in pictures:
+            paragraph = right.paragraphs[0] if not any(lines) else right.add_paragraph()
+            width = Cm(3.6) if label == 'Soal' else Cm(2.4)
+            paragraph.add_run().add_picture(_shape_png(*pictures[label]), width=width)
     doc.add_paragraph('')
 
 
@@ -678,6 +716,8 @@ def build_template():
         'Satu tabel untuk satu soal. Jangan mengubah tulisan di kolom kiri (Soal, A sampai E, Kunci, CP).',
         'Tulis kalimat soal di baris Soal. Gambar boleh ditempel langsung di sel Soal atau di sel pilihan A sampai E, '
         'satu gambar per sel.',
+        f'Soal bergambar tetap wajib punya kalimat pertanyaan, misalnya: "{PICTURE_SENTENCE}". '
+        'Tanpa kalimat, soal gagal diimpor. Lihat contoh ketiga.',
         'Semua pilihan A sampai E wajib diisi, berupa teks atau gambar.',
         'Isi Kunci dengan satu huruf: A, B, C, D, atau E.',
         'CP boleh kosong. Contoh pengisian: CP 2 - Statistika.',
@@ -687,7 +727,7 @@ def build_template():
         '(Ctrl+V) di akhir dokumen.',
         f'Mata pelajaran dan tingkat kelas dipilih saat mengunggah, jadi satu file untuk satu mapel dan satu tingkat. '
         f'Maksimal {MAX_QUESTIONS} soal dan {MAX_FILE_BYTES // (1024 * 1024)} MB per file.',
-        'Dua tabel contoh di bawah ini otomatis dilewati saat impor dan boleh dihapus.',
+        'Tiga tabel contoh di bawah ini otomatis dilewati saat impor dan boleh dihapus.',
     )
     for step in steps:
         doc.add_paragraph(step, style='List Number')
@@ -696,7 +736,7 @@ def build_template():
     for example in EXAMPLES:
         values = {'Soal': example['soal'], 'Kunci': example['kunci'], 'CP': example['cp']}
         values.update(dict(zip(OPTION_KEYS, example['options'])))
-        _template_table(doc, values)
+        _template_table(doc, values, example.get('pictures'))
 
     doc.paragraphs[-1].add_run().add_break(WD_BREAK.PAGE)
     doc.add_heading('Soal', level=2)

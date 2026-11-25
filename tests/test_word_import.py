@@ -90,7 +90,18 @@ def test_template_alone_imports_nothing():
     result = word_import.parse_document(io.BytesIO(word_import.build_template()))
     assert result.file_error == ''
     assert result.items == []
-    assert result.skipped_examples == 2
+    assert result.skipped_examples == 3
+
+
+def test_template_explains_picture_questions_with_an_example():
+    doc = Document(io.BytesIO(word_import.build_template()))
+    text = ' '.join(p.text for p in doc.paragraphs)
+    assert 'Soal bergambar tetap wajib punya kalimat pertanyaan' in text
+    picture_example = doc.tables[2]
+    labels = [row.cells[0].text for row in picture_example.rows]
+    assert labels[:6] == ['Soal', 'A', 'B', 'C', 'D', 'E']
+    for row in picture_example.rows[:6]:
+        assert row.cells[1]._tc.xpath('.//a:blip'), f'sel {row.cells[0].text} contoh harus bergambar'
 
 
 def test_multi_paragraph_question_keeps_line_breaks():
@@ -200,6 +211,17 @@ def test_question_without_text_fails():
     _soal(doc, soal='')
     [item] = _parse(doc).items
     assert item.status == 'gagal'
+
+
+def test_picture_only_question_explains_the_sentence_is_needed():
+    def question(cell):
+        cell.paragraphs[0].add_run().add_picture(_png((30, 30)))
+
+    doc = Document()
+    _soal(doc, soal=question)
+    [item] = _parse(doc).items
+    assert item.status == 'gagal'
+    assert item.errors[0].startswith('Soal bergambar tetap perlu kalimat pertanyaan')
 
 
 def test_table_inside_question_fails():
