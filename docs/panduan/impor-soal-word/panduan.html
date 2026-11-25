@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Panduan Impor Soal dari Word</title>
+<style>
+  @page { size: A4; margin: 16mm 16mm 18mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Calibri, Arial, sans-serif; color: #1c1917; font-size: 10.5pt; line-height: 1.5; margin: 0; }
+  header { border-bottom: 2px solid #c2410c; padding-bottom: 8mm; margin-bottom: 7mm; }
+  .kicker { font-size: 9.5pt; color: #57534e; margin: 0 0 2mm; }
+  h1 { font-size: 22pt; line-height: 1.15; margin: 0 0 3mm; }
+  .lead { font-size: 11pt; margin: 0; max-width: 160mm; }
+  h2 { font-size: 13pt; margin: 0 0 2mm; }
+  .step { break-inside: avoid; margin: 0 0 8mm; }
+  .step h2 .no { color: #c2410c; }
+  .step p { margin: 0 0 3mm; }
+  figure { margin: 0; }
+  figure img { display: block; width: 100%; border: 1px solid #d6d3d1; border-radius: 3mm; }
+  figure.narrow img { width: 118mm; }
+  figure.mid img { width: 150mm; }
+  figcaption { font-size: 9pt; color: #57534e; margin-top: 1.5mm; }
+  b.btn { white-space: nowrap; }
+  section.box { break-inside: avoid; border: 1px solid #d6d3d1; border-radius: 3mm; padding: 5mm 6mm; margin: 0 0 6mm; }
+  dl { margin: 0; display: grid; grid-template-columns: 42mm 1fr; row-gap: 2.5mm; column-gap: 4mm; }
+  dt { font-weight: 600; }
+  dt.ok { color: #047857; } dt.warn { color: #92400e; } dt.fail { color: #b91c1c; } dt.same { color: #44403c; }
+  dd { margin: 0; }
+  ul { margin: 0; padding-left: 5mm; }
+  li { margin: 0 0 1.8mm; }
+  .page-break { break-before: page; }
+  footer { font-size: 10pt; border-top: 1px solid #d6d3d1; padding-top: 4mm; margin-top: 2mm; }
+</style>
+</head>
+<body>
+<header>
+  <p class="kicker">Exam Jingga, SMKN 1 Rongga · untuk Bapak/Ibu guru</p>
+  <h1>Panduan Impor Soal dari Word</h1>
+  <p class="lead">Soal bisa dimasukkan ke Exam lewat file Word, jadi tidak perlu diketik satu per satu di aplikasi. Soal diketik di template Word (boleh tanpa internet), lalu diunggah sekali. Gambar yang ditempel di Word ikut masuk.</p>
+</header>
+
+<div class="step">
+  <h2><span class="no">1.</span> Buka halaman impor</h2>
+  <p>Buka menu Bank Soal di Exam, lalu klik <b class="btn">Impor dari Word</b>.</p>
+  <figure><img src="gambar/1-buka-impor.jpg" alt="Tombol Impor dari Word di halaman Bank Soal"></figure>
+</div>
+
+<div class="step">
+  <h2><span class="no">2.</span> Unduh template</h2>
+  <p>Klik <b class="btn">Unduh Template Word</b>. Template cukup diunduh sekali dan bisa dipakai berulang kali.</p>
+  <figure><img src="gambar/2-unduh-template.jpg" alt="Tombol Unduh Template Word"></figure>
+</div>
+
+<div class="step">
+  <h2><span class="no">3.</span> Isi template di Word</h2>
+  <p>Satu tabel untuk satu soal. Isi Soal, pilihan A sampai E, Kunci (satu huruf), dan CP kalau ada. Jangan mengubah tulisan di kolom kiri. Untuk menambah soal, salin satu tabel kosong lalu tempel di bawahnya. Gambar boleh ditempel langsung di sel Soal atau di sel pilihan.</p>
+  <figure class="mid"><img src="gambar/3-isi-template.jpg" alt="Contoh template Word yang sudah diisi"><figcaption>Contoh isian. Soal kedua memakai gambar dan tetap punya kalimat pertanyaan.</figcaption></figure>
+</div>
+
+<div class="step">
+  <h2><span class="no">4.</span> Unggah file</h2>
+  <p>Kembali ke halaman impor. Pilih mata pelajaran dan tingkat kelas, klik <b class="btn">Pilih File</b>, pilih file Word yang sudah diisi, lalu klik <b class="btn">Baca File</b>.</p>
+  <figure><img src="gambar/4-unggah-file.jpg" alt="Form unggah file"></figure>
+</div>
+
+<div class="step">
+  <h2><span class="no">5.</span> Periksa hasilnya</h2>
+  <p>Exam menampilkan semua soal yang terbaca. Pada tahap ini soal belum masuk ke bank soal. Cocokkan teks, gambar, dan kunci (pilihan yang berwarna hijau).</p>
+  <figure class="mid"><img src="gambar/5-periksa-pratinjau.jpg" alt="Hasil pemeriksaan file"></figure>
+</div>
+
+<section class="box">
+  <h2>Arti tanda di hasil pemeriksaan</h2>
+  <dl>
+    <dt class="ok">Siap disimpan</dt><dd>Soal terbaca dengan benar.</dd>
+    <dt class="warn">Disimpan, perlu dicek</dt><dd>Soal ikut tersimpan, tetapi baca catatan kuningnya.</dd>
+    <dt class="fail">Gagal, tidak disimpan</dt><dd>Baca catatan merahnya, perbaiki di Word, lalu unggah ulang file yang sama. Soal yang sudah tersimpan tidak akan dobel.</dd>
+    <dt class="same">Sudah ada</dt><dd>Soal itu sudah ada di bank soal Bapak/Ibu, jadi dilewati.</dd>
+  </dl>
+</section>
+
+<div class="step">
+  <h2><span class="no">6.</span> Simpan</h2>
+  <p>Klik <b class="btn">Simpan</b> di bagian bawah. Angka di tombol adalah jumlah soal yang akan disimpan. Soal yang gagal tidak ikut.</p>
+  <figure class="narrow"><img src="gambar/6-status-dan-simpan.jpg" alt="Contoh soal perlu dicek, soal gagal, dan tombol Simpan"><figcaption>Soal 4 tetap disimpan dengan catatan. Soal 5 gagal karena pilihan E kosong.</figcaption></figure>
+</div>
+
+<div class="step">
+  <h2><span class="no">7.</span> Soal masuk ke Bank Soal</h2>
+  <p>Muncul pesan jumlah soal yang ditambahkan. Urutan soal di Bank Soal sama dengan urutan di file Word.</p>
+  <figure class="mid"><img src="gambar/7-masuk-bank-soal.jpg" alt="Bank Soal setelah impor"></figure>
+</div>
+
+<section class="box">
+  <h2>Yang perlu diperhatikan</h2>
+  <ul>
+    <li>Satu file untuk satu mapel dan satu tingkat kelas, maksimal 200 soal dan 20 MB.</li>
+    <li>Soal bergambar tetap harus ada kalimat pertanyaannya, misalnya "Perhatikan gambar berikut! Benda pada gambar digunakan untuk ....".</li>
+    <li>Semua pilihan A sampai E wajib diisi, boleh teks atau gambar. Satu sel hanya memakai satu gambar.</li>
+    <li>Simbol yang diketik biasa (x², √, ½, °) terbaca apa adanya. Rumus yang rumit dan tabel di dalam soal ditempel sebagai gambar.</li>
+    <li>File harus berformat .docx. Kalau masih .doc, buka di Word lalu Simpan Sebagai .docx.</li>
+    <li>Tombol Impor dari Word hanya muncul untuk guru yang sudah punya pembagian tugas mengajar. Kalau tombolnya tidak ada, hubungi kurikulum.</li>
+  </ul>
+</section>
+
+<footer>Kalau ada kendala, kirim tangkapan layar hasil pemeriksaannya ke Pak Agung (admin Exam).</footer>
+</body>
+</html>

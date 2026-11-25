@@ -1,0 +1,26 @@
+Assalamu'alaikum, Bapak/Ibu guru.
+
+Mulai hari ini soal bisa dimasukkan ke Exam lewat file Word, jadi tidak perlu lagi diketik satu per satu di aplikasi. Soal diketik di template Word (boleh tanpa internet), lalu diunggah sekali. Gambar yang ditempel di Word ikut masuk.
+
+Caranya:
+1. Buka Bank Soal di Exam, klik *Impor dari Word* (gambar 1).
+2. Klik *Unduh Template Word* (gambar 2).
+3. Isi template di Word. Satu tabel untuk satu soal: isi Soal, pilihan A sampai E, Kunci (satu huruf), dan CP kalau ada (gambar 3). Untuk menambah soal, salin tabel kosong lalu tempel di bawahnya.
+4. Kembali ke halaman impor. Pilih mapel dan kelas, klik *Pilih File*, pilih file Word-nya, lalu klik *Baca File* (gambar 4).
+5. Periksa hasilnya. Pada tahap ini soal belum masuk ke bank soal (gambar 5).
+6. Klik *Simpan* di bagian bawah (gambar 6). Soal langsung muncul di Bank Soal (gambar 7).
+
+Arti tanda di hasil pemeriksaan:
+- Siap disimpan: soal terbaca dengan benar.
+- Disimpan, perlu dicek: soal ikut tersimpan, tetapi baca catatan kuningnya.
+- Gagal, tidak disimpan: baca catatan merahnya, perbaiki di Word, lalu unggah ulang file yang sama. Soal yang sudah tersimpan tidak akan dobel.
+- Sudah ada: soal itu sudah ada di bank soal Bapak/Ibu, jadi dilewati.
+
+Yang perlu diperhatikan:
+- Satu file untuk satu mapel dan satu tingkat kelas, maksimal 200 soal.
+- Soal bergambar tetap harus ada kalimat pertanyaannya, misalnya "Perhatikan gambar berikut! Benda pada gambar digunakan untuk ....".
+- Semua pilihan A sampai E wajib diisi, boleh teks atau gambar.
+- Rumus yang rumit dan tabel di dalam soal ditempel sebagai gambar.
+- Tombol Impor dari Word hanya muncul untuk guru yang sudah punya pembagian tugas mengajar. Kalau tombolnya tidak ada, hubungi kurikulum.
+
+Kalau ada kendala, kirim tangkapan layar hasil pemeriksaannya ke saya.

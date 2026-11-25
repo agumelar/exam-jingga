@@ -1,0 +1,362 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Laporan Audit Exam Jingga</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: laporan satu kolom dengan daftar isi menempel di kiri pada layar lebar; jingga hanya untuk penanda prioritas dan status. */
+:root {
+  --bg: #fbfaf8;
+  --surface: #ffffff;
+  --ink: #1c1917;
+  --muted: #57534e;
+  --line: #e7e2dc;
+  --accent: #c2410c;
+  --accent-soft: #fff1e8;
+  --ok: #047857;
+  --ok-soft: #e9f7f1;
+  --warn: #92400e;
+  --warn-soft: #fef6e4;
+  --crit: #b91c1c;
+  --crit-soft: #fdeceb;
+  --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141210; --surface: #1d1a17; --ink: #f2efec; --muted: #b8b0a8; --line: #36302b;
+    --accent: #fb923c; --accent-soft: #3a2111; --ok: #34d399; --ok-soft: #10291f;
+    --warn: #fbbf24; --warn-soft: #33260c; --crit: #f87171; --crit-soft: #3a1515; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141210; --surface: #1d1a17; --ink: #f2efec; --muted: #b8b0a8; --line: #36302b;
+  --accent: #fb923c; --accent-soft: #3a2111; --ok: #34d399; --ok-soft: #10291f;
+  --warn: #fbbf24; --warn-soft: #33260c; --crit: #f87171; --crit-soft: #3a1515; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6; margin: 0; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 72px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; }
+@media (max-width: 900px) { .wrap { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 24px 56px; } .toc { position: static !important; } }
+
+.toc { position: sticky; top: calc(24px + env(safe-area-inset-top, 0px)); align-self: start; font-size: 14px; }
+.toc p { margin: 0 0 8px; font-weight: 700; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.toc a { display: block; padding: 6px 10px; border-radius: 8px; color: var(--muted); text-decoration: none; }
+.toc a:hover { background: var(--accent-soft); color: var(--ink); }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+main { min-width: 0; display: grid; gap: 56px; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: clamp(30px, 4vw, 42px); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: 24px; font-weight: 800; letter-spacing: -0.01em; }
+h3 { font-size: 17px; font-weight: 700; }
+p { margin: 0; max-width: 68ch; }
+section { display: grid; gap: 18px; scroll-margin-top: 24px; }
+.lede { color: var(--muted); font-size: 17px; }
+.mono { font-family: var(--font-mono); font-size: .92em; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; overflow-wrap: anywhere; }
+
+.meta { display: flex; flex-wrap: wrap; gap: 8px 24px; color: var(--muted); font-size: 14px; }
+.meta strong { color: var(--ink); font-weight: 600; }
+.status { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); font-weight: 700; font-size: 14px; width: fit-content; }
+.status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.fact { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 2px; }
+.fact b { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.fact span { color: var(--muted); font-size: 14px; }
+
+.actions { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; counter-reset: act; }
+.actions li { counter-increment: act; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.actions li::before { content: counter(act); width: 34px; height: 34px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-weight: 800; display: grid; place-items: center; }
+.actions li.urgent { border-color: var(--accent); }
+.actions .who { display: inline-block; margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.tag { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; vertical-align: 2px; }
+.tag.open { background: var(--warn-soft); color: var(--warn); }
+.tag.progress { background: var(--accent-soft); color: var(--accent); }
+.done-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.done-list li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; font-size: 15px; }
+.done-list li::before { content: "✓"; color: var(--ok); font-weight: 800; }
+
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 13px; color: var(--muted); font-weight: 700; background: var(--bg); }
+td.phase { white-space: nowrap; font-weight: 700; }
+.matrix td, .matrix th { text-align: center; white-space: nowrap; }
+.matrix td:first-child, .matrix th:first-child { text-align: left; white-space: normal; min-width: 220px; }
+.yes { color: var(--ok); font-weight: 700; }
+.own { color: var(--warn); font-weight: 700; }
+.no { color: var(--muted); }
+
+.sev { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.sev div { border-radius: 14px; padding: 16px; display: grid; gap: 6px; }
+.sev .c { background: var(--crit-soft); }
+.sev .h { background: var(--warn-soft); }
+.sev .m { background: var(--surface); border: 1px solid var(--line); }
+.sev b { font-size: 15px; }
+.sev .c b { color: var(--crit); } .sev .h b { color: var(--warn); }
+.sev p { font-size: 15px; color: var(--ink); }
+
+ul.plain { margin: 0; padding-left: 20px; display: grid; gap: 8px; max-width: 72ch; }
+.note { background: var(--warn-soft); border-radius: 14px; padding: 16px 18px; display: grid; gap: 8px; }
+.note b { color: var(--warn); }
+.decisions { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.decisions div { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 6px; align-content: start; }
+.decisions p { font-size: 15px; color: var(--muted); }
+.decisions .new h3::after { content: "baru"; margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; background: var(--accent-soft); color: var(--accent); vertical-align: 2px; }
+footer { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); padding-top: 20px; display: grid; gap: 6px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+</style>
+
+<div class="wrap">
+  <nav class="toc" aria-label="Daftar isi">
+    <p>Isi laporan</p>
+    <ol>
+      <li><a href="#ringkasan">Ringkasan</a></li>
+      <li><a href="#tindakan">Tindakan tim</a></li>
+      <li><a href="#lanjutan">Setelah audit</a></li>
+      <li><a href="#tes-beban">Rencana tes beban</a></li>
+      <li><a href="#keputusan">Keputusan bisnis</a></li>
+      <li><a href="#peran">Peran dan akses</a></li>
+      <li><a href="#sso">SSO bersama ASIK</a></li>
+      <li><a href="#bug">Bug saat uji</a></li>
+      <li><a href="#temuan">Temuan audit</a></li>
+      <li><a href="#perubahan">Perubahan per fase</a></li>
+      <li><a href="#operasional">Catatan operasional</a></li>
+      <li><a href="#sisa">Belum dikerjakan</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <section id="ringkasan" aria-labelledby="h-ringkasan">
+      <span class="status">Siap dipakai, menunggu bank soal dan tes beban</span>
+      <h1 id="h-ringkasan">Laporan Audit Exam Jingga</h1>
+      <p class="lede">Audit menyeluruh aplikasi CBT SMKN 1 Rongga: proses bisnis, kode, dan peran pengguna, dilanjutkan uji coba di produksi dengan siswa uji. Semua temuan yang disepakati sudah diperbaiki, diuji, dan dideploy. Exam memakai data tahun ajaran 2026/2027, dan penugasan guru sudah lengkap. Langkah berikutnya: guru mengisi bank soal, lalu satu hari tes ujian untuk semua siswa sebagai tes beban server.</p>
+      <div class="meta">
+        <span>Tanggal: <strong>12 sampai 16 Oktober 2026</strong></span>
+        <span>Versi kode di server: <strong class="mono">66b47af</strong></span>
+        <span>Status: <strong>belum dipakai untuk ujian sungguhan</strong></span>
+      </div>
+      <div class="facts">
+        <div class="fact"><b>425 / 425</b><span>test lulus di SQLite dan PostgreSQL 17</span></div>
+        <div class="fact"><b>728</b><span>siswa aktif tahun ajaran 2026/2027</span></div>
+        <div class="fact"><b>291</b><span>penugasan mengajar untuk 41 guru di 22 kelas</span></div>
+        <div class="fact"><b>Harian</b><span>backup database tersalin ke Google Drive sekolah</span></div>
+      </div>
+    </section>
+
+    <section id="tindakan" aria-labelledby="h-tindakan">
+      <h2 id="h-tindakan">Tindakan tim yang masih terbuka</h2>
+      <p>Langkah ini tidak bisa dikerjakan dari kode. Yang ditandai "belum dikonfirmasi" mungkin sudah dikerjakan, tapi belum ada kabar ke pengembang.</p>
+      <ol class="actions">
+        <li class="urgent"><div><h3>Semua guru mengisi bank soal<span class="tag progress">akan dimulai</span></h3><p>Soal diisi per mapel dan jenjang yang diajar, lengkap opsi A sampai E. Untuk mapel yang diampu beberapa guru di kelas yang sama, soal PAS dibagi rata, jadi setiap guru pengampu perlu menyiapkan bagiannya.</p><span class="who">Semua guru, dikoordinasi kurikulum</span></div></li>
+        <li class="urgent"><div><h3>Tes ujian satu hari untuk semua siswa<span class="tag progress">direncanakan</span></h3><p>Sekaligus tes beban server. Rencananya ada di bagian <a href="#tes-beban">Rencana tes beban</a>.</p><span class="who">Kurikulum, pengelola server, dan pengembang</span></div></li>
+        <li><div><h3>Iwan Setiawan login sekali ke Exam</h3><p>Penugasannya sudah ada, tapi beliau baru bisa membuat UH dan memilih soal setelah login pertama.</p><span class="who">Iwan Setiawan</span></div></li>
+        <li class="urgent"><div><h3>Ganti kata sandi database Supabase cloud lama<span class="tag open">belum dikonfirmasi</span></h3><p>Kata sandinya sempat tercatat di repo yang berstatus publik dan masih ada di riwayat git.</p><span class="who">Pemilik akun Supabase</span></div></li>
+        <li class="urgent"><div><h3>Pasang kunci webhook baru di panel Data Admin<span class="tag open">belum dikonfirmasi</span></h3><p>Kunci lama sudah ditolak server. Kunci baru ada di <code>.env</code> server Exam dengan nama <code>WEBHOOK_SECRET_KEY</code>.</p><span class="who">Pengelola Data Admin</span></div></li>
+        <li><div><h3>Jadikan repo GitHub private<span class="tag open">belum dikonfirmasi</span></h3><p>Sudah disepakati akan dilakukan oleh pemilik repo.</p><span class="who">Pemilik repo</span></div></li>
+        <li><div><h3>Lengkapi data tiga guru di Data Admin<span class="tag open">belum dikonfirmasi</span></h3><p>Jenis staf Suhendar Aryadi, Agus Waluyo, dan M Tauqi sempat kosong. Isi "Guru", dan NIP bila ada. Penulisan nama sebaiknya juga diseragamkan (ada yang memakai gelar, ada yang tidak). Nama M Tauqi di Exam tertulis kapital semua karena diambil dari akun SSO; ubah di Keycloak bila ingin seragam.</p><span class="who">Pengelola Data Admin dan Keycloak</span></div></li>
+        <li><div><h3>Sosialisasikan aturan ujian kepada siswa</h3><p>Tidak ada tombol selesai: ujian berakhir saat hitung mundur habis. Siswa tetap di layar ujian sampai waktu habis dan memakai sisa waktu untuk memeriksa jawaban. Berpindah aplikasi tercatat sebagai pelanggaran, dan di PAS/PAT/SAJ pelanggaran kedua mengunci ujian.</p><span class="who">Kurikulum dan wali kelas</span></div></li>
+        <li><div><h3>Uji reset sesi di HP sungguhan</h3><p>Reset satu sesi dari Monitoring saat halaman ujian siswa uji masih terbuka. HP seharusnya pindah ke dashboard dalam beberapa detik dengan pesan bahwa sesi direset.</p><span class="who">Kurikulum dan satu guru penguji</span></div></li>
+        <li><div><h3>Persiapan hari ujian pertama</h3><p>Maintenance VPS ASIK mengikuti jam freeze Exam (06.30 sampai 16.30 WIB), dan siswa sudah login sebelum token dibagikan, karena absensi ASIK pagi hari memakai Keycloak yang sama.</p><span class="who">Pengelola server dan kurikulum</span></div></li>
+      </ol>
+      <h3>Sudah selesai</h3>
+      <ul class="done-list">
+        <li><span>Client role <code>admin</code> dan <code>kurikulum</code> di client <code>exam-jingga</code> terpasang. Akun <code>admin-exam</code> dan <code>kurikulum</code> sudah login dengan peran yang benar.</span></li>
+        <li><span>Salinan backup ke Google Drive sekolah aktif sejak 15 Oktober (remote <code>gdrive-sekolah</code>, user <code>ubuntu</code>).</span></li>
+        <li><span>Uji coba di produksi selesai: UH, PTS, PAS, SAJ, susulan, kunci dan buka kunci, reset, hentikan paksa, arsip, dan hapus permanen.</span></li>
+        <li><span>Data uji coba dibersihkan. Kelas 10 Uji beserta dua siswa uji sengaja disimpan untuk uji coba berikutnya.</span></li>
+        <li><span>Penugasan guru 2026/2027 lengkap: 291 penugasan, semua kelas paralel memiliki mapel yang sama, tanpa data ganda.</span></li>
+        <li><span>M Tauqi sudah login dan mendapat penugasan.</span></li>
+        <li><span>Akun Dhafika Mutiara dan Sandi Saprudin (pindah tugas) serta akun uji Meta dinonaktifkan di Exam dan Keycloak. Soal buatan mereka tetap ada di bank soal.</span></li>
+      </ul>
+    </section>
+
+    <section id="lanjutan" aria-labelledby="h-lanjutan">
+      <h2 id="h-lanjutan">Perubahan setelah audit (13 sampai 15 Oktober)</h2>
+      <p>Sebagian besar perubahan ini lahir dari uji coba dengan siswa uji dan dari keputusan sekolah selama uji coba.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Bagian</th><th scope="col">Yang berubah</th><th scope="col">Commit</th></tr></thead>
+          <tbody>
+            <tr><td class="phase">Data pusat</td><td>Tombol sinkron ternyata belum pernah berfungsi dan tetap melaporkan "berhasil". Kini memakai client Keycloak khusus <code>exam-jingga-sync</code>, membaca semua halaman API, dan membatalkan sinkron bila data tidak lengkap. Exam pindah ke tahun ajaran 2026/2027: 728 siswa aktif, 5 dinonaktifkan, kelas lama dibersihkan.</td><td class="mono">28e2284, 6324c5e</td></tr>
+            <tr><td class="phase">Data guru</td><td>NIP menjadi kunci identitas guru (username Keycloak guru adalah NIP). Sinkron guru membuat guru baru dari data pusat, nama guru mengikuti data pusat, dan guru tanpa data guru dibuatkan saat login SSO pertama.</td><td class="mono">779d22c, 5a5f36a, 03fce69, 2e67d29</td></tr>
+            <tr><td class="phase">Ujian di HP</td><td>Layar tetap menyala selama ujian, zoom diizinkan, pengatur ukuran teks di daftar nomor soal, jendela token tidak tertutup keyboard, peringatan pindah layar di tengah layar, pop up nilai di dashboard setelah waktu habis.</td><td class="mono">9387b3e, 607981e</td></tr>
+            <tr><td class="phase">Aturan ujian</td><td>Tidak ada tombol selesai; ujian berakhir saat hitung mundur habis, dan server menolak selesai lebih awal. Susulan cukup dengan menggeser waktu jadwal; siswa yang sudah selesai tidak bisa mengerjakan lagi.</td><td class="mono">d5bb66f, 94451d9</td></tr>
+            <tr><td class="phase">Pelanggaran</td><td>Pencatatan pindah layar ternyata selalu error 500 di produksi, jadi PAS tidak pernah mengunci. Diperbaiki, dan sekarang seluruh test juga dijalankan di PostgreSQL sebelum deploy.</td><td class="mono">4f8100f, a131b8c</td></tr>
+            <tr><td class="phase">Aksi sesi</td><td>Buka kunci tanpa isian alasan; reset dan hentikan paksa cukup konfirmasi. Halaman ujian yang sesinya direset langsung kembali ke dashboard dengan penjelasan.</td><td class="mono">4dbef01</td></tr>
+            <tr><td class="phase">Arsip dan hapus</td><td>Paket yang sudah lewat bisa diarsipkan, satu per satu atau massal. Admin bisa menghapus permanen paket arsip, juga massal dengan satu konfirmasi; sebelumnya rekap Excel dan backup database disimpan ke folder <code>arsip-hapus</code> di server dan Drive.</td><td class="mono">4867f19, 61dc84d, 036e903, ed6999b</td></tr>
+            <tr><td class="phase">Guru nonaktif</td><td>Guru pindah tugas dan akun uji dinonaktifkan lewat akunnya, tidak dihapus. Mereka hilang dari pilihan guru di penugasan, jadwal, dan penulis soal, diberi label Nonaktif di Master Guru, dan soalnya tetap tersimpan.</td><td class="mono">66b47af</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="tes-beban" aria-labelledby="h-tes-beban">
+      <h2 id="h-tes-beban">Rencana tes beban</h2>
+      <p>Satu hari tes ujian untuk semua siswa, dengan tujuan memastikan server sanggup melayani seluruh siswa sekaligus sebelum ujian sungguhan. Server Exam memiliki 4 core dan RAM 24 GB, dengan beban harian yang sangat rendah. Aplikasi melayani 16 permintaan sekaligus, dan setiap siswa yang sedang ujian mengirim satu tanda aktif tiap 15 detik ditambah satu permintaan setiap kali memilih jawaban.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Tahap</th><th scope="col">Yang dilakukan</th></tr></thead>
+          <tbody>
+            <tr><td class="phase">Persiapan</td><td>Kurikulum membuat paket uji (judul diawali "UJI BEBAN") untuk satu mapel yang ada di semua jenjang, sekitar 30 soal dan durasi 45 menit, dengan jam mulai yang sama untuk semua kelas. Pengelola server memastikan tidak ada maintenance di VPS Exam maupun VPS ASIK pada hari itu. Pengembang tidak melakukan deploy sejak sehari sebelumnya.</td></tr>
+            <tr><td class="phase">Waktu</td><td>Setelah absensi pagi ASIK selesai (di atas pukul 08.00), karena login Exam dan ASIK memakai Keycloak yang sama.</td></tr>
+            <tr><td class="phase">Bertahap</td><td>Mulai dengan satu jenjang (sekitar 250 siswa) selama 10 sampai 15 menit, lalu dua jenjang lainnya menyusul. Kalau ada gejala lambat di tahap pertama, tahap berikutnya ditunda dan pengaturan server disesuaikan dulu.</td></tr>
+            <tr><td class="phase">Pemantauan</td><td>Pengembang memantau langsung dari server: waktu respons, error, beban CPU dan memori, serta koneksi database. Guru di kelas mencatat keluhan siswa (lambat, gagal simpan, keluar sendiri) beserta jamnya.</td></tr>
+            <tr><td class="phase">Setelah tes</td><td>Pengembang melaporkan angka puncak dan kendala. Paket uji diarsipkan lalu dihapus permanen, atau disimpan sebagai latihan bila sekolah menginginkan.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="keputusan" aria-labelledby="h-keputusan">
+      <h2 id="h-keputusan">Keputusan bisnis yang ditetapkan</h2>
+      <div class="decisions">
+        <div><h3>Login lewat SSO untuk semua peran</h3><p>Hanya superuser yang punya jalur darurat saat SSO tidak bisa diakses.</p></div>
+        <div><h3>Tidak ada peran pengawas</h3><p>Siswa yang terkunci datang ke admin atau kurikulum untuk pembinaan, sesuai SOP sekolah.</p></div>
+        <div class="new"><h3>Aksi sesi tanpa isian alasan</h3><p>Buka kunci, reset, dan hentikan paksa hanya oleh admin dan kurikulum. Log tetap mencatat pelaku, waktu, status sebelumnya, dan jumlah pelanggaran.</p></div>
+        <div><h3>Soal dan opsi A sampai E diacak</h3><p>Diacak per siswa. Jawaban tetap disimpan dengan huruf asli soal, jadi analisis pengecoh tetap valid.</p></div>
+        <div class="new"><h3>Tidak ada tombol selesai</h3><p>Semua jenis ujian berakhir saat hitung mundur habis, agar siswa disiplin dan memakai sisa waktu untuk memeriksa jawaban.</p></div>
+        <div class="new"><h3>Nilai langsung terlihat</h3><p>Siswa melihat nilainya begitu waktu habis, untuk semua jenis ujian termasuk PAS dan SAJ.</p></div>
+        <div class="new"><h3>Susulan dengan geser waktu</h3><p>Admin, kurikulum, atau guru pemilik UH menggeser waktu jadwal setelah gelombang pertama selesai. Jadwal awal tetap tercatat.</p></div>
+        <div><h3>PTS mengikuti jam dan kelas mengajar</h3><p>Admin memilih mapel, lalu guru pengampu, lalu kelas guru tersebut. PTS tidak kolaboratif.</p></div>
+        <div class="new"><h3>NIP sebagai identitas guru</h3><p>Data guru, nama, dan NIP mengikuti data pusat. Penugasan mengajar diisi manual oleh kurikulum.</p></div>
+        <div class="new"><h3>Nilai disimpan satu tahun pelajaran</h3><p>Paket lama diarsipkan. Hapus permanen hanya oleh admin, setelah backup otomatis.</p></div>
+        <div><h3>Soal di naskah terkunci tidak bisa diubah</h3><p>Revisi dilakukan lewat buka kunci naskah, dan hanya selama belum ada siswa yang mulai.</p></div>
+        <div class="new"><h3>Siswa mengerjakan dari HP</h3><p>Hampir semua siswa memakai HP, jadi setiap perubahan tampilan siswa diperiksa di lebar layar HP.</p></div>
+      </div>
+    </section>
+
+    <section id="peran" aria-labelledby="h-peran">
+      <h2 id="h-peran">Peran dan akses</h2>
+      <p>"Milik" berarti hanya untuk paket ujian yang dibuat atau diampu guru tersebut.</p>
+      <div class="table-wrap">
+        <table class="matrix">
+          <thead><tr><th scope="col">Fitur</th><th scope="col">Admin / Kurikulum</th><th scope="col">Guru</th><th scope="col">Siswa</th></tr></thead>
+          <tbody>
+            <tr><td>Bank soal</td><td class="yes">Semua</td><td class="own">Milik</td><td class="no">Tidak</td></tr>
+            <tr><td>Jadwal UH</td><td class="yes">Ya</td><td class="own">Kelas yang diajar</td><td class="no">Tidak</td></tr>
+            <tr><td>Jadwal PTS, PAS/PAT, SAJ</td><td class="yes">Ya</td><td class="no">Tidak</td><td class="no">Tidak</td></tr>
+            <tr><td>Pilih soal naskah</td><td class="yes">Ya</td><td class="own">Milik, sesuai kuota</td><td class="no">Tidak</td></tr>
+            <tr><td>Verifikasi dan kembalikan naskah</td><td class="yes">Ya</td><td class="no">Tidak</td><td class="no">Tidak</td></tr>
+            <tr><td>Buka kunci naskah</td><td class="yes">Semua jenis</td><td class="own">UH milik</td><td class="no">Tidak</td></tr>
+            <tr><td>Geser waktu untuk susulan</td><td class="yes">Semua jenis</td><td class="own">UH milik</td><td class="no">Tidak</td></tr>
+            <tr><td>Monitoring sesi</td><td class="yes">Ya, dengan aksi</td><td class="own">Milik, hanya lihat</td><td class="no">Tidak</td></tr>
+            <tr><td>Buka kunci, reset, hentikan paksa siswa</td><td class="yes">Ya</td><td class="no">Tidak</td><td class="no">Tidak</td></tr>
+            <tr><td>Rekap nilai dan analisis</td><td class="yes">Semua</td><td class="own">Milik</td><td class="no">Tidak</td></tr>
+            <tr><td>Arsipkan paket</td><td class="yes">Semua jenis</td><td class="own">UH milik</td><td class="no">Tidak</td></tr>
+            <tr><td>Hapus permanen paket arsip</td><td class="own">Admin saja</td><td class="no">Tidak</td><td class="no">Tidak</td></tr>
+            <tr><td>Logistik, kartu, daftar hadir, pengaturan</td><td class="yes">Ya</td><td class="no">Tidak</td><td class="no">Tidak</td></tr>
+            <tr><td>Master data dan sinkron data pusat</td><td class="yes">Ya</td><td class="no">Tidak</td><td class="no">Tidak</td></tr>
+            <tr><td>Mengerjakan ujian</td><td class="no">Tidak</td><td class="no">Tidak</td><td class="yes">Kelas dan guru sendiri</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="sso" aria-labelledby="h-sso">
+      <h2 id="h-sso">SSO bersama ASIK</h2>
+      <p>Keycloak sekolah (<code>sso.smkn1rongga.sch.id</code>, realm <code>sekolah</code>) berjalan di VPS yang sama dengan ASIK. Exam berjalan di VPS lain. Semua peran login lewat realm yang sama: siswa dengan NIS, guru dengan NIP, admin dan kurikulum dengan username.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Hal</th><th scope="col">Yang berlaku sekarang</th></tr></thead>
+          <tbody>
+            <tr><td class="phase">Peran admin</td><td>Hanya dari client role <code>exam-jingga</code>: <code>admin</code>, <code>kurikulum</code>, <code>platform_admin</code>, <code>data_admin</code>. Role realm milik ASIK dengan nama yang sama tidak memberi akses di Exam.</td></tr>
+            <tr><td class="phase">Guru dan siswa</td><td>Dari role realm, username NIS untuk siswa, dan username NIP untuk guru. NIP dari login disimpan ke data guru dan dipakai sinkron data pusat.</td></tr>
+            <tr><td class="phase">Sinkron data pusat</td><td>Memakai client terpisah <code>exam-jingga-sync</code> dengan service account. Client login <code>exam-jingga</code> tidak diubah.</td></tr>
+            <tr><td class="phase">Komputer lab</td><td>Setiap login ke Exam selalu meminta kata sandi. Logout dari Exam juga mengakhiri sesi SSO. Sudah dicoba di HP: kata sandi diminta lagi saat ganti siswa.</td></tr>
+            <tr><td class="phase">Kalau Keycloak mati</td><td>Pengguna baru tidak bisa login ke Exam. Siswa yang sudah masuk tetap bisa mengerjakan dan menyimpan jawaban.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="bug" aria-labelledby="h-bug">
+      <h2 id="h-bug">Bug yang ditemukan saat uji dan sudah diperbaiki</h2>
+      <h3>Saat uji coba di produksi (13 sampai 15 Oktober)</h3>
+      <ul class="plain">
+        <li>Tombol "Tarik Data Master" tidak pernah berfungsi sejak pindah ke Django, tapi tetap menampilkan "Sinkronisasi berhasil: 0 siswa".</li>
+        <li>Sinkron hanya membaca 100 dari 728 siswa, dan paginasi API data pusat sempat mengulang 130 siswa sekaligus melewatkan 130 lainnya. API sudah diperbaiki oleh pengelolanya.</li>
+        <li>Sinkron guru akan membuat 53 guru ganda dan mendaftarkan tenaga kependidikan sebagai guru. Diganti dengan pencocokan NIP.</li>
+        <li>Setiap pelanggaran pindah layar menghasilkan error 500, sehingga tidak pernah tercatat dan PAS tidak pernah mengunci. Lolos dari test karena test memakai SQLite.</li>
+        <li>Setelah reset, halaman ujian siswa terus mengirim ke sesi yang sudah dihapus dan berakhir di halaman tidak ditemukan.</li>
+        <li>Dua paket bernama sama yang dihapus bersamaan saling menimpa file Excel rekapnya. Data tetap aman di backup database.</li>
+        <li>Peringatan pindah layar terlalu kecil, dan siswa tidak melihat nilainya setelah waktu habis.</li>
+      </ul>
+      <h3>Saat audit (12 Oktober)</h3>
+      <ul class="plain">
+        <li>Form penugasan guru bisa membuat data ganda, dan berakhir error server setelah aturan data unik dipasang.</li>
+        <li>PTS bisa tersimpan tanpa judul bila semester tidak dipilih.</li>
+        <li>Pesan token salah tidak pernah tampil, dan tombol "Mulai Ujian" berhenti di status memproses.</li>
+        <li>Notifikasi aksi di halaman jadwal tidak pernah muncul, dan kartu jadwal tidak diperbarui setelah naskah dikembalikan.</li>
+        <li>Browser yang pernah membuka aplikasi tetap memakai CSS lama selama setahun.</li>
+      </ul>
+    </section>
+
+    <section id="temuan" aria-labelledby="h-temuan">
+      <h2 id="h-temuan">Temuan audit</h2>
+      <p>Hasil pemeriksaan lima area: login dan peran, jadwal, mesin ujian, laporan dan logistik, serta master data dan infrastruktur. Temuan sedang dan rendah dibulatkan.</p>
+      <div class="sev">
+        <div class="c"><b>6 kritis</b><p>Siswa bisa login sebagai guru atau teman memakai kata sandi bawaan. Siswa bisa mengubah sesi siswa lain lewat UUID di address bar. Webhook dengan kunci publik bisa membuat admin. Rahasia tercatat di repo publik. Guru bisa mengunduh data seluruh siswa. Ada celah XSS di layar ujian.</p></div>
+        <div class="h"><b>Sekitar 25 tinggi</b><p>Contohnya: token tidak mengecek kelas, soal muncul ganda, tombol Ragu menghapus jawaban, sesi yang terputus tidak pernah dinilai, hapus jadwal ikut menghapus nilai, kuota guru tidak ditegakkan, siswa yang keluar tetap aktif, dan tidak ada backup database.</p></div>
+        <div class="m"><b>Sekitar 40 sedang dan rendah</b><p>Contohnya: jumlah peserta berbeda antar layar, query lambat di rekap, injeksi formula Excel, error form tidak tampil, polling berat, dan sisa kode lama.</p></div>
+      </div>
+    </section>
+
+    <section id="perubahan" aria-labelledby="h-perubahan">
+      <h2 id="h-perubahan">Perubahan per fase audit (12 sampai 13 Oktober)</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th scope="col">Fase</th><th scope="col">Yang berubah</th><th scope="col">Commit</th></tr></thead>
+          <tbody>
+            <tr><td class="phase">Bagian A</td><td>Status naskah tinggal tiga tahap. Admin bisa mengembalikan naskah dengan alasan. Guru bisa menarik pengajuan. Gerbang token menolak naskah yang belum diverifikasi.</td><td class="mono">bebad5a</td></tr>
+            <tr><td class="phase">0. Keamanan</td><td>Login SSO saja, ditambah jalur darurat superuser. Kata sandi lokal dicabut. Kunci rahasia produksi diganti. Webhook diperketat. Celah XSS ditutup. Upload pengaturan hanya menerima gambar.</td><td class="mono">c1b9a5d</td></tr>
+            <tr><td class="phase">1. Ujian siswa</td><td>Sesi hanya bisa disentuh pemiliknya. Kelayakan ujian dicek di dashboard dan gerbang token. Jawaban ditolak setelah waktu habis, sesi terputus dinilai otomatis tiap 2 menit. Pengacakan soal dan opsi. Heartbeat.</td><td class="mono">8d24d85</td></tr>
+            <tr><td class="phase">2. Peran</td><td>Satu modul kebijakan peran dipakai server dan menu. Logistik, kartu, daftar hadir, dan pengaturan hanya untuk admin dan kurikulum. Guru hanya melihat paketnya sendiri.</td><td class="mono">7ee2641</td></tr>
+            <tr><td class="phase">3. Jadwal</td><td>Form jadwal bertingkat yang divalidasi ke penugasan mengajar. Bentrok jadwal ditolak. Kuota per guru ditegakkan. Guru hanya bisa memilih soal miliknya.</td><td class="mono">9be0ea9</td></tr>
+            <tr><td class="phase">4. Laporan</td><td>Jumlah peserta sama di semua layar. KKM bisa diatur. Rekap menampilkan daya pembeda. Excel aman dari injeksi formula. Alokasi ruang menolak bila kapasitas kurang.</td><td class="mono">5b24dc5</td></tr>
+            <tr><td class="phase">5. Data dan soal</td><td>Siswa yang keluar dari data pusat dinonaktifkan. Hasil ujian terlindungi saat data dihapus. Import Excel divalidasi. Soal di naskah terkunci tidak bisa diedit atau dihapus.</td><td class="mono">d75b0e0</td></tr>
+            <tr><td class="phase">6. Operasional</td><td>Backup harian 01.30 WIB plus backup sebelum migrasi. Deploy lewat git. Rate limit di Nginx. Proxy data pusat yang terbuka ditutup.</td><td class="mono">189e75b</td></tr>
+            <tr><td class="phase">7. Pembersihan</td><td>Kode React dan Supabase lama, skrip yang menyimpan kunci, dan workflow FTP dihapus.</td><td class="mono">cdaa06e</td></tr>
+            <tr><td class="phase">SSO bersama</td><td>Peran admin hanya dari client role <code>exam-jingga</code>.</td><td class="mono">b75c0ac</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="operasional" aria-labelledby="h-operasional">
+      <h2 id="h-operasional">Catatan operasional</h2>
+      <div class="note">
+        <p><b>Jendela deploy.</b> Exam belum dipakai siswa, jadi deploy saat ini boleh di jam berapa pun. Setelah dipakai untuk ujian sungguhan, berlaku aturan runbook: deploy pukul 22.00 sampai 04.00 WIB, dan freeze 06.30 sampai 16.30 WIB.</p>
+      </div>
+      <ul class="plain">
+        <li>Sebelum deploy, seluruh test dijalankan juga di PostgreSQL sementara di VPS (<code>scripts/test_postgres_vps.sh</code>). Test lokal memakai SQLite, yang tidak menangkap bug pelanggaran 500.</li>
+        <li>Backup harian 01.30 WIB disimpan 14 hari di server dan 60 hari di Drive. Folder <code>arsip-hapus</code> (backup sebelum hapus permanen) tidak ikut dibersihkan otomatis.</li>
+        <li>Pada 15 Oktober satu deploy berhenti di tengah karena backup pra-migrasi gagal (rclone belum siap). Kode baru belum aktif, tapi aplikasi tetap berjalan normal. Deploy diulang setelah rclone siap, dan sejak itu setiap deploy diperiksa: kode keluar, versi di server, migrasi, dan waktu restart.</li>
+        <li>Prosedur deploy, backup, restore, arsip, dan rollback ada di <code>runbook-deploy.md</code> di repo.</li>
+      </ul>
+    </section>
+
+    <section id="sisa" aria-labelledby="h-sisa">
+      <h2 id="h-sisa">Belum dikerjakan</h2>
+      <ul class="plain">
+        <li>Alokasi ruang dan sesi belum ditautkan ke jadwal tertentu, dan sesi siswa belum ditegakkan saat ujian.</li>
+        <li>Anti-cheat tetap bergantung pada browser siswa. Panggilan telepon yang masuk saat PAS juga tercatat sebagai pelanggaran.</li>
+        <li>Belum ada notifikasi otomatis saat terjadi error di server.</li>
+        <li>Daftar jadwal belum punya filter tahun ajaran dan semester; untuk sementara jadwal lama dirapikan lewat arsip.</li>
+        <li>Sinkron siswa mengosongkan jurusan kelas yang namanya tidak dikenali (contohnya 10 Uji). Dampaknya kecil.</li>
+      </ul>
+    </section>
+
+    <footer>
+      <p>Disusun dari audit kode dan peran pengguna serta uji coba di produksi, 12 sampai 15 Oktober 2026. Detail teknis per commit ada di <code>HANDOFF.md</code> dan <code>log.md</code> di repo.</p>
+    </footer>
+  </main>
+</div>
+
+</body></html>
