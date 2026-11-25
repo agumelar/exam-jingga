@@ -20,11 +20,13 @@ import time
 import uuid
 import zipfile
 from dataclasses import dataclass, field
+from datetime import timedelta
 from pathlib import Path
 
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.db import transaction
+from django.utils import timezone
 from docx import Document
 from docx.enum.text import WD_BREAK
 from docx.oxml import OxmlElement
@@ -629,6 +631,7 @@ def save_import(token, data, subject, teacher):
     folder = import_dir() / token
     existing = _existing_fingerprints(subject, teacher)['no_image']
     created = skipped = 0
+    saved = []
     with transaction.atomic():
         for entry in data['items']:
             options = entry['options']
@@ -648,9 +651,16 @@ def save_import(token, data, subject, teacher):
                 getattr(question, field_name).save(f'{uuid.uuid4()}.{ext}', ContentFile((folder / name).read_bytes()),
                                                    save=False)
             question.save()
+            saved.append(question)
             if not entry['images']:
                 existing.add(key)
             created += 1
+        # Bank soal diurutkan dari yang terbaru. Beri soal pertama di file waktu paling baru (selisih 1 ms per
+        # soal) supaya urutan di Bank Soal sama dengan urutan di Word, di jam server mana pun.
+        newest = timezone.now()
+        for index, question in enumerate(saved):
+            question.created_at = newest - timedelta(milliseconds=index)
+        Question.objects.bulk_update(saved, ['created_at'])
     return created, skipped
 
 

@@ -374,6 +374,25 @@ def test_upload_preview_then_save_creates_questions_with_images(client, guru, me
 
 
 @pytest.mark.django_db
+def test_imported_questions_appear_in_file_order_in_bank(client, guru, media):
+    Question.objects.create(subject=guru['mtk'], level=11, created_by=guru['teacher'], question_text='Soal lama',
+                            option_a='a', option_b='b', option_c='c', option_d='d', option_e='e')
+    doc = Document()
+    for n in (1, 2, 3):
+        _soal(doc, soal=f'Soal nomor {n}')
+    client.force_login(guru['user'])
+    client.post(reverse('questions:import_confirm'), {'token': _token(_upload(client, doc, guru['mtk']))})
+
+    # Bank soal mengurutkan dari yang terbaru; soal nomor 1 harus paling baru agar tampil paling atas.
+    times = [Question.objects.get(question_text=f'Soal nomor {n}').created_at for n in (1, 2, 3)]
+    assert times[0] > times[1] > times[2] > Question.objects.get(question_text='Soal lama').created_at
+
+    html = client.get(reverse('questions:bank_soal')).content.decode()
+    positions = [html.index(text) for text in ('Soal nomor 1', 'Soal nomor 2', 'Soal nomor 3', 'Soal lama')]
+    assert positions == sorted(positions)
+
+
+@pytest.mark.django_db
 def test_same_file_twice_does_not_duplicate(client, guru, media):
     doc = Document()
     _soal(doc)
