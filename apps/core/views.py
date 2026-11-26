@@ -60,7 +60,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         metrics = cache.get(cache_key)
         if not metrics:
             metrics = {
-                'total_students': Student.objects.count(),
+                # Hanya siswa aktif; siswa keluar disimpan untuk riwayat nilai, bukan peserta didik
+                'total_students': Student.objects.filter(status='aktif').count(),
+                'inactive_students': Student.objects.exclude(status='aktif').count(),
                 'total_teachers': Teacher.objects.count(),
                 'total_classes': ClassRoom.objects.count(),
                 'total_majors': Major.objects.count(),

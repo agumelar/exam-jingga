@@ -118,3 +118,14 @@ def test_nightly_timer_runs_at_half_past_midnight_and_is_installed():
     assert 'Persistent=false' in timer, 'sinkron yang terlewat tidak boleh menyusul di jam sekolah'
     assert 'sync_master_data --otomatis' in service
     assert 'exam_jingga_sync.timer' in deploy and 'exam_jingga_sync.service' in deploy
+
+
+@pytest.mark.django_db
+def test_dashboard_counts_only_active_students(admin_client, students):
+    from django.core.cache import cache
+    cache.clear()
+    html = admin_client.get(reverse('core:dashboard')).content.decode()
+    context = admin_client.get(reverse('core:dashboard')).context
+    assert context['total_students'] == 2
+    assert context['inactive_students'] == 1
+    assert '1 tidak aktif' in html
