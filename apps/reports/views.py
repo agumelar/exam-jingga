@@ -117,7 +117,7 @@ class SessionMonitoringView(View):
         )
 
         all_classes = ClassRoom.objects.all().order_by('name')
-        all_rooms = list(StudentLogistic.objects.values_list('room_name', flat=True).distinct().order_by('room_name'))
+        all_rooms = list(active_logistics().values_list('room_name', flat=True).distinct().order_by('room_name'))
         if not all_rooms:
             all_rooms = list(Schedule.objects.exclude(room_name__isnull=True).exclude(room_name='').values_list('room_name', flat=True).distinct().order_by('room_name'))
 
@@ -580,6 +580,11 @@ class DistractorAnalysisView(View):
 # 3. PRINTABLE EXAM CARDS & ATTENDANCE LISTS
 # ==============================================================================
 
+def active_logistics():
+    """Pembagian ruang siswa aktif saja; siswa yang keluar tidak ikut dihitung, dicetak, atau diekspor."""
+    return StudentLogistic.objects.filter(student__status='aktif')
+
+
 class ExamCardsView(View):
     """
     Cetak Kartu Peserta Ujian Siswa (Exam Cards).
@@ -594,7 +599,7 @@ class ExamCardsView(View):
         filter_session = request.GET.get('session', 'all')
         filter_class = request.GET.get('class_id', 'all')
 
-        logistics_qs = StudentLogistic.objects.select_related('student', 'student__class_room', 'student__major').order_by('room_name', 'session_name', 'student__full_name')
+        logistics_qs = active_logistics().select_related('student', 'student__class_room', 'student__major').order_by('room_name', 'session_name', 'student__full_name')
 
         if filter_room != 'all' and filter_room:
             logistics_qs = logistics_qs.filter(room_name=filter_room)
@@ -605,8 +610,8 @@ class ExamCardsView(View):
 
         logistics = list(logistics_qs)
 
-        all_rooms = list(StudentLogistic.objects.values_list('room_name', flat=True).distinct().order_by('room_name'))
-        all_sessions = list(StudentLogistic.objects.values_list('session_name', flat=True).distinct().order_by('session_name'))
+        all_rooms = list(active_logistics().values_list('room_name', flat=True).distinct().order_by('room_name'))
+        all_sessions = list(active_logistics().values_list('session_name', flat=True).distinct().order_by('session_name'))
         all_classes = ClassRoom.objects.all().order_by('name')
 
         context = {
@@ -641,7 +646,7 @@ class AttendanceListView(View):
         filter_session = request.GET.get('session', 'all')
         print_type = request.GET.get('type', 'attendance')  # 'attendance' or 'door'
 
-        logistics_qs = StudentLogistic.objects.select_related('student', 'student__class_room', 'student__major').order_by('room_name', 'session_name', 'student__full_name')
+        logistics_qs = active_logistics().select_related('student', 'student__class_room', 'student__major').order_by('room_name', 'session_name', 'student__full_name')
 
         if filter_room != 'all' and filter_room:
             logistics_qs = logistics_qs.filter(room_name=filter_room)
@@ -662,8 +667,8 @@ class AttendanceListView(View):
                 }
             groups[key]['students'].append(item)
 
-        all_rooms = list(StudentLogistic.objects.values_list('room_name', flat=True).distinct().order_by('room_name'))
-        all_sessions = list(StudentLogistic.objects.values_list('session_name', flat=True).distinct().order_by('session_name'))
+        all_rooms = list(active_logistics().values_list('room_name', flat=True).distinct().order_by('room_name'))
+        all_sessions = list(active_logistics().values_list('session_name', flat=True).distinct().order_by('session_name'))
 
         context = {
             'active_menu': 'daftar_hadir',
@@ -696,14 +701,14 @@ class LogisticsView(View):
             return redirect('accounts:login')
 
         total_active_students = Student.objects.filter(status='aktif').count()
-        logistics_count = StudentLogistic.objects.count()
-        unassigned_count = max(0, total_active_students - logistics_count)
+        logistics_count = active_logistics().values('student').distinct().count()
+        unassigned_count = Student.objects.filter(status='aktif', logistics__isnull=True).count()
 
         filter_room = request.GET.get('room', 'all')
         filter_session = request.GET.get('session', 'all')
         search_query = request.GET.get('q', '').strip()
 
-        logistics_qs = StudentLogistic.objects.select_related('student', 'student__class_room', 'student__major').order_by('room_name', 'session_name', 'student__full_name')
+        logistics_qs = active_logistics().select_related('student', 'student__class_room', 'student__major').order_by('room_name', 'session_name', 'student__full_name')
 
         if filter_room != 'all' and filter_room:
             logistics_qs = logistics_qs.filter(room_name=filter_room)
@@ -714,8 +719,8 @@ class LogisticsView(View):
                 Q(student__full_name__icontains=search_query) | Q(student__nis__icontains=search_query)
             )
 
-        all_rooms = list(StudentLogistic.objects.values_list('room_name', flat=True).distinct().order_by('room_name'))
-        all_sessions = list(StudentLogistic.objects.values_list('session_name', flat=True).distinct().order_by('session_name'))
+        all_rooms = list(active_logistics().values_list('room_name', flat=True).distinct().order_by('room_name'))
+        all_sessions = list(active_logistics().values_list('session_name', flat=True).distinct().order_by('session_name'))
         classes = ClassRoom.objects.all().order_by('name')
 
         context = {
@@ -798,7 +803,7 @@ class LogisticsExportView(View):
         filter_room = request.GET.get('room', 'all')
         filter_session = request.GET.get('session', 'all')
 
-        logistics_qs = StudentLogistic.objects.select_related('student', 'student__class_room').order_by('room_name', 'session_name', 'student__full_name')
+        logistics_qs = active_logistics().select_related('student', 'student__class_room').order_by('room_name', 'session_name', 'student__full_name')
 
         if filter_room != 'all' and filter_room:
             logistics_qs = logistics_qs.filter(room_name=filter_room)

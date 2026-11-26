@@ -263,6 +263,8 @@ def auto_distribute_logistics(levels, room_count, capacity, sessions_count, exam
 
     with transaction.atomic():
         StudentLogistic.objects.filter(student_id__in=student_ids).delete()
+        # Ruang milik siswa yang sudah keluar ikut dibersihkan agar tidak tercetak di kartu dan daftar hadir
+        StudentLogistic.objects.exclude(student__status='aktif').delete()
         StudentLogistic.objects.bulk_create(new_logistics)
 
     return len(new_logistics)
