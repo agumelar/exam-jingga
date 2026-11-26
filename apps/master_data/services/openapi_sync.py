@@ -543,6 +543,7 @@ class MasterDataSyncService:
             'classes_count': classes_res.get('count', 0),
             'teachers_count': teachers_res.get('count', 0),
             'students_count': students_res.get('count', 0),
+            'students_deactivated': students_res.get('deactivated', 0),
             'message': (
                 f"Data Master diperbarui dari {self.base_url}. "
                 f"{students_res.get('count', 0)} Siswa Terdaftar, "

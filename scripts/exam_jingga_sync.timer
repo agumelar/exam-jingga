@@ -1,0 +1,10 @@
+[Unit]
+Description=Sinkron data pusat Exam Jingga tiap malam pukul 00:30 WIB
+
+[Timer]
+OnCalendar=*-*-* 00:30:00 Asia/Jakarta
+# Sinkron yang terlewat (server mati) tidak menyusul saat menyala, agar tidak berjalan di jam ujian.
+Persistent=false
+
+[Install]
+WantedBy=timers.target

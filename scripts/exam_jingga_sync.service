@@ -1,0 +1,12 @@
+[Unit]
+Description=Exam Jingga - sinkron data siswa, kelas, dan guru dari Data Admin sekolah
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/opt/exam-jingga
+EnvironmentFile=/opt/exam-jingga/.env
+Environment="DJANGO_SETTINGS_MODULE=config.settings.production"
+ExecStart=/opt/exam-jingga/.venv/bin/python manage.py sync_master_data --otomatis

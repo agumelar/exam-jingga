@@ -14,7 +14,7 @@ from django.db.models import Q
 from django.contrib.auth import get_user_model
 from apps.accounts.decorators import admin_required
 from apps.accounts.models import Role
-from .models import Major, ClassRoom, Teacher, Student, Subject, TeacherAssignment
+from .models import Major, ClassRoom, MasterSyncLog, Teacher, Student, Subject, TeacherAssignment
 from .services.openapi_sync import master_data_sync_service
 from apps.reports.utils import excel_safe
 
@@ -191,7 +191,7 @@ class StudentListView(View):
         q = request.GET.get('q', '').strip()
         class_id = request.GET.get('class_id', '').strip()
         major_id = request.GET.get('major_id', '').strip()
-        status = request.GET.get('status', '').strip()
+        status = request.GET.get('status', '').strip() or 'aktif'
 
         if q:
             qs = qs.filter(
@@ -203,7 +203,11 @@ class StudentListView(View):
             qs = qs.filter(class_room_id=class_id)
         if major_id:
             qs = qs.filter(major_id=major_id)
-        if status:
+        if status == 'aktif':
+            qs = qs.filter(status='aktif')
+        elif status == 'nonaktif':
+            qs = qs.exclude(status='aktif')
+        elif status != 'semua':
             qs = qs.filter(status=status)
 
         page_number = request.GET.get('page', 1)
@@ -219,7 +223,9 @@ class StudentListView(View):
             'filter_class': class_id,
             'filter_major': major_id,
             'filter_status': status,
-            'total_students_count': Student.objects.count(),
+            'active_students_count': Student.objects.filter(status='aktif').count(),
+            'inactive_students_count': Student.objects.exclude(status='aktif').count(),
+            'last_sync': MasterSyncLog.objects.first(),
             'filtered_count': qs.count(),
             'page_title': 'Data Siswa Peserta CBT',
             'page_subtitle': 'Database Terpusat Siswa Terdaftar & Akun CBT',
@@ -765,6 +771,7 @@ class SyncMasterDataView(View):
                 result = master_data_sync_service.sync_students(bearer_token=bearer_token)
             else:
                 result = master_data_sync_service.sync_all(bearer_token=bearer_token)
+            MasterSyncLog.record('tombol', sync_type, result)
 
             context = {
                 'success': True,
@@ -778,6 +785,7 @@ class SyncMasterDataView(View):
             }
         except Exception as e:
             logger_err = str(e)
+            MasterSyncLog.record('tombol', sync_type, error=e)
             context = {
                 'success': False,
                 'sync_type': sync_type,

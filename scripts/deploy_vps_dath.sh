@@ -58,9 +58,10 @@ python manage.py collectstatic --noinput
 
 echo "[6/7] Unit systemd + Nginx"
 sudo cp scripts/exam_jingga.service scripts/exam_jingga_grader.service scripts/exam_jingga_grader.timer \
-    scripts/exam_jingga_backup.service scripts/exam_jingga_backup.timer /etc/systemd/system/
+    scripts/exam_jingga_backup.service scripts/exam_jingga_backup.timer \
+    scripts/exam_jingga_sync.service scripts/exam_jingga_sync.timer /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now exam_jingga_grader.timer exam_jingga_backup.timer > /dev/null
+sudo systemctl enable --now exam_jingga_grader.timer exam_jingga_backup.timer exam_jingga_sync.timer > /dev/null
 sudo cp scripts/nginx_dath.conf /etc/nginx/sites-available/exam.smkn1rongga.sch.id
 sudo nginx -t
 sudo systemctl reload nginx

@@ -217,3 +217,35 @@ class TeacherAssignment(models.Model):
     def __str__(self):
         subj = self.subject.name if self.subject else self.subject_name
         return f"{self.teacher.full_name} - {subj} ({self.class_room.name})"
+
+
+class MasterSyncLog(models.Model):
+    """Catatan setiap sinkron data pusat (tombol atau otomatis tiap malam), agar admin tahu kapan data terakhir diperbarui."""
+    SOURCE_CHOICES = [('tombol', 'Tombol Tarik Data Master'), ('otomatis', 'Otomatis tiap malam'),
+                      ('perintah', 'Perintah di server')]
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES)
+    sync_type = models.CharField(max_length=20, default='all')
+    success = models.BooleanField(default=True)
+    students_active = models.IntegerField(null=True, blank=True)
+    deactivated = models.IntegerField(null=True, blank=True)
+    message = models.TextField(blank=True, default='')
+
+    class Meta:
+        db_table = 'master_sync_logs'
+        ordering = ['-created_at']
+        verbose_name = 'Catatan Sinkron Data Pusat'
+        verbose_name_plural = 'Catatan Sinkron Data Pusat'
+
+    @classmethod
+    def record(cls, source, sync_type, result=None, error=None):
+        if error is not None:
+            return cls.objects.create(source=source, sync_type=sync_type, success=False, message=str(error)[:2000])
+        result = result or {}
+        deactivated = result.get('deactivated', result.get('students_deactivated'))
+        return cls.objects.create(
+            source=source, sync_type=sync_type, success=True,
+            students_active=Student.objects.filter(status='aktif').count(),
+            deactivated=deactivated, message=str(result.get('message', ''))[:2000],
+        )
